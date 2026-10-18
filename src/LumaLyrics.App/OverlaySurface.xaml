@@ -1,0 +1,19 @@
+<UserControl x:Class="LumaLyrics.App.OverlaySurface" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" IsHitTestVisible="False" TextOptions.TextFormattingMode="Display">
+ <Grid x:Name="Surface" SizeChanged="SurfaceSizeChanged">
+  <Border x:Name="Base"/>
+  <Border x:Name="Glow"/>
+  <Border x:Name="Sheen"/>
+  <Border x:Name="Rim" BorderThickness="1"/>
+  <Border x:Name="InnerRim" Margin="2" BorderThickness="1"/>
+  <StackPanel x:Name="Lines" VerticalAlignment="Center">
+   <Grid x:Name="CurrentHost">
+    <Canvas IsHitTestVisible="False"><TextBlock x:Name="OutgoingCurrent" Width="{Binding ActualWidth,ElementName=CurrentHost}" TextWrapping="Wrap" Opacity="0"/></Canvas>
+    <TextBlock x:Name="CurrentLine" TextWrapping="Wrap" TextAlignment="Center"/>
+   </Grid>
+   <Grid x:Name="NextHost">
+    <Canvas IsHitTestVisible="False"><TextBlock x:Name="OutgoingNext" Width="{Binding ActualWidth,ElementName=NextHost}" TextWrapping="Wrap" Opacity="0"/></Canvas>
+    <TextBlock x:Name="NextLine" TextWrapping="Wrap" TextAlignment="Center"/>
+   </Grid>
+  </StackPanel>
+ </Grid>
+</UserControl>

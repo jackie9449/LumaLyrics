@@ -1,0 +1,16 @@
+{
+  "liveSession": true,
+  "networkCandidates": 20,
+  "automaticallyImportedBeforeFixture": true,
+  "automaticSource": "LRCLIB #22067388 \u00B7 \u81EA\u52A8\u68C0\u67E5",
+  "libraryTracks": 3219,
+  "importedTimedGroups": 7,
+  "offsetSaved": true,
+  "bindingRetainedAfterLookup": true,
+  "manualRetainedAfterCleanup": true,
+  "nativeTransparentFlagEnabled": true,
+  "nativeTransparentFlagRestored": true,
+  "trayAvailable": true,
+  "hotkeysRegistered": false,
+  "mainHiddenOverlayVisible": true
+}

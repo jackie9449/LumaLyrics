@@ -1,0 +1,61 @@
+{
+  "os": "Microsoft Windows NT 10.0.19045.0",
+  "source": "AppleMusic.exe",
+  "Generation": 1,
+  "Revision": 1,
+  "state": "Paused",
+  "position": 0,
+  "quality": "Estimated",
+  "lyrics": true,
+  "groups": 7,
+  "tray": true,
+  "hotkeys": "\u663E\u793A\u5FEB\u6377\u952E Ctrl\u002BAlt\u002BL \u6CE8\u518C\u5931\u8D25\u6216\u5DF2\u5360\u7528\uFF1B\u89E3\u9501\u5FEB\u6377\u952E Ctrl\u002BAlt\u002BU \u6CE8\u518C\u5931\u8D25\u6216\u5DF2\u5360\u7528",
+  "dpi": 96,
+  "screens": [
+    {
+      "Bounds": {
+        "Location": {
+          "IsEmpty": true,
+          "X": 0,
+          "Y": 0
+        },
+        "Size": {
+          "IsEmpty": false,
+          "Width": 2560,
+          "Height": 1440
+        },
+        "X": 0,
+        "Y": 0,
+        "Width": 2560,
+        "Height": 1440,
+        "Left": 0,
+        "Top": 0,
+        "Right": 2560,
+        "Bottom": 1440,
+        "IsEmpty": false
+      },
+      "WorkingArea": {
+        "Location": {
+          "IsEmpty": true,
+          "X": 0,
+          "Y": 0
+        },
+        "Size": {
+          "IsEmpty": false,
+          "Width": 2560,
+          "Height": 1440
+        },
+        "X": 0,
+        "Y": 0,
+        "Width": 2560,
+        "Height": 1440,
+        "Left": 0,
+        "Top": 0,
+        "Right": 2560,
+        "Bottom": 1440,
+        "IsEmpty": false
+      }
+    }
+  ],
+  "capture": "WPF live client-area visual tree"
+}

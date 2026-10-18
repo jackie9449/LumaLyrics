@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LumaLyrics.App/LumaLyrics.App.csproj" />
+    <Project Path="src/LumaLyrics.Core/LumaLyrics.Core.csproj" />
+    <Project Path="src/LumaLyrics.Infrastructure/LumaLyrics.Infrastructure.csproj" />
+    <Project Path="src/LumaLyrics.Windows/LumaLyrics.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LumaLyrics.Core.Tests/LumaLyrics.Core.Tests.csproj" />
+    <Project Path="tests/LumaLyrics.Infrastructure.Tests/LumaLyrics.Infrastructure.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/LumaLyrics.Probe/LumaLyrics.Probe.csproj" />
+  </Folder>
+</Solution>

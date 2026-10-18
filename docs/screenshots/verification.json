@@ -1,0 +1,13 @@
+{
+  "liveSession": true,
+  "networkCandidates": 20,
+  "importedTimedGroups": 7,
+  "offsetSaved": true,
+  "bindingRetainedAfterLookup": true,
+  "manualRetainedAfterCleanup": true,
+  "nativeTransparentFlagEnabled": true,
+  "nativeTransparentFlagRestored": true,
+  "trayAvailable": true,
+  "hotkeysRegistered": true,
+  "mainHiddenOverlayVisible": true
+}

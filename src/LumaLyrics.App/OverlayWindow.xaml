@@ -1,0 +1,17 @@
+<Window x:Class="LumaLyrics.App.OverlayWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:LumaLyrics.App"
+ Title="浮光歌词 · 桌面歌词" Width="820" SizeToContent="Height" MinWidth="360" MinHeight="90" MaxHeight="640" WindowStyle="None" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowActivated="False" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip">
+ <Grid Background="Transparent" MouseLeftButtonDown="DragOverlay">
+  <local:OverlaySurface x:Name="LyricSurface"/>
+  <Popup x:Name="ToolbarPopup" Placement="Custom" PlacementTarget="{Binding ElementName=LyricSurface}" AllowsTransparency="True" StaysOpen="True" Focusable="False">
+  <Border x:Name="Toolbar" CornerRadius="10" Background="#F2222630" Padding="4" MouseEnter="ToolbarEntered" MouseLeave="ToolbarLeft">
+   <StackPanel Orientation="Horizontal">
+    <TextBlock Text="拖动移动" FontSize="10" Foreground="#CFD2DF" VerticalAlignment="Center" Margin="8,0,10,0"/>
+    <Button Content="外观" FontSize="11" Padding="9,3" Margin="0,0,3,0" Click="AppearanceClicked"/>
+    <Button Content="锁定" ToolTip="锁定并允许鼠标穿透；可从托盘解锁" FontSize="11" Padding="9,3" Margin="0,0,3,0" Click="LockClicked"/>
+    <Button Content="主窗口" FontSize="11" Padding="9,3" Margin="0,0,3,0" Click="MainClicked"/>
+    <Button Content="×" ToolTip="隐藏桌面歌词" FontSize="11" Padding="9,3" Margin="0" Click="HideClicked"/>
+   </StackPanel>
+  </Border>
+  </Popup>
+ </Grid>
+</Window>

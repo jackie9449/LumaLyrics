@@ -1,0 +1,19 @@
+{
+  "systemAnimationsEnabled": true,
+  "crossfadeInProgress": true,
+  "transitionClearedOutgoing": true,
+  "rapidChangesEndOnLatestText": true,
+  "reduceMotionSkipsTransition": true,
+  "animationSwitchSkipsTransition": true,
+  "cornerHasFractionalAlpha": true,
+  "cornerFractionalPixels": 51,
+  "singleLineTextCentered": true,
+  "sharedSliderTemplateLoaded": true,
+  "sliderValueStillWorks": true,
+  "singleLineKeepsCurrentLyricScreenY": true,
+  "currentLineYBefore": 1303,
+  "currentLineYAfter": 1303,
+  "singleLineWindowCentered": true,
+  "singleLineDefaultMatchesTwoLineAnchor": true,
+  "mainSliderUsesSharedTemplate": true
+}

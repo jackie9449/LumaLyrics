@@ -1,0 +1,71 @@
+{
+  "controls": {
+    "installedFontSelectionUpdatesSettings": true,
+    "fontDropdownOpens": true,
+    "fontSliderUpdatesSettings": true,
+    "weightUpdatesSettings": true,
+    "invalidColorDisablesSave": true,
+    "validColorUpdatesAndEnablesSave": true,
+    "clearBackgroundDisablesBackdrop": true
+  },
+  "glass": {
+    "blurRequested": true,
+    "MaterialStatus": "\u5DF2\u8BF7\u6C42\u7CFB\u7EDF\u80CC\u666F\u6A21\u7CCA \u00B7 \u6548\u679C\u7531\u7CFB\u7EDF\u51B3\u5B9A",
+    "width": 820,
+    "height": 119.35999999999999,
+    "OverlayFontSize": 32
+  },
+  "frost": {
+    "blurRequested": true,
+    "MaterialStatus": "\u5DF2\u8BF7\u6C42\u7CFB\u7EDF\u80CC\u666F\u6A21\u7CCA \u00B7 \u6548\u679C\u7531\u7CFB\u7EDF\u51B3\u5B9A",
+    "width": 820,
+    "height": 114.16,
+    "OverlayFontSize": 32
+  },
+  "light": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 119.35999999999999,
+    "OverlayFontSize": 32
+  },
+  "dark": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 119.35999999999999,
+    "OverlayFontSize": 32
+  },
+  "aurora": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 114.16,
+    "OverlayFontSize": 32
+  },
+  "paper": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 114.16,
+    "OverlayFontSize": 32
+  },
+  "classic": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 114.16,
+    "OverlayFontSize": 32
+  },
+  "clear": {
+    "blurRequested": false,
+    "MaterialStatus": "\u80CC\u666F\u6A21\u7CCA\u672A\u542F\u7528",
+    "width": 820,
+    "height": 106.96,
+    "OverlayFontSize": 32
+  },
+  "noBlurAfterTransparentTheme": true,
+  "cancelRestoredAppearance": true,
+  "appearanceSavedAndReloaded": true,
+  "largeFontWindowWithinBounds": true
+}
