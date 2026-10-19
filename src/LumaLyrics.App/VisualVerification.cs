@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -10,6 +11,12 @@ namespace LumaLyrics.App;
 // Opt-in, isolated-data verification only. Sample sentences are self-authored and never enter the lyrics database.
 internal static class VisualVerification
 {
+    [DllImport("gdi32.dll")] static extern nint CreateRectRgn(int left,int top,int right,int bottom);
+    [DllImport("user32.dll")] static extern int GetWindowRgn(nint window,nint region);
+    [DllImport("gdi32.dll")] static extern int GetRgnBox(nint region,out NativeWindow.RectNative bounds);
+    [DllImport("gdi32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool PtInRegion(nint region,int x,int y);
+    [DllImport("gdi32.dll")] static extern bool DeleteObject(nint obj);
+
     internal static RenderTargetBitmap Render(FrameworkElement visual)
     {
         visual.UpdateLayout();var dpi=VisualTreeHelper.GetDpi(visual);
@@ -18,6 +25,58 @@ internal static class VisualVerification
     }
     internal static void Save(FrameworkElement visual,string path)
     {var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(Render(visual)));using var file=File.Create(path);png.Save(file);}
+    internal static async Task<Dictionary<string,Dictionary<string,bool>>> CheckOverlayCornersAsync(OverlayWindow overlay,AppSettings settings,string directory)
+    {
+        var checks=new Dictionary<string,Dictionary<string,bool>>();
+        var saved=OverlayAppearance.From(settings);var left=settings.OverlayLeft;var top=settings.OverlayTop;
+        bool visible=overlay.IsVisible,locked=overlay.IsLocked;
+        try
+        {
+            if(!visible)overlay.Show();
+            foreach(var tag in new[]{"GLASS","FROST","CLASSIC","CLEAR"})
+            foreach(double radius in new double[]{0,8,24,64})
+            foreach(bool lockWindow in new[]{false,true})
+            {
+                var appearance=OverlayThemes.All.Single(t=>t.Tag==tag).Appearance with{Radius=radius,Width=lockWindow?360:820,TwoLines=!lockWindow,Animations=false};
+                appearance.Apply(settings);overlay.ApplyStyle();overlay.SetLocked(lockWindow,false);
+                await overlay.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+                string name=$"{tag.ToLowerInvariant()}-r{radius}-{(lockWindow?"locked":"unlocked")}";
+                checks[name]=CheckWindowSilhouette(overlay,radius);
+                if(tag=="GLASS" && radius==64)Save(overlay,Path.Combine(directory,$"rounded-window-{(lockWindow?"locked":"unlocked")}.png"));
+            }
+        }
+        finally
+        {
+            saved.Apply(settings);overlay.SetLocked(locked,false);overlay.RestorePlacement(left,top);
+            if(!visible)overlay.Hide();
+        }
+        return checks;
+    }
+    static Dictionary<string,bool> CheckWindowSilhouette(OverlayWindow overlay,double radius)
+    {
+        var checks=new Dictionary<string,bool>();var (width,height)=NativeWindow.PixelSize(overlay);
+        var region=CreateRectRgn(0,0,0,0);
+        try
+        {
+            bool hasRegion=region!=0 && GetWindowRgn(NativeWindow.Handle(overlay),region)>0;
+            checks["nativeRegionPresent"]=hasRegion;
+            NativeWindow.RectNative bounds=default;
+            bool hasBounds=hasRegion && GetRgnBox(region,out bounds)>0;
+            checks["nativeRegionMatchesWindowBounds"]=hasBounds && bounds.Left==0 && bounds.Top==0 && bounds.Right==width && bounds.Bottom==height;
+            checks["nativeCenterIncluded"]=hasRegion && PtInRegion(region,width/2,height/2);
+            var dpi=VisualTreeHelper.GetDpi(overlay);
+            // Probe the top and bottom shoulders as well as all four extreme corners.
+            // The former outward guard included these transparent shoulder pixels in native blur.
+            int shoulder=(int)(Math.Min(radius*dpi.DpiScaleX,width/2d)*.25);
+            var points=new[]{(0,0),(width-1,0),(0,height-1),(width-1,height-1),(shoulder,0),(width-1-shoulder,0),(shoulder,height-1),(width-1-shoulder,height-1)};
+            checks["nativeCornersExcluded"]=hasRegion && (radius==0 || points.All(p=>!PtInRegion(region,p.Item1,p.Item2)));
+            var bitmap=Render(overlay);int stride=bitmap.PixelWidth*4;var pixels=new byte[stride*bitmap.PixelHeight];bitmap.CopyPixels(pixels,stride,0);
+            checks["renderSizeMatchesWindow"]=bitmap.PixelWidth==width && bitmap.PixelHeight==height;
+            checks["wholeWindowCornersTransparent"]=radius==0 || points.All(p=>p.Item1>=0 && p.Item1<bitmap.PixelWidth && p.Item2>=0 && p.Item2<bitmap.PixelHeight && pixels[p.Item2*stride+p.Item1*4+3]==0);
+        }
+        finally{if(region!=0)DeleteObject(region);}
+        return checks;
+    }
     internal static async Task<Dictionary<string,object?>> RunAsync(Window owner,string directory)
     {
         var checks=new Dictionary<string,object?>();

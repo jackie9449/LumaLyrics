@@ -132,7 +132,11 @@ public partial class OverlaySurface : UserControl
         if(Surface.ActualWidth<=0 || Surface.ActualHeight<=0)return;
         // Preserve fractional edge coverage instead of stacking geometric clips on the visible silhouette.
         Surface.Clip=null;
-        var shape=new RectangleGeometry(new Rect(0,0,Surface.ActualWidth,Surface.ActualHeight),radius,radius);
-        var mask=new DrawingBrush(new GeometryDrawing(Brushes.White,null,shape)){Stretch=Stretch.Fill};mask.Freeze();Surface.OpacityMask=mask;
+        Surface.OpacityMask=RoundedMask(Surface.RenderSize,radius);
+    }
+    internal static DrawingBrush RoundedMask(Size size,double radius)
+    {
+        var shape=new RectangleGeometry(new Rect(size),radius,radius);
+        var mask=new DrawingBrush(new GeometryDrawing(Brushes.White,null,shape)){Stretch=Stretch.Fill};mask.Freeze();return mask;
     }
 }

@@ -24,6 +24,7 @@ internal static class NativeWindow
         SetWindowPos(h,0,0,0,0,0,0x37);
     }
     public static (double Left,double Top) Location(Window w) { GetWindowRect(Handle(w),out var r); return (r.Left,r.Top); }
+    internal static (int Width,int Height) PixelSize(Window w) => GetWindowRect(Handle(w),out var r)?(r.Right-r.Left,r.Bottom-r.Top):(0,0);
     public static void Place(Window w,double? left,double? top,bool bottom = false,double bottomInset=60)
     {
         var h=Handle(w); GetWindowRect(h,out var r); int width=r.Right-r.Left, height=r.Bottom-r.Top;

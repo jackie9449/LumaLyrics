@@ -1,0 +1,36 @@
+name: Windows build and overlay corners
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build and verify native overlay corners
+        shell: pwsh
+        run: ./scripts/verify-corners.ps1
+      - name: Run unit tests
+        run: dotnet test -c Release --no-build --logger "trx;LogFilePrefix=results" --results-directory TestResults
+      - name: Package Windows application
+        shell: pwsh
+        run: ./scripts/publish.ps1
+      - name: Upload application and verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LumaLyrics-windows
+          path: |
+            artifacts/*.zip
+            artifacts/*.sha256
+            artifacts/overlay-corners/
+            TestResults/**/*.trx

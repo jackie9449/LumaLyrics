@@ -202,6 +202,8 @@ public partial class MainWindow : Window
     {
         // Capture actual WPF clients. The explicit motion demo uses self-authored text, never player metadata.
         Directory.CreateDirectory(directory);
+        var cornerChecks=await VisualVerification.CheckOverlayCornersAsync(overlay,settings,directory);
+        File.WriteAllText(Path.Combine(directory,"corners-check.json"),System.Text.Json.JsonSerializer.Serialize(cornerChecks,new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));
         var motionChecks=await VisualVerification.RunAsync(this,directory);
         var savedAppearance=OverlayAppearance.From(settings);
         (savedAppearance with{TwoLines=true}).Apply(settings);overlay.ApplyStyle();overlay.ResetPosition();double beforeY=overlay.CurrentScreenY;

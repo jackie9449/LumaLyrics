@@ -25,23 +25,32 @@ public partial class OverlayWindow : Window
         toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver)ToolbarPopup.IsOpen=false;};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible){ToolbarPopup.IsOpen=false;toolbarDelay.Stop();}};
         LocationChanged+=(_,_)=> {if(placed)RememberPosition();};
-        SizeChanged+=(_,_)=> { if(placed) { settings.OverlayWidth=Width;backdrop.RoundRegion(settings.OverlayCornerRadius); } };
+        SizeChanged+=(_,_)=> {if(placed)settings.OverlayWidth=Width;UpdateWindowShape();};
+        DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,UpdateWindowShape);
         Closed+=(_,_)=>{toolbarDelay.Stop();ToolbarPopup.IsOpen=false;backdrop.Dispose();};
     }
     public void ApplyStyle()
     {
         var a=OverlayAppearance.From(settings);
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
-        Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(a,settings.ReduceMotion);backdrop.Apply(a);
-        if(IsLoaded) {UpdateLayout();backdrop.RoundRegion(a.Radius);if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
+        Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(a,settings.ReduceMotion);
+        if(IsLoaded) {UpdateLayout();UpdateWindowShape();if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
+    }
+    void UpdateWindowShape()
+    {
+        if(ActualWidth<=0 || ActualHeight<=0)return;
+        var a=OverlayAppearance.From(settings);
+        // Include the resize handle and every other window visual in the same silhouette.
+        WindowSurface.OpacityMask=OverlaySurface.RoundedMask(WindowSurface.RenderSize,a.Radius);
+        backdrop.Apply(a);
     }
     public void SetLocked(bool locked,bool showTip=true)
     {
         if(locked && !owner.CanRecoverOverlay) { MessageBox.Show("托盘暂不可用，无法安全锁定。请先重新连接托盘。","浮光歌词"); return; }
         if(locked && firstLock && showTip) { MessageBox.Show($"锁定后可点击穿透。\n从托盘选择“解锁歌词”，或按 {settings.UnlockHotkey} 解锁。","桌面歌词"); firstLock=false; }
-        IsLocked=locked; NativeWindow.ClickThrough(this,locked);ToolbarPopup.IsOpen=false; ResizeMode=locked?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
+        IsLocked=locked; NativeWindow.ClickThrough(this,locked);ToolbarPopup.IsOpen=false;ResizeHandle.Visibility=locked?Visibility.Collapsed:Visibility.Visible; ResizeMode=locked?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
     }
-    void DragOverlay(object sender,MouseButtonEventArgs e) { if(!IsLocked && e.ButtonState==MouseButtonState.Pressed) { try {ToolbarPopup.IsOpen=false;DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } } }
+    void DragOverlay(object sender,MouseButtonEventArgs e) { if(!IsLocked && !ResizeHandle.IsMouseOver && e.ButtonState==MouseButtonState.Pressed) { try {ToolbarPopup.IsOpen=false;DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } } }
     void LockClicked(object s,RoutedEventArgs e) { e.Handled=true; SetLocked(true); }
     void MainClicked(object s,RoutedEventArgs e) { e.Handled=true; owner.Restore(); }
     void AppearanceClicked(object s,RoutedEventArgs e) {e.Handled=true;owner.ShowAppearance();}
