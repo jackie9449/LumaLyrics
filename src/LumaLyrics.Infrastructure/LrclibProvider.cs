@@ -13,7 +13,7 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
     {
         client = handler is null ? new() : new(handler);
         client.BaseAddress = new("https://lrclib.net/api/"); client.Timeout = TimeSpan.FromSeconds(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.3.1 (Windows desktop lyrics companion)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.3.2 (Windows desktop lyrics companion)");
     }
     async Task<string?> GetAsync(string url, CancellationToken token)
     {
