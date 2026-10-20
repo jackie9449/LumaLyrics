@@ -12,9 +12,12 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     readonly LyricsRepository repository; readonly PlaybackClock clock = new();
     CancellationTokenSource? lookup; readonly RequestVersion requests=new(); bool disposed;
     readonly CancellationTokenSource lifetime=new();CancellationTokenSource? libraryCancellation;Task? libraryTask,libraryMonitor;
+    CancellationTokenSource? artworkCancellation;Task? artworkTask;
     volatile bool foregroundLookupActive;
     DateTimeOffset nextLookupRetry;
+    long artworkRequestVersion;
     public LibraryProgress LibraryStatus {get;private set;}=new(0,0,0,0,false,"等待扫描本机 Apple Music 资料库");
+    public ArtworkProgress ArtworkStatus {get;private set;}=new(0,0,0,0,0,false,"等待扫描封面");
     public AppSettings Settings { get; }
     public GsmtcPlaybackSource Source { get; }
     public PlaybackSnapshot? Snapshot { get; private set; }
@@ -31,6 +34,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
+        using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();
         Source.Changed += s => dispatcher.BeginInvoke(() => Receive(s));
         Source.Error += e => dispatcher.BeginInvoke(() => { store.Log(e); LyricsStatus = e; Updated?.Invoke(); });
     }
@@ -38,24 +42,68 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     {
         try{await Source.StartAsync();}catch(Exception e){store.Log("Playback start: "+e.GetType().Name);LyricsStatus="播放连接暂不可用，资料库仍可后台预缓存";Updated?.Invoke();}
         if(Settings.OnlineLookup&&Settings.AutoPrefetchLibrary)File.Delete(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db")));StartLibraryPrefetch();
-        libraryMonitor=Task.Run(async()=>{try{using var timer=new PeriodicTimer(TimeSpan.FromMinutes(5));while(await timer.WaitForNextTickAsync(lifetime.Token))await dispatcher.InvokeAsync(StartLibraryPrefetch);}catch(OperationCanceledException){}},lifetime.Token);
+        libraryMonitor=Task.Run(async()=>
+        {
+            try
+            {
+                var nextScan=DateTimeOffset.UtcNow.AddMinutes(5);using var timer=new PeriodicTimer(TimeSpan.FromSeconds(2));
+                while(await timer.WaitForNextTickAsync(lifetime.Token))await dispatcher.InvokeAsync(()=>
+                {
+                    RefreshExternalProgress();if(DateTimeOffset.UtcNow>=nextScan){nextScan=DateTimeOffset.UtcNow.AddMinutes(5);StartLibraryPrefetch();}
+                });
+            }
+            catch(OperationCanceledException){}
+        },lifetime.Token);
     }
     public void StartLibraryPrefetch()
     {
-        if(disposed||!Settings.OnlineLookup||!Settings.AutoPrefetchLibrary||libraryTask is{IsCompleted:false})return;
+        if(disposed||!Settings.OnlineLookup||!Settings.AutoPrefetchLibrary)return;
         var path=Settings.LibraryPath??AppleMusicLibraryReader.Discover();
         if(path is null){LibraryStatus=new(0,0,0,0,false,"未找到本机资料库，可在资料库窗口选择 Library.musicdb");Updated?.Invoke();return;}
-        libraryCancellation?.Dispose();libraryCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
-        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),provider,()=>foregroundLookupActive);
-        prefetcher.Progress+=progress=>{if(!disposed)dispatcher.BeginInvoke(()=>{LibraryStatus=progress;Updated?.Invoke();});};
-        prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(Snapshot?.Track.Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(track);if(b is not null)Apply(b);}});};
-        libraryTask=Task.Run(async()=>{try{await prefetcher.RunAsync(path,libraryCancellation.Token);}catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{LibraryStatus=LibraryStatus with{Running=false,Message="资料库扫描失败："+e.Message};Updated?.Invoke();});}},libraryCancellation.Token);
+        if(libraryTask is not {IsCompleted:false})StartLyricsPrefetch(path);
+        if(artworkTask is not {IsCompleted:false})StartArtworkPrefetch(path);
     }
-    public void PauseLibraryPrefetch(){File.WriteAllText(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db")),"");libraryCancellation?.Cancel();}
+    void StartLyricsPrefetch(string path)
+    {
+        libraryCancellation?.Dispose();libraryCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=libraryCancellation.Token;
+        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),new LibraryLyricsProvider(provider),()=>foregroundLookupActive);
+        prefetcher.Progress+=progress=>{if(!disposed)dispatcher.BeginInvoke(()=>{LibraryStatus=progress;Updated?.Invoke();});};
+        prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;if(Snapshot is { } s && TrackMetadata.FromAppleSession(s.Track).Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(s.Track);if(b is not null)Apply(b);}});};
+        libraryTask=Task.Run(async()=>{try{await prefetcher.RunAsync(path,token);}catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{LibraryStatus=LibraryStatus with{Running=false,Message="资料库扫描失败："+e.Message};Updated?.Invoke();});}},token);
+    }
+    void StartArtworkPrefetch(string path)
+    {
+        artworkCancellation?.Dispose();artworkCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=artworkCancellation.Token;
+        artworkTask=Task.Run(async()=>
+        {
+            using var worker=new LibraryArtworkImporter(store.Root);
+            worker.Progress+=progress=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{ArtworkStatus=progress;Updated?.Invoke();});};
+            worker.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>
+            {
+                if(disposed || Snapshot is not { } s)return;var current=TrackMetadata.FromAppleSession(s.Track);
+                if(current.Fingerprint==track.Fingerprint || current.Album.Length>0 && MatchRules.Normalize(current.Artist)==MatchRules.Normalize(track.Artist) && MatchRules.Normalize(current.Album)==MatchRules.Normalize(track.Album))_=LoadArtworkAsync(s);
+            });};
+            try{await worker.RunAsync(path,token);}
+            catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{ArtworkStatus=ArtworkStatus with{Running=false,Message="封面扫描失败："+e.Message};Updated?.Invoke();});}
+        },token);
+    }
+    void RefreshExternalProgress()
+    {
+        if(disposed)return;
+        try
+        {
+            var path=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(libraryTask is not {IsCompleted:false} && File.Exists(path))LibraryStatus=(System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(path))??LibraryStatus) with{Running=LibraryPrefetcher.IsRunning(Path.Combine(store.Root,"lyrics.db"))};
+            path=LibraryArtworkImporter.ProgressPath(store.Root);if(artworkTask is not {IsCompleted:false} && File.Exists(path))ArtworkStatus=(System.Text.Json.JsonSerializer.Deserialize<ArtworkProgress>(File.ReadAllText(path))??ArtworkStatus) with{Running=LibraryArtworkImporter.IsRunning(store.Root)};
+            Updated?.Invoke();
+        }
+        catch(IOException){}catch(System.Text.Json.JsonException){}
+    }
+    public void PauseLibraryPrefetch(){File.WriteAllText(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db")),"");libraryCancellation?.Cancel();artworkCancellation?.Cancel();}
     public async Task ResumeLibraryPrefetchAsync(bool retryDeferred=false)
     {
         if(libraryCancellation?.IsCancellationRequested==true && libraryTask is not null){try{await libraryTask;}catch(OperationCanceledException){}}
-        if(retryDeferred)repository.ResetLibraryRetries();
+        if(artworkCancellation?.IsCancellationRequested==true && artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
+        if(retryDeferred){repository.ResetLibraryRetries();using var artwork=new ArtworkCache(store.Root);artwork.ResetRetries();}
         File.Delete(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db")));
         if(!disposed)StartLibraryPrefetch();
     }
@@ -65,10 +113,6 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     {
         if (disposed) return;
         var old = Snapshot;
-        if(libraryTask?.IsCompleted==true)
-        {
-            try{var p=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(File.Exists(p))LibraryStatus=System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(p))??LibraryStatus;}catch(IOException){}catch(System.Text.Json.JsonException){}
-        }
         bool changed = old?.SessionId != s?.SessionId || old?.Generation != s?.Generation || old?.Revision != s?.Revision;
         bool durationArrived = s?.Track.DurationMs is not null && (old?.Track.DurationMs is null || Math.Abs((old.Track.DurationMs ?? 0) - s.Track.DurationMs.Value) > 5000);
         Snapshot = s; clock.Update(s);
@@ -78,16 +122,49 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
             lookup?.Cancel(); requests.Next(); Document = null; Binding = null; Candidates = [];
             LyricsStatus = s is null ? "等待 Apple Music；也可以手动查找和导入" : "正在查找歌词…";
             ArtworkChanged?.Invoke(null);
-            if (s is not null) { _ = LookupAsync(false); _ = LoadArtworkAsync(s.Generation, s.Revision); }
+            Interlocked.Increment(ref artworkRequestVersion);
+            if (s is not null) { _ = LookupAsync(false); _ = LoadArtworkAsync(s); }
         }
         else if (durationArrived && s is not null && Binding is null) _ = LookupAsync(false);
         else if(s is not null && Binding is null && Settings.OnlineLookup && !foregroundLookupActive && DateTimeOffset.UtcNow>=nextLookupRetry)_=LookupAsync(false);
         Updated?.Invoke();
     }
-    async Task LoadArtworkAsync(long generation, long revision)
+    async Task LoadArtworkAsync(PlaybackSnapshot expected)
     {
-        try { var bytes = await Source.GetArtworkAsync(); if (!disposed && Snapshot?.Generation == generation && Snapshot.Revision == revision) ArtworkChanged?.Invoke(bytes); }
+        var serial=Interlocked.Increment(ref artworkRequestVersion);
+        try
+        {
+            var cached=await Task.Run(()=>{using var artwork=new ArtworkCache(store.Root);return artwork.Find(expected.Track);},lifetime.Token);
+            byte[]? bytes=cached?.Bytes;
+            if(cached?.HighResolution!=true)
+            {
+                var session=await Source.GetArtworkAsync();
+                if(session is not null)
+                {
+                    try{var size=ImageDimensions.Read(session);if(cached is null || (long)size.Width*size.Height>(long)cached.Width*cached.Height)bytes=session;}
+                    catch(InvalidDataException){if(cached is null)bytes=session;}
+                }
+            }
+            if(!disposed && serial==artworkRequestVersion && Snapshot?.SessionId==expected.SessionId && Snapshot.Generation==expected.Generation && Snapshot.Revision==expected.Revision)ArtworkChanged?.Invoke(bytes);
+        }
+        catch(OperationCanceledException){}
         catch (Exception e) { store.Log("Artwork: " + e.GetType().Name); }
+    }
+    async Task LoadManualArtworkAsync(Track expected)
+    {
+        var serial=Interlocked.Increment(ref artworkRequestVersion);
+        try
+        {
+            var cached=await Task.Run(()=>{using var artwork=new ArtworkCache(store.Root);return artwork.Find(expected);},lifetime.Token);
+            if(!disposed && serial==artworkRequestVersion && Snapshot is null && ManualTrack==expected)ArtworkChanged?.Invoke(cached?.Bytes);
+        }
+        catch(OperationCanceledException){}
+        catch(Exception e){store.Log("Manual artwork: "+e.GetType().Name);}
+    }
+    public Task RefreshArtworkAsync()=>Snapshot is { } s?LoadArtworkAsync(s):ManualTrack is { } track?LoadManualArtworkAsync(track):Task.CompletedTask;
+    void SetManualTrack(Track track)
+    {
+        ManualTrack=track;ArtworkChanged?.Invoke(null);_=LoadManualArtworkAsync(track);
     }
     public async Task LookupAsync(bool force)
     {
@@ -137,7 +214,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     {
         lookup?.Cancel(); requests.Next();foregroundLookupActive=false;
         var b = repository.Save(target,raw,source,true,plain:plain);
-        if (Snapshot is null) ManualTrack=target;
+        if (Snapshot is null) SetManualTrack(target);
         if (ActiveTrack?.Fingerprint == target.Fingerprint) Apply(b);
     }
     public void SelectCandidate(Track target,LyricsCandidate candidate)
@@ -145,7 +222,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
         lookup?.Cancel(); requests.Next();foregroundLookupActive=false;
         var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir); File.WriteAllText(Path.Combine(dir,candidate.Id + ".json"),candidate.RawJson);
         var b = repository.Save(target,candidate.Content,$"LRCLIB #{candidate.Id}",true,candidate.Instrumental,providerJson:candidate.RawJson);
-        if (Snapshot is null) ManualTrack=target;
+        if (Snapshot is null) SetManualTrack(target);
         if (ActiveTrack?.Fingerprint == target.Fingerprint) Apply(b);
     }
     public void SetOffset(double ms)
@@ -156,7 +233,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     public async Task LookupManualAsync(Track track)
     {
         lookup?.Cancel();lookup=new();var token=lookup.Token;var serial=requests.Next();
-        try { var results=await provider.LookupAsync(track,token);if(token.IsCancellationRequested || disposed || !requests.IsCurrent(serial))return;ManualTrack=track;Candidates=results;LyricsStatus=$"找到 {results.Count} 个候选，请确认版本";Updated?.Invoke(); }
+        try { var results=await provider.LookupAsync(track,token);if(token.IsCancellationRequested || disposed || !requests.IsCurrent(serial))return;if(Snapshot is null)SetManualTrack(track);else ManualTrack=track;Candidates=results;LyricsStatus=$"找到 {results.Count} 个候选，请确认版本";Updated?.Invoke(); }
         catch(OperationCanceledException) { }
         catch(Exception e) { if(requests.IsCurrent(serial) && !disposed){LyricsStatus=e.Message;Updated?.Invoke();} }
     }
@@ -183,8 +260,9 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     {
         disposed=true;lookup?.Cancel();PauseLibraryPrefetch();lifetime.Cancel();await Source.DisposeAsync();
         if(libraryTask is not null){try{await libraryTask;}catch(OperationCanceledException){}}
+        if(artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
         if(libraryMonitor is not null){try{await libraryMonitor;}catch(OperationCanceledException){}}
         // Let a canceled HTTP continuation finish before disposing its semaphore.
-        provider.Dispose();repository.Dispose(); store.Save(Settings);
+        provider.Dispose();repository.Dispose();libraryCancellation?.Dispose();artworkCancellation?.Dispose();lifetime.Dispose();store.Save(Settings);
     }
 }

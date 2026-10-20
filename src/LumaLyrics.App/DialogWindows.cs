@@ -108,8 +108,8 @@ public sealed class LibraryWindow : Window
 {
     public LibraryWindow(PlaybackCoordinator c)
     {
-        Title="浮光歌词 · 资料库预缓存";
-        var p=DialogUi.Panel(this,"播放之前，歌词已准备好","自动读取本机资料库，按歌名、歌手、专辑、时长和歌词结构筛选。进度保存在本机，退出后下次继续。播放中的歌曲优先查词。");
+        Title="浮光歌词 · 资料库";
+        var p=DialogUi.Panel(this,"把音乐的细节，提前备好","动态歌词按录音版本、时长、时间戳与全文覆盖筛选。封面直接对应 Apple Music 资料库，优先缓存高清图片。进度保存在本机，下次继续。");
         var status=new TextBlock{TextWrapping=TextWrapping.Wrap,FontSize=17,Margin=new(0,4,0,18)};p.Children.Add(status);
         var progress=new ProgressBar{Height=8,Minimum=0,Maximum=1};p.Children.Add(progress);
         var path=DialogUi.Field(p,"Apple Music 资料库路径",c.Settings.LibraryPath??AppleMusicLibraryReader.Discover()??"");path.IsReadOnly=true;
@@ -117,8 +117,8 @@ public sealed class LibraryWindow : Window
         DialogUi.Button(p,"暂停后台预缓存",()=>{c.Settings.AutoPrefetchLibrary=false;c.SaveSettings();c.PauseLibraryPrefetch();});
         DialogUi.Button(p,"继续预缓存",async()=>{if(!c.Settings.OnlineLookup){MessageBox.Show(this,"请先在设置中开启联网查词。");return;}c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync();});
         DialogUi.Button(p,"立即重试尚未缓存的歌曲",async()=>{c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync(true);});
-        var note=new TextBlock{Text="自动检查会排除明显截断、异常时间戳和错误录音版本。没有可靠结果的歌曲保留在重试队列，不会弹窗打断播放。第三方歌词的准确性与完整性仍受来源限制。",TextWrapping=TextWrapping.Wrap,Margin=new(0,20,0,0)};ThemeManager.Bind(note,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(note);
-        void Refresh(){var s=c.LibraryStatus;status.Text=s.ToString();progress.Maximum=Math.Max(1,s.Total);progress.Value=s.Cached+s.Unavailable+s.Errors;}
+        var note=new TextBlock{Text="只自动保存通过检查的动态歌词；静态全文不计入动态歌词，手动绑定会保留。确认的纯音乐歌词区留空。待补齐与网络错误分开记录，缺少歌词不会被当作纯音乐。高清按实际图片尺寸统计。",TextWrapping=TextWrapping.Wrap,Margin=new(0,20,0,0)};ThemeManager.Bind(note,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(note);
+        void Refresh(){var s=c.LibraryStatus;var a=c.ArtworkStatus;status.Text=s+"\n\n"+a;progress.Maximum=Math.Max(1,s.Total+a.Total);progress.Value=s.Cached+s.Unavailable+s.Errors+s.Manual+a.Cached+a.Unavailable+a.Errors;}
         c.Updated+=Refresh;Closed+=(_,_)=>c.Updated-=Refresh;Refresh();
     }
 }

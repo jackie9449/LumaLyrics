@@ -8,12 +8,15 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
 {
     readonly HttpClient client;
     readonly SemaphoreSlim gate = new(1);
+    readonly bool searchOnly;readonly TimeSpan minimumInterval;
+    readonly Dictionary<string,IReadOnlyList<LyricsCandidate>?> artistCache=new();
     DateTimeOffset nextRequest;
-    public LrclibProvider(HttpMessageHandler? handler = null)
+    public LrclibProvider(HttpMessageHandler? handler = null,bool searchOnly=false,TimeSpan? minimumInterval=null)
     {
+        this.searchOnly=searchOnly;this.minimumInterval=minimumInterval??TimeSpan.FromSeconds(1);
         client = handler is null ? new() : new(handler);
         client.BaseAddress = new("https://lrclib.net/api/"); client.Timeout = TimeSpan.FromSeconds(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.3.1 (Windows desktop lyrics companion)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.5.0 (https://github.com/jackie9449/LumaLyrics)");
     }
     async Task<string?> GetAsync(string url, CancellationToken token)
     {
@@ -26,16 +29,20 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
                 try
                 {
                     using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
-                    nextRequest = DateTimeOffset.UtcNow.AddSeconds(1);
+                    nextRequest = DateTimeOffset.UtcNow+minimumInterval;
                     if (response.StatusCode == HttpStatusCode.NotFound) return null;
                     if (response.StatusCode == HttpStatusCode.TooManyRequests)
                     {
                         var retry = response.Headers.RetryAfter;
                         nextRequest = (retry?.Date ?? DateTimeOffset.UtcNow + (retry?.Delta ?? TimeSpan.FromSeconds(30))).AddMilliseconds(Random.Shared.Next(20,250));
                         if (attempt == 0) continue;
-                        throw new LyricsProviderException("歌词服务暂时限流，请稍后重试。");
+                        throw new LyricsProviderException("歌词服务暂时限流，请稍后重试。",429);
                     }
-                    if ((int)response.StatusCode >= 500 && attempt == 0) { nextRequest = DateTimeOffset.UtcNow.AddSeconds(2); continue; }
+                    if ((int)response.StatusCode >= 500)
+                    {
+                        var retry=response.Headers.RetryAfter;nextRequest=retry?.Date??DateTimeOffset.UtcNow+(retry?.Delta??TimeSpan.FromSeconds(2));
+                        if(attempt==0)continue;
+                    }
                     if (!response.IsSuccessStatusCode) throw new LyricsProviderException($"歌词服务错误（{(int)response.StatusCode}）。",(int)response.StatusCode);
                     if (response.Content.Headers.ContentLength > 2 * 1024 * 1024) throw new LyricsProviderException("歌词响应超过 2 MB。");
                     using var stream = await response.Content.ReadAsStreamAsync(token);
@@ -51,13 +58,32 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
         catch (HttpRequestException) { throw new LyricsProviderException("无法连接歌词服务，请检查网络。"); }
         finally { gate.Release(); }
     }
-    static LyricsCandidate Parse(JsonElement e)
+    internal static LyricsCandidate Parse(JsonElement e)
     {
         string? S(string key) => e.TryGetProperty(key, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
         double? d = e.TryGetProperty("duration", out var dp) && dp.ValueKind==JsonValueKind.Number && dp.TryGetDouble(out var v) ? v * 1000 : null;
         long id = e.TryGetProperty("id", out var ip) && ip.ValueKind==JsonValueKind.Number && ip.TryGetInt64(out var n) ? n : 0;
         bool instrumental = e.TryGetProperty("instrumental", out var b) && b.ValueKind == JsonValueKind.True;
         return new(id, new(S("trackName") ?? "", S("artistName") ?? "", S("albumName") ?? "", d), S("syncedLyrics"), S("plainLyrics"), instrumental, e.GetRawText());
+    }
+    public async Task<IReadOnlyList<LyricsCandidate>> LookupLibraryAsync(Track input,CancellationToken token)
+    {
+        var track=TrackMetadata.FromAppleSession(input);var key=MatchRules.Normalize(track.Artist);
+        if(key.Length==0)return await LookupAsync(track,token);
+        if(!artistCache.TryGetValue(key,out var candidates))
+        {
+            try
+            {
+                var raw=await GetAsync("search?q="+Uri.EscapeDataString(track.Artist),token);
+                using var json=JsonDocument.Parse(raw??"[]");var all=json.RootElement.EnumerateArray().Select(Parse).ToArray();
+                // Official search is capped at 20 and has no pagination. A full page
+                // is never evidence that an absent song has no lyrics: use its signature.
+                candidates=all.Length<20?all:null;artistCache[key]=candidates;
+            }
+            catch(LyricsProviderException e) when(e.StatusCode>=500){artistCache[key]=null;candidates=null;}
+            catch(JsonException){throw new LyricsProviderException("歌词服务返回了无法解析的内容。");}
+        }
+        return candidates is null?await LookupAsync(track,token):candidates.Where(c=>MatchRules.Score(track,c).Eligible).ToArray();
     }
     public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track, CancellationToken token)
     {
@@ -66,13 +92,13 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
         try
         {
             var all = new List<LyricsCandidate>();
-            if (track.DurationMs.HasValue)
+            if (!searchOnly && track.DurationMs.HasValue)
             {
                 string? raw=null;
                 try{raw = await GetAsync($"get?track_name={E(track.Title)}&artist_name={E(track.Artist)}&album_name={E(track.Album)}&duration={(track.DurationMs.Value / 1000).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}", token);}
                 catch(LyricsProviderException e) when(e.StatusCode>=500){} // Search can remain available when exact lookup fails.
                 if (raw is not null) { using var doc = JsonDocument.Parse(raw); all.Add(Parse(doc.RootElement)); }
-                if (AutomaticLyricsMatcher.Select(track, all) is not null) return all;
+                if (AutomaticLyricsMatcher.Select(track, all) is {Candidate.Instrumental:false}) return all;
             }
             var search = await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist)}", token);
             if (search is not null) { using var doc = JsonDocument.Parse(search); foreach (var e in doc.RootElement.EnumerateArray()) all.Add(Parse(e)); }
@@ -92,3 +118,7 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
     }
     public void Dispose() { client.Dispose(); } // In-flight cancellation may still release the gate.
 }
+
+/// <summary>Shares the foreground HTTP limiter and caches complete, small artist result sets.</summary>
+public sealed class LibraryLyricsProvider(LrclibProvider provider):ILyricsProvider
+{public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>provider.LookupLibraryAsync(track,token);}

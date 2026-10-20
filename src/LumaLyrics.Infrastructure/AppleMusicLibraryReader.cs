@@ -5,7 +5,7 @@ using System.Text;
 using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
-public sealed record LibraryTrack(string PersistentId,Track Track);
+public sealed record LibraryTrack(string PersistentId,Track Track,string? AlbumPersistentId=null);
 public sealed record LibrarySnapshot(string Path,int DeclaredCount,IReadOnlyList<LibraryTrack> Tracks,string SourceHash);
 
 /// <summary>Original, read-only metadata reader. Binary field definitions are documented
@@ -64,6 +64,9 @@ public sealed class AppleMusicLibraryReader
             if(tag!="itma"){offset+=size;continue;}
             if(size<24)throw new InvalidDataException("曲目记录不完整。");
             string id=BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(offset+16,8)).ToString("X16");
+            // Windows Music stores the album reference at 180 in the expanded itma header.
+            // A fallback is used only if artwork.sqlite confirms it is an album (source_kind 45).
+            string? albumId=size>=188?BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(offset+180,8)).ToString("X16"):null;
             int children=Int(payload,offset+12);if(children<0||children>10000)throw new InvalidDataException("曲目子记录数异常。");
             offset+=size;string title="",artist="",album="";double? duration=null;
             for(int j=0;j<children;j++)
@@ -81,7 +84,7 @@ public sealed class AppleMusicLibraryReader
                 else if(type==1 && length>=180){var value=Int(payload,offset+176);if(value>0 && value<86400000)duration=value;}
                 offset+=length;
             }
-            tracks.Add(new(id,new(title,artist,album,duration)));
+            tracks.Add(new(id,new(title,artist,album,duration),albumId));
             if(expected>=0 && tracks.Count==expected)break; // Only the declared track section is needed.
         }
         if(expected<0||tracks.Count!=expected)throw new InvalidDataException($"资料库曲目计数不一致：声明 {expected}，读取 {tracks.Count}，未把部分结果当作全库。");

@@ -1,22 +1,45 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--asset-status")
+{
+    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");
+    using var lyrics=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));using var artwork=new LumaLyrics.Infrastructure.ArtworkCache(root);
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{lyrics=lyrics.GetLibraryProgress(running:LumaLyrics.Infrastructure.LibraryPrefetcher.IsRunning(Path.Combine(root,"lyrics.db"))),artwork=artwork.GetProgress(running:LumaLyrics.Infrastructure.LibraryArtworkImporter.IsRunning(root))}));return;
+}
+if(args.ElementAtOrDefault(0)=="--artwork")
+{
+    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");Directory.CreateDirectory(root);
+    using var worker=new LumaLyrics.Infrastructure.LibraryArtworkImporter(root);using var cancel=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;cancel.Cancel();};
+    worker.Progress+=p=>Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(p));
+    if(args.Contains("--retry")){using var cache=new LumaLyrics.Infrastructure.ArtworkCache(root);cache.ResetRetries();}
+    File.Delete(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(Path.Combine(root,"lyrics.db")));
+    int? limit=int.TryParse(args.ElementAtOrDefault(2),out var max)?max:null;
+    await worker.RunAsync(LumaLyrics.Infrastructure.AppleMusicLibraryReader.Discover()??throw new FileNotFoundException("No library"),cancel.Token,limit);return;
+}
 if(args.ElementAtOrDefault(0)=="--library-status")
 {
     var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");
-    using var db=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(db.GetLibraryProgress()));return;
+    using var db=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(db.GetLibraryProgress(running:LumaLyrics.Infrastructure.LibraryPrefetcher.IsRunning(Path.Combine(root,"lyrics.db")))));return;
 }
 if(args.ElementAtOrDefault(0)=="--prefetch")
 {
     var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");Directory.CreateDirectory(root);
-    using var provider=new LumaLyrics.Infrastructure.LrclibProvider();
-    var prefetcher=new LumaLyrics.Infrastructure.LibraryPrefetcher(Path.Combine(root,"lyrics.db"),provider);
+    using var provider=new LumaLyrics.Infrastructure.LrclibProvider(searchOnly:args.Contains("--batch"),minimumInterval:args.Contains("--batch")?TimeSpan.FromMilliseconds(250):null);
+    LumaLyrics.Core.ILyricsProvider lookupProvider=args.Contains("--batch")?new LumaLyrics.Infrastructure.LibraryLyricsProvider(provider):provider;
+    var prefetcher=new LumaLyrics.Infrastructure.LibraryPrefetcher(Path.Combine(root,"lyrics.db"),lookupProvider);
     prefetcher.Progress+=p=>Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(p));
     using var cancel=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;cancel.Cancel();};
     int? limit=int.TryParse(args.ElementAtOrDefault(2),out var max)?max:null;
     var db=Path.Combine(root,"lyrics.db");File.Delete(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(db));
+    if(args.Contains("--retry")){using var repository=new LumaLyrics.Infrastructure.LyricsRepository(db);repository.ResetLibraryRetries();}
     do
     {
         await prefetcher.RunAsync(LumaLyrics.Infrastructure.AppleMusicLibraryReader.Discover()??throw new FileNotFoundException("No library"),cancel.Token,limit);
-        if(limit.HasValue||File.Exists(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(db)))break;
+        if(cancel.IsCancellationRequested||limit.HasValue||args.Contains("--once")||File.Exists(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(db)))break;
+        if(args.Contains("--drain"))
+        {
+            using var repository=new LumaLyrics.Infrastructure.LyricsRepository(db);if(repository.GetLibraryProgress().Pending==0)break;
+            try{await Task.Delay(30000,cancel.Token);}catch(OperationCanceledException){break;}continue;
+        }
         try{for(int i=0;i<300&&!File.Exists(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(db));i++)await Task.Delay(1000,cancel.Token);}catch(OperationCanceledException){break;}
     }while(!cancel.IsCancellationRequested&&!File.Exists(LumaLyrics.Infrastructure.LibraryPrefetcher.PausePath(db)));return;
 }

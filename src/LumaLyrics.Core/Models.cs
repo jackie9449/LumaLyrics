@@ -39,7 +39,7 @@ public interface IPlaybackSource : IAsyncDisposable
 }
 public interface ILyricsParser { LyricsDocument Parse(string raw, bool forcePlain = false); }
 public interface ILyricsProvider { Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track, CancellationToken token); }
-public sealed record LyricsBinding(string Id, string TrackId, string Raw, string Source, bool Manual, double OffsetMs, bool Instrumental, bool Plain = false);
+public sealed record LyricsBinding(string Id, string TrackId, string Raw, string Source, bool Manual, double OffsetMs, bool Instrumental, bool Plain = false,string? ProviderJson=null);
 public interface ILyricsRepository
 {
     LyricsBinding? Find(Track track);

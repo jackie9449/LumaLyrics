@@ -106,7 +106,7 @@ public partial class MainWindow : Window
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=s?.CanSeek==true;
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
         vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
-        vm.Library=coordinator.LibraryStatus.ToString();
+        vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
         if(!ReferenceEquals(displayed,coordinator.Document))BuildLyrics();
@@ -116,8 +116,11 @@ public partial class MainWindow : Window
     {
         displayed=coordinator.Document; currentIndex=-2;lyricBlocks.Clear();LyricLines.Children.Clear();
         bool empty=displayed is null || displayed.Instrumental || string.IsNullOrWhiteSpace(displayed.Raw);
-        EmptyState.Visibility=empty?Visibility.Visible:Visibility.Collapsed;
-        EmptyHint.Text=displayed?.Instrumental==true?"这首是纯音乐。":coordinator.Snapshot is null?"在 Apple Music 中播放歌曲，或导入本地歌词进行静态浏览。":coordinator.LyricsStatus;
+        bool instrumental=displayed?.Instrumental==true;
+        overlay.SetInstrumental(instrumental);
+        EmptyState.Visibility=empty&&!instrumental?Visibility.Visible:Visibility.Collapsed;
+        LyricsScroll.Visibility=instrumental?Visibility.Collapsed:Visibility.Visible;ReturnButton.Visibility=Visibility.Collapsed;
+        EmptyHint.Text=coordinator.Snapshot is null?"在 Apple Music 中播放歌曲，或导入本地歌词进行静态浏览。":coordinator.LyricsStatus;
         if(empty)return;
         foreach(var text in displayed!.IsSynced?displayed.Groups.Select(g=>g.Text):displayed.Raw.Split('\n'))
         {
@@ -143,7 +146,7 @@ public partial class MainWindow : Window
             if(index>=0 && DateTime.UtcNow>=manualUntil)CenterLine(Math.Abs(index-old)>2);
         }
         if(DateTime.UtcNow>=manualUntil && ReturnButton.Visibility==Visibility.Visible) {ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
-        if(displayed?.Instrumental==true) {vm.Current="纯音乐";vm.Next=s?.Track.Title ?? "";}
+        if(displayed?.Instrumental==true) {vm.Current="";vm.Next="";}
         else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayed.Groups[index].Text:"前奏";vm.Next=index+1<displayed.Groups.Count?displayed.Groups[index+1].Text:"";}
         else {vm.Current=s?.Track.Title ?? "浮光歌词";vm.Next=displayed is null?"等待歌词":displayed.IsSynced?"同步受限 · 请在主窗口浏览":"静态歌词 · 请在主窗口浏览";}
         if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=coordinator.LyricsStatus;

@@ -10,6 +10,7 @@ public partial class OverlayWindow : Window
     readonly MainWindow owner; readonly AppSettings settings;
     public bool IsLocked { get; private set; }
     bool firstLock=true,placed;
+    bool instrumental;
     readonly DispatcherTimer toolbarDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
     readonly NativeBackdrop backdrop;
     public string MaterialStatus=>backdrop.Status;
@@ -20,7 +21,7 @@ public partial class OverlayWindow : Window
         ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new(new Point(Math.Max(0,target.Width-popup.Width),-popup.Height-4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical),new(new Point(Math.Max(0,target.Width-popup.Width),target.Height+4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical)];
         SourceInitialized+=(_,_)=>NativeWindow.NoActivate(this);
         Loaded+=(_,_)=> {var left=settings.OverlayLeft;var top=settings.OverlayTop;ApplyStyle();UpdateLayout();NativeWindow.Place(this,left,top,true,DefaultBottomInset());placed=true;RememberPosition();};
-        MouseEnter+=(_,_)=>{toolbarDelay.Stop();if(!IsLocked)ToolbarPopup.IsOpen=true;};
+        MouseEnter+=(_,_)=>{toolbarDelay.Stop();if(!IsLocked && !instrumental)ToolbarPopup.IsOpen=true;};
         MouseLeave+=(_,_)=>toolbarDelay.Start();
         toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver)ToolbarPopup.IsOpen=false;};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible){ToolbarPopup.IsOpen=false;toolbarDelay.Stop();}};
@@ -36,7 +37,20 @@ public partial class OverlayWindow : Window
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
         Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(a,settings.ReduceMotion);backdrop.Apply(a);
         if(IsLoaded) {UpdateLayout();backdrop.RoundRegion(a.Radius);if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
+        ApplyInstrumentalState();
     }
+    public void SetInstrumental(bool value)
+    {
+        if(instrumental==value)return;instrumental=value;ApplyInstrumentalState();
+    }
+    void ApplyInstrumentalState()
+    {
+        LyricSurface.Visibility=instrumental?Visibility.Hidden:Visibility.Visible;
+        if(instrumental){ToolbarPopup.IsOpen=false;backdrop.Apply(new(){SystemBlur=false});}
+        else backdrop.Apply(OverlayAppearance.From(settings));
+        if(NativeWindow.Handle(this)!=0)NativeWindow.ClickThrough(this,IsLocked||instrumental);
+    }
+    internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen;
     public void SetLocked(bool locked,bool showTip=true)
     {
         if(locked && !owner.CanRecoverOverlay) { MessageBox.Show("托盘暂不可用，无法安全锁定。请先重新连接托盘。","浮光歌词"); return; }

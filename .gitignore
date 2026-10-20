@@ -19,3 +19,8 @@ docs/*.log
 *.backup
 settings.json
 library-prefetch-progress.json
+artwork-prefetch-progress.json
+library-import-report.json
+**/cache/artwork/
+*-prefetch.lock
+*-prefetch.pause

@@ -5,6 +5,9 @@
 - Application UI themes are selected in Settings. Keep theme selectors off the playback/lyrics main page.
 - Floating desktop lyrics have independent appearance settings, previews, save/cancel behavior and scoped UI resources. Changing the application theme must not change floating lyrics, their toolbar or their appearance editor.
 - Preserve existing lyric bindings, library data, playback behavior and compatibility fallbacks.
+- Automatically import only checked timed lyrics. Preserve manual bindings, never fabricate timestamps, and do not label missing lyrics as instrumental.
+- Confirmed instrumentals leave the main lyric area blank and suppress floating text and its empty surface. Restore the UI when vocal lyrics return.
+- Map covers through Apple Music persistent IDs and confirmed album references. Count high resolution from actual image dimensions, preserve usable fallbacks, and keep personal metadata, images and downloaded lyrics out of Git.
 
 ## Authorized GitHub synchronization
 

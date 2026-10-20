@@ -4,6 +4,10 @@ $releaseVersion = ([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'Direc
 $packageName = "LumaLyrics-$releaseVersion-ui-preview-$Runtime"
 $destination = Join-Path $projectRoot "artifacts/$packageName"
 Invoke-Dotnet publish src/LumaLyrics.App -c Release -r $Runtime --self-contained true '-p:PublishSingleFile=false' '-p:PublishTrimmed=false' --no-restore -o $destination
+$probeDestination=Join-Path $projectRoot ".tools/publish-probe-$releaseVersion"
+Invoke-Dotnet publish tools/LumaLyrics.Probe -c Release -r $Runtime --self-contained true --no-restore -o $probeDestination
+Get-ChildItem -LiteralPath $probeDestination -Filter 'LumaLyrics.Probe.*' -File | Copy-Item -Destination $destination -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Probe.cmd') -Destination $destination -Force
 # Keep the existing app-local Microsoft host entry point for machines where apphost launch stalls.
 $dotnetRoot = Split-Path -Parent $script:Dotnet
 $fxr = Get-ChildItem -LiteralPath (Join-Path $dotnetRoot 'host/fxr') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
@@ -18,7 +22,9 @@ Copy-Item -LiteralPath licenses -Destination $destination -Recurse -Force
 $guide = Join-Path $destination 'docs'
 New-Item -ItemType Directory -Force -Path $guide | Out-Null
 Copy-Item -LiteralPath docs/ui-themes.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/library-assets.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force
 $hash = Get-FileHash -LiteralPath $archive -Algorithm SHA256

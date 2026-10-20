@@ -20,4 +20,15 @@ public class ProviderTests
     }
     [Fact] public async Task CancellationPropagates(){using var cancel=new CancellationTokenSource();cancel.Cancel();using var p=new LrclibProvider(new Handler((r,c)=>throw new Exception("Must not issue request")));await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>p.LookupAsync(track,cancel.Token));}
     [Fact] public async Task NullDurationAndIdAreTolerated(){using var p=new LrclibProvider(new Handler((r,c)=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("[{\"id\":null,\"duration\":null,\"plainLyrics\":\"Test\"}]")})));var results=await p.LookupAsync(track,default);Assert.Single(results);Assert.Null(results[0].Track.DurationMs);}
+    [Fact] public async Task SmallArtistSearchIsSharedWithoutRepeatingMissingSongs()
+    {
+        int requests=0;using var p=new LrclibProvider(new Handler((r,c)=>{requests++;Assert.Contains("search?q=",r.RequestUri!.OriginalString);return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("[]")});}),minimumInterval:TimeSpan.Zero);
+        Assert.Empty(await p.LookupLibraryAsync(track,default));Assert.Empty(await p.LookupLibraryAsync(track with{Title="Another own song"},default));Assert.Equal(1,requests);
+    }
+    [Fact] public async Task FullArtistPageCannotProveAnAbsentSongIsMissing()
+    {
+        int requests=0;var full="["+string.Join(",",Enumerable.Range(1,20).Select(i=>$"{{\"id\":{i},\"trackName\":\"Other\",\"artistName\":\"Singer\"}}"))+"]";
+        using var p=new LrclibProvider(new Handler((r,c)=>{requests++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(requests==1?full:"[]")});}),searchOnly:true,minimumInterval:TimeSpan.Zero);
+        Assert.Empty(await p.LookupLibraryAsync(track,default));Assert.Equal(2,requests);
+    }
 }

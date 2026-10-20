@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 namespace LumaLyrics.App;
@@ -25,6 +26,28 @@ public partial class MainWindow
         var fixture="[00:00.00]微风轻轻推开了窗\n[00:12.00]城市在远处慢慢发亮\n[00:24.00]把此刻，轻轻唱成一束光。\n[00:36.00]让旋律停留在你身旁\n[00:48.00]那些未曾说出口的向往\n[01:00.00]都随着音乐，去往远方\n[01:12.00]留一束光，给正在听的你\n[01:24.00]下一句，随微风慢慢抵达";
         coordinator.Import(new Track("微光之间","浮光","自写文字 · 界面预览",96000),fixture,"UI verification fixture",false);
         checks["localImportRendersLyrics"]=displayed?.Groups.Count==8 && lyricBlocks.Count==8;
+        // Original geometric artwork tests the actual PNG cache and WPF decoder;
+        // no personal library images or external services are used in verification.
+        var artworkDrawing=new DrawingVisual();
+        using(var canvas=artworkDrawing.RenderOpen())
+        {
+            canvas.DrawRectangle(new LinearGradientBrush(Color.FromRgb(16,30,64),Color.FromRgb(52,91,109),35),null,new Rect(0,0,1200,1200));
+            canvas.DrawEllipse(new LinearGradientBrush(Color.FromRgb(224,207,170),Color.FromRgb(114,179,181),65),null,new Point(770,470),400,400);
+            canvas.DrawEllipse(new SolidColorBrush(Color.FromRgb(18,40,68)),null,new Point(615,340),377,377);
+            canvas.DrawLine(new Pen(new SolidColorBrush(Color.FromArgb(80,232,233,221)),2),new Point(100,895),new Point(1100,895));
+            var text=new FormattedText("L U M A  /  微光之间",System.Globalization.CultureInfo.GetCultureInfo("zh-CN"),FlowDirection.LeftToRight,new Typeface("Microsoft YaHei UI"),44,Brushes.White,1);
+            canvas.DrawText(text,new Point(100,960));
+        }
+        var bitmap=new RenderTargetBitmap(1200,1200,96,96,PixelFormats.Pbgra32);bitmap.Render(artworkDrawing);
+        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));using var artworkBytes=new MemoryStream();encoder.Save(artworkBytes);
+        using(var cache=new ArtworkCache(store.Root))
+        {
+            var track=coordinator.ActiveTrack!;var sourcePath=Path.Combine(store.Root,"cache","ui-fixture.png");File.WriteAllBytes(sourcePath,artworkBytes.ToArray());
+            cache.Sync(new("ui-fixture",1,[new("UI",track)],"original-artwork"),new Dictionary<string,AppleArtworkSource>{{"UI",new("UI","original-artwork",null,sourcePath)}});
+            cache.Save(cache.GetQueue().Single(),artworkBytes.ToArray());var cached=cache.Find(track)!;await coordinator.RefreshArtworkAsync();
+            checks["artwork.highResolutionCache"]=cached.HighResolution && cache.GetProgress().HighResolution==1;
+            checks["artwork.wpfDecodesCachedCover"]=Artwork.Source is BitmapImage image && image.PixelWidth==1200 && image.IsFrozen && CoverPlaceholder.Visibility==Visibility.Collapsed;
+        }
         vm.Title="微光之间";vm.Artist="浮光  /  自写文字 · 界面预览";vm.Time="00:24 / 01:36";
         vm.Status="本地歌词 · 静态浏览";vm.Quality="界面预览 · 示例文字";vm.Duration=96000;vm.Position=24000;
         currentIndex=2;LyricLines.Margin=new(0,32,10,60);
@@ -78,6 +101,20 @@ public partial class MainWindow
         }
         LaterClicked(this,new());checks["offsetButtonWorks"]=coordinator.Binding?.OffsetMs==100;
         ResetOffsetClicked(this,new());checks["offsetResetWorks"]=coordinator.Binding?.OffsetMs==0;
+        var instrumental=new LyricsCandidate(900001,new("静静的海面","浮光","自写测试",180000),null,null,true);
+        coordinator.SelectCandidate(instrumental.Track,instrumental);Tick();
+        checks["instrumental.noLyricLines"]=lyricBlocks.Count==0 && LyricLines.Children.Count==0;
+        checks["instrumental.noPlaceholder"]=EmptyState.Visibility==Visibility.Collapsed && LyricsScroll.Visibility==Visibility.Collapsed && ReturnButton.Visibility==Visibility.Collapsed;
+        checks["instrumental.emptyFloatingText"]=vm.Current.Length==0 && vm.Next.Length==0;
+        Width=1220;Height=820;await Task.Delay(80);CaptureMain("instrumental-blank.png");
+        checks["instrumental.noFloatingSurface"]=overlay.InstrumentalSuppressed;
+        checks["instrumental.noOutgoingLyric"]=overlay.LyricSurface.TransitionState.Text.Length==0 && overlay.LyricSurface.TransitionState.OutgoingText.Length==0;
+        checks["artwork.manualTrackChangeClearsOldCover"]=Artwork.Source is null && CoverPlaceholder.Visibility==Visibility.Visible;
+        coordinator.Import(new("微光之间","浮光","自写文字 · 界面预览",96000),fixture,"UI verification fixture",false);Tick();
+        checks["instrumental.vocalSongRestores"]=lyricBlocks.Count==8 && LyricsScroll.Visibility==Visibility.Visible && !overlay.InstrumentalSuppressed;
+        var libraryWindow=new LibraryWindow(coordinator){Owner=this};libraryWindow.Show();await Task.Delay(60);
+        checks["library.separateArtworkProgress"]=Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("高清")) && Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("动态歌词"));
+        VisualVerification.Save(libraryWindow,Path.Combine(directory,"library-assets.png"));libraryWindow.Close();
         Width=1220;Height=820;SelectUiTheme(originalTheme);originalOverlay.Apply(settings);coordinator.SaveSettings();
         var overlayChecks=await VisualVerification.RunAsync(this,directory);
         checks["overlayRegression"]=overlayChecks;

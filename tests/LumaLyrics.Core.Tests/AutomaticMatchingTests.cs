@@ -33,9 +33,26 @@ public class AutomaticMatchingTests
         Assert.Null(AutomaticLyricsMatcher.Select(track,[Candidate() with{Track=track with{DurationMs=220000}}]));
         Assert.Null(AutomaticLyricsMatcher.Select(track,[Candidate() with{Track=track with{Album="Album (Live)"}}]));
     }
-    [Fact] public void PlaceholdersCannotPassAndEmptySyncCanUsePlain()
+    [Fact] public void PlaceholdersAndUntimedLyricsCannotBeAutomaticallyAccepted()
     {
         Assert.False(AutomaticLyricsMatcher.Assess(Candidate() with{SyncedLyrics=null,PlainLyrics="暂无歌词"}).Accepted);
-        var full=Candidate() with{SyncedLyrics=""};Assert.True(AutomaticLyricsMatcher.Assess(full).Accepted);Assert.False(AutomaticLyricsMatcher.Assess(full).Synced);
+        var full=Candidate() with{SyncedLyrics=""};Assert.False(AutomaticLyricsMatcher.Assess(full).Accepted);Assert.Null(AutomaticLyricsMatcher.Select(track,[full]));
+    }
+    [Fact] public void InstrumentalFlagCannotContradictVocalLyrics()
+    {
+        Assert.False(AutomaticLyricsMatcher.Assess(Candidate() with{Instrumental=true}).Accepted);
+        Assert.True(AutomaticLyricsMatcher.Assess(new(1,track,null,null,true)).Accepted);
+        Assert.Null(AutomaticLyricsMatcher.Select(track,[new(1,track,null,null,false)]));
+    }
+    [Fact] public void DifferentAlbumNeedsVeryCloseRecordingDuration()
+    {
+        Assert.Null(AutomaticLyricsMatcher.Select(track,[Candidate() with{Track=track with{Album="Other edition",DurationMs=184000}}]));
+    }
+    [Fact] public void ConflictingRecordsCannotSilentlyTurnAVocalSongIntoAnInstrumental()
+    {
+        var instrumental=new LyricsCandidate(1,track,null,null,true);
+        var partial=Candidate(2) with{SyncedLyrics=null};
+        Assert.Null(AutomaticLyricsMatcher.Select(track,[instrumental,partial]));
+        Assert.False(AutomaticLyricsMatcher.Select(track,[instrumental,Candidate(3)])!.Candidate.Instrumental);
     }
 }

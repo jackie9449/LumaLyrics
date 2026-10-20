@@ -50,7 +50,29 @@ public class LibraryTests : IDisposable
         var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,Library(1));var db=Path.Combine(dir,"lyrics.db");var track=new Track("Track 1","Artist","Album",180000);
         using(var repo=new LyricsRepository(db)){repo.Save(track,"user confirmed text","本地导入",true,plain:true);}
         var provider=new Provider();await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(0,provider.Requests);
-        using var reopened=new LyricsRepository(db);Assert.Equal("user confirmed text",reopened.Find(track)!.Raw);
+        using var reopened=new LyricsRepository(db);Assert.Equal("user confirmed text",reopened.Find(track)!.Raw);Assert.Equal(1,reopened.GetLibraryProgress().Manual);Assert.Equal(0,reopened.GetLibraryProgress().Cached);
+    }
+    [Fact] public async Task OldAutomaticStaticLyricsAreReplacedByTimedLyrics()
+    {
+        var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,Library(1));var db=Path.Combine(dir,"lyrics.db");var track=new Track("Track 1","Artist","Album",180000);
+        using(var repo=new LyricsRepository(db))repo.Save(track,"Old automatic untimed text","LRCLIB #1",false,plain:true);
+        // Simulate the v4 state which older releases considered a completed cache.
+        using(var connection=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}")){connection.Open();using var c=connection.CreateCommand();c.CommandText="PRAGMA user_version=4";c.ExecuteNonQuery();}
+        var provider=new Provider();await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);
+        using var reopened=new LyricsRepository(db);Assert.Equal(1,provider.Requests);Assert.True(new LrcParser().Parse(reopened.Find(track)!.Raw).IsSynced);Assert.Equal(1,reopened.GetLibraryProgress().Synced);Assert.True(File.Exists(db+".pre-v5.backup"));
+    }
+    [Fact] public void RestoringAutomaticBindingRequeuesPreservedManualLibraryTrack()
+    {
+        var db=Path.Combine(dir,"lyrics.db");using var repo=new LyricsRepository(db);var track=new Track("Track 1","Artist","Album",180000);repo.SyncLibrary(new("fixture",1,[new("01",track)],"hash"));repo.Save(track,"Own static text","本地导入",true,plain:true);
+        Assert.Empty(repo.GetLibraryQueue());Assert.Equal(1,repo.GetLibraryProgress().Manual);repo.RestoreAutomatic(track);Assert.Single(repo.GetLibraryQueue());Assert.Equal(1,repo.GetLibraryProgress().Pending);
+    }
+    [Fact] public async Task CompletedStateIsRecheckedWhenItsDocumentFailsTheCurrentPolicy()
+    {
+        var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,Library(1));var db=Path.Combine(dir,"lyrics.db");var track=new Track("Track 1","Artist","Album",180000);
+        using(var repo=new LyricsRepository(db)){repo.SyncLibrary(new(file,1,[new("0000000000000001",track)],"hash"));repo.Save(track,"Old automatic static content","LRCLIB #1",false,plain:true);}
+        using(var connection=new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db}")){connection.Open();using var c=connection.CreateCommand();c.CommandText="UPDATE LibraryTracks SET State='Cached',LyricsKind='Synced'";c.ExecuteNonQuery();}
+        var provider=new Provider();await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(1,provider.Requests);
+        using var reopened=new LyricsRepository(db);Assert.True(LibraryPrefetcher.QualityOf(reopened.Find(track)!,track));
     }
     [Fact] public void CombinedArtistFindsCanonicalCache()
     {
@@ -61,7 +83,20 @@ public class LibraryTests : IDisposable
         var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,Library(1));var db=Path.Combine(dir,"lyrics.db");var provider=new Provider();
         File.WriteAllText(LibraryPrefetcher.PausePath(db),"");await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(0,provider.Requests);File.Delete(LibraryPrefetcher.PausePath(db));
         using var lease=new FileStream(Path.Combine(dir,"library-prefetch.lock"),FileMode.Open,FileAccess.ReadWrite,FileShare.None);
-        await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(0,provider.Requests);
+        await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(0,provider.Requests);Assert.True(LibraryPrefetcher.IsRunning(db));lease.Dispose();Assert.False(LibraryPrefetcher.IsRunning(db));
+    }
+    sealed class WaitingProvider : ILyricsProvider
+    {
+        public TaskCompletionSource<bool> Started=new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token){Started.TrySetResult(true);await Task.Delay(Timeout.Infinite,token);return [];}
+    }
+    [Fact] public async Task CrossProcessPauseInterruptsAnInflightRequest()
+    {
+        var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,Library(1));var db=Path.Combine(dir,"lyrics.db");var provider=new WaitingProvider();
+        var worker=new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero);var run=worker.RunAsync(file,default);await provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        File.WriteAllText(LibraryPrefetcher.PausePath(db),"");await run.WaitAsync(TimeSpan.FromSeconds(3));
+        using var repo=new LyricsRepository(db);Assert.Equal(1,repo.GetLibraryProgress().Pending);Assert.Equal(0,repo.GetLibraryProgress().Cached);
+        var progress=System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(LibraryPrefetcher.ProgressPath(db)));Assert.False(progress!.Running);
     }
     public void Dispose(){Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();Directory.Delete(dir,true);}
 }
