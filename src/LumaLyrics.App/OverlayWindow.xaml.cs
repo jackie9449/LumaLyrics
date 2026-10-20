@@ -31,6 +31,8 @@ public partial class OverlayWindow : Window
     public void ApplyStyle()
     {
         var a=OverlayAppearance.From(settings);
+        ThemeManager.ApplyOverlayResources(this,a);
+        ThemeManager.ApplyOverlayResources(Toolbar,a);
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
         Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(a,settings.ReduceMotion);backdrop.Apply(a);
         if(IsLoaded) {UpdateLayout();backdrop.RoundRegion(a.Radius);if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}

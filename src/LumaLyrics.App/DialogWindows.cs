@@ -12,9 +12,9 @@ internal static class DialogUi
     public static StackPanel Panel(Window window,string heading,string hint)
     {
         window.Width=650;window.Height=650;window.MinWidth=480;window.MinHeight=400;window.WindowStartupLocation=WindowStartupLocation.CenterOwner;
-        window.Background=(System.Windows.Media.Brush)new System.Windows.Media.BrushConverter().ConvertFromString("#101216")!;window.Foreground=System.Windows.Media.Brushes.WhiteSmoke;window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
+        ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         var p=new StackPanel{Margin=new(26)};p.Children.Add(new TextBlock{Text=heading,FontSize=24,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,12)});
-        p.Children.Add(new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Foreground=System.Windows.Media.Brushes.LightGray,Margin=new(0,0,0,18)});
+        var hintLabel=new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,18)};ThemeManager.Bind(hintLabel,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(hintLabel);
         window.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};return p;
     }
     public static TextBox Field(Panel p,string label,string value="") {p.Children.Add(new TextBlock{Text=label,Margin=new(0,8,0,4)});var box=new TextBox{Text=value};p.Children.Add(box);return box;}
@@ -90,31 +90,6 @@ public sealed class CandidateWindow : Window
     }
     void Refresh(){list.ItemsSource=coordinator.Candidates;choose.IsEnabled=false;status.Text=coordinator.LyricsStatus;}
 }
-public sealed class SettingsWindow : Window
-{
-    public SettingsWindow(PlaybackCoordinator c)
-    {
-        Title="浮光歌词 · 设置";var s=c.Settings;var p=DialogUi.Panel(this,"把歌词调成你的样子","设置保存在本机。正偏移表示歌词延后，负偏移表示提前。");
-        var online=DialogUi.Check(p,"联网查词（仅向 LRCLIB 发送歌名、歌手、专辑、时长）",s.OnlineLookup);
-        var prefetch=DialogUi.Check(p,"后台预缓存 Apple Music 全部资料库（自动断点继续）",s.AutoPrefetchLibrary);
-        var close=DialogUi.Check(p,"关闭主窗口后继续在托盘运行",s.CloseToTray);
-        var reduce=DialogUi.Check(p,"减少界面动画（含歌词切换）",s.ReduceMotion);var fade=DialogUi.Check(p,"暂停 10 秒后淡出桌面歌词",s.FadeOnPause);
-        DialogUi.Button(p,"打开桌面歌词外观…",()=>{if(Owner is MainWindow main)main.ShowAppearance(this);});
-        var offset=DialogUi.Field(p,"全局歌词偏移（毫秒）",s.GlobalOffsetMs.ToString());
-        var toggle=DialogUi.Field(p,"显示 / 隐藏快捷键",s.ToggleHotkey);var unlock=DialogUi.Field(p,"解锁快捷键",s.UnlockHotkey);
-        var startup=DialogUi.Check(p,"登录 Windows 时启动（默认关闭）",StartupEnabled());
-        DialogUi.Button(p,"清理网络缓存（保留手动绑定）",()=>{c.ClearCache();MessageBox.Show(this,"网络缓存已清理。手动绑定和导入歌词已保留。");});
-        DialogUi.Button(p,"保存设置",()=>{
-            if(!double.TryParse(offset.Text,out var off)||!double.IsFinite(off)||Math.Abs(off)>3600000){MessageBox.Show(this,"请检查歌词偏移数值。");return;}
-            s.OnlineLookup=online.IsChecked==true;s.AutoPrefetchLibrary=prefetch.IsChecked==true;s.CloseToTray=close.IsChecked==true;s.ReduceMotion=reduce.IsChecked==true;s.FadeOnPause=fade.IsChecked==true;
-            s.GlobalOffsetMs=off;s.ToggleHotkey=toggle.Text;s.UnlockHotkey=unlock.Text;
-            try{SetStartup(startup.IsChecked==true);}catch(Exception e){MessageBox.Show(this,"开机启动保存失败："+e.Message);return;}
-            c.SettingsChanged();c.SaveSettings();DialogResult=true;
-        });
-    }
-    static bool StartupEnabled(){using var k=Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");return k?.GetValue("LumaLyrics") is not null;}
-    static void SetStartup(bool enabled){using var k=Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");if(enabled)k.SetValue("LumaLyrics","\""+Path.Combine(AppContext.BaseDirectory,"LumaLyrics.exe")+"\"");else k.DeleteValue("LumaLyrics",false);}
-}
 public sealed class DiagnosticsWindow : Window
 {
     public DiagnosticsWindow(PlaybackCoordinator c,SettingsStore store,string? hotkeyError)
@@ -142,7 +117,7 @@ public sealed class LibraryWindow : Window
         DialogUi.Button(p,"暂停后台预缓存",()=>{c.Settings.AutoPrefetchLibrary=false;c.SaveSettings();c.PauseLibraryPrefetch();});
         DialogUi.Button(p,"继续预缓存",async()=>{if(!c.Settings.OnlineLookup){MessageBox.Show(this,"请先在设置中开启联网查词。");return;}c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync();});
         DialogUi.Button(p,"立即重试尚未缓存的歌曲",async()=>{c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync(true);});
-        p.Children.Add(new TextBlock{Text="自动检查会排除明显截断、异常时间戳和错误录音版本。没有可靠结果的歌曲保留在重试队列，不会弹窗打断播放。第三方歌词的准确性与完整性仍受来源限制。",TextWrapping=TextWrapping.Wrap,Margin=new(0,20,0,0),Foreground=System.Windows.Media.Brushes.LightGray});
+        var note=new TextBlock{Text="自动检查会排除明显截断、异常时间戳和错误录音版本。没有可靠结果的歌曲保留在重试队列，不会弹窗打断播放。第三方歌词的准确性与完整性仍受来源限制。",TextWrapping=TextWrapping.Wrap,Margin=new(0,20,0,0)};ThemeManager.Bind(note,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(note);
         void Refresh(){var s=c.LibraryStatus;status.Text=s.ToString();progress.Maximum=Math.Max(1,s.Total);progress.Value=s.Cached+s.Unavailable+s.Errors;}
         c.Updated+=Refresh;Closed+=(_,_)=>c.Updated-=Refresh;Refresh();
     }

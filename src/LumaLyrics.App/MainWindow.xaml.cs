@@ -24,17 +24,51 @@ public partial class MainWindow : Window
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
-        InitializeComponent(); store=new(dataDirectory); DataContext=vm; settings=store.Load(); coordinator=new(Dispatcher,store,settings);
+        store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme);
+        InitializeComponent();DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
+        SelectUiTheme(settings.UiTheme,false);
         coordinator.Updated+=Update; coordinator.ArtworkChanged+=SetArtwork;
         timer=new DispatcherTimer(TimeSpan.FromMilliseconds(33),DispatcherPriority.Background,(_,_)=>Tick(),Dispatcher);
         Loaded+=OnLoaded; Closing+=OnClosing; SizeChanged+=OnSize;
         SystemEvents.PowerModeChanged+=PowerModeChanged; SystemEvents.DisplaySettingsChanged+=DisplayChanged;
         LocationChanged+=(_,_)=> { if(IsLoaded && WindowState==WindowState.Normal) { var p=NativeWindow.Location(this); settings.MainLeft=p.Left; settings.MainTop=p.Top; } };
     }
+    internal void SelectUiTheme(string id,bool persist=true)
+    {
+        var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id);
+        ClipArtwork();
+        StyleLyricLines(-1,currentIndex);
+        if(persist)coordinator.SaveSettings();
+    }
+    void ClipArtwork()
+    {
+        if(ArtworkBorder.ActualWidth>0 && ArtworkBorder.ActualHeight>0)
+            ArtworkBorder.Clip=new RectangleGeometry(new Rect(0,0,ArtworkBorder.ActualWidth,ArtworkBorder.ActualHeight),ThemeManager.Current.Radius,ThemeManager.Current.Radius);
+    }
+    void TitleBarPressed(object sender,MouseButtonEventArgs e)
+    {
+        if(e.OriginalSource is DependencyObject source)
+            for(var node=source;node is not null;node=VisualTreeHelper.GetParent(node))
+                if(node is System.Windows.Controls.Primitives.ButtonBase)return;
+        if(e.ClickCount==2)WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized;
+        else if(e.LeftButton==MouseButtonState.Pressed)DragMove();
+    }
+    void MinimizeClicked(object sender,RoutedEventArgs e)=>WindowState=WindowState.Minimized;
+    void MaximizeClicked(object sender,RoutedEventArgs e)=>WindowState=WindowState==WindowState.Maximized?WindowState.Normal:WindowState.Maximized;
+    void CloseClicked(object sender,RoutedEventArgs e)=>Close();
     async void OnLoaded(object sender,RoutedEventArgs e)
     {
         NativeWindow.Place(this,settings.MainLeft,settings.MainTop);
+        var startupArgs=Environment.GetCommandLineArgs();int uiArg=Array.IndexOf(startupArgs,"--verify-ui");
+        if(uiArg>=0 && uiArg+1<startupArgs.Length)
+        {
+            SetupTray();timer.Stop();
+            try{await VerifyUiThemesAsync(startupArgs[uiArg+1]);}
+            catch(Exception ex){store.Log("UI verification: "+ex);Directory.CreateDirectory(startupArgs[uiArg+1]);File.WriteAllText(Path.Combine(startupArgs[uiArg+1],"failure.txt"),ex.ToString());}
+            if(startupArgs.Contains("--exit-after-capture"))await QuitAsync();return;
+        }
         SetupTray(); hotkeys=new(this,id=>{if(id==1)ToggleOverlay();else {if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);}});
         RegisterHotkeys(); if(settings.OverlayVisible)overlay.Show();
         try { await coordinator.StartAsync(); } catch(Exception ex) { vm.Status="连接失败，可在诊断页重新连接";store.Log("Start: "+ex.Message); }
@@ -128,7 +162,7 @@ public partial class MainWindow : Window
             var color=((SolidColorBrush)FindResource(active?"TextBrush":"MutedBrush")).Color;
             var priorColor=line.Foreground is SolidColorBrush previous?previous.Color:color;
             line.FontSize=active?34:24;line.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;
-            line.BeginAnimation(OpacityProperty,null);line.Opacity=active?1:.65;line.RenderTransform=Transform.Identity;
+            line.BeginAnimation(OpacityProperty,null);line.Opacity=active?1:ThemeManager.Current.IsDark?.65:.82;line.RenderTransform=Transform.Identity;
             var brush=new SolidColorBrush(color);line.Foreground=brush;
             if(!motion || i!=oldIndex && i!=newIndex)continue;
             var ease=new CubicEase{EasingMode=EasingMode.EaseOut};var scale=new ScaleTransform(1,1);line.RenderTransformOrigin=new(0,.5);line.RenderTransform=scale;
@@ -156,12 +190,16 @@ public partial class MainWindow : Window
     }
     void OnSize(object s,SizeChangedEventArgs e)
     {
-        if(InfoPanel is null)return;bool narrow=ActualWidth<900;
+        if(InfoPanel is null)return;bool narrow=ActualWidth<930;
         Grid.SetColumn(InfoPanel,0);Grid.SetRow(InfoPanel,0);Grid.SetColumn(LyricsPanel,narrow?0:1);Grid.SetRow(LyricsPanel,narrow?1:0);Grid.SetColumnSpan(InfoPanel,narrow?2:1);Grid.SetColumnSpan(LyricsPanel,narrow?2:1);
-        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(310);InfoRow.Height=narrow?new GridLength(125):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1100?260:310);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
         ArtworkBorder.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;InfoPanel.Margin=narrow?new Thickness(0,0,0,12):new Thickness(0,0,28,0);
-        TrackTitle.FontSize=narrow?20:25;TrackTitle.MaxHeight=narrow?28:104;TrackTitle.Margin=narrow?new Thickness(0,0,0,5):new Thickness(0,18,0,8);TrackArtist.MaxHeight=narrow?20:40;TrackTime.Margin=narrow?new Thickness(0,6,0,4):new Thickness(0,18,0,6);
-        SeekSlider.Visibility=PlaybackControls.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;
+        TrackTitle.FontSize=narrow?18:25;TrackTitle.MaxHeight=narrow?26:70;TrackTitle.Margin=narrow?new Thickness(0,0,0,4):new Thickness(0,20,0,7);TrackArtist.MaxHeight=narrow?18:36;TrackTime.Margin=narrow?new Thickness(0,5,0,0):new Thickness(0,18,0,2);
+        PlaybackControls.Margin=narrow?new Thickness(0,2,0,0):new Thickness(0,8,0,12);
+        ConnectionStatus.Visibility=QualityStatus.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;
+        EmptyState.MaxWidth=narrow?460:390;
+        EmptyState.LayoutTransform=new ScaleTransform(narrow?.68:1,narrow?.68:1);
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>{if(currentIndex>=0 && DateTime.UtcNow>=manualUntil)CenterLine(true);});
     }
     public void Restore() {Show();WindowState=WindowState.Normal;Activate();NativeWindow.ClampVisible(this);}
     public void ToggleOverlay() {if(overlay.IsVisible)overlay.Hide();else {overlay.Show();NativeWindow.ClampVisible(overlay);}settings.OverlayVisible=overlay.IsVisible;coordinator.SaveSettings();}
@@ -179,7 +217,7 @@ public partial class MainWindow : Window
     void OnDragOver(object s,DragEventArgs e) {e.Effects=e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     void OnDrop(object s,DragEventArgs e) {if(e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length>0)new ImportWindow(coordinator,files[0]){Owner=this}.ShowDialog();}
     void CandidatesClicked(object s,RoutedEventArgs e)=>new CandidateWindow(coordinator){Owner=this}.ShowDialog();
-    void SettingsClicked(object s,RoutedEventArgs e) {new SettingsWindow(coordinator){Owner=this}.ShowDialog();overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();}
+    void SettingsClicked(object s,RoutedEventArgs e) {new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this}.ShowDialog();overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();}
     void AppearanceClicked(object s,RoutedEventArgs e)=>ShowAppearance();
     public void ShowAppearance(Window? dialogOwner=null)
     {

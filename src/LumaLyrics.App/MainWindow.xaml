@@ -1,26 +1,101 @@
-<Window x:Class="LumaLyrics.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="浮光歌词 LumaLyrics" Width="1060" Height="720" MinWidth="760" MinHeight="520" Background="#101216" Foreground="#F5F7FA" FontFamily="Segoe UI Variable, Microsoft YaHei UI" WindowStartupLocation="CenterScreen" AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
- <Grid Margin="28,20,28,18" Background="#101216">
-  <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-  <DockPanel Margin="0,0,0,24"><StackPanel DockPanel.Dock="Left" Orientation="Horizontal"><TextBlock Text="◒" FontSize="28" Foreground="{StaticResource AccentBrush}" Margin="0,0,10,0"/><StackPanel><TextBlock Text="浮光歌词" FontSize="20" FontWeight="SemiBold"/><TextBlock Text="L U M A L Y R I C S" FontSize="9" Foreground="{StaticResource MutedBrush}"/></StackPanel></StackPanel><StackPanel HorizontalAlignment="Right" Orientation="Horizontal"><Button Content="{Binding LibraryLabel}" ToolTip="{Binding Library}" Click="LibraryClicked"/><Button Content="桌面歌词" Click="ToggleOverlayClicked"/><Button Content="外观" Click="AppearanceClicked"/><Button Content="设置" Click="SettingsClicked"/><Button Content="诊断" Click="DiagnosticsClicked" Margin="0"/></StackPanel></DockPanel>
-  <Grid x:Name="Body" Grid.Row="1">
-   <Grid.ColumnDefinitions><ColumnDefinition x:Name="InfoColumn" Width="310"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition x:Name="InfoRow" Height="*"/><RowDefinition x:Name="LyricsRow" Height="0"/></Grid.RowDefinitions>
-   <Grid x:Name="InfoPanel" Margin="0,0,28,0">
-    <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <Border x:Name="ArtworkBorder" MaxHeight="270" CornerRadius="20" ClipToBounds="True"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#46405E"/><GradientStop Color="#1B2932" Offset="1"/></LinearGradientBrush></Border.Background><Grid><TextBlock x:Name="CoverPlaceholder" Text="♫" FontSize="104" Opacity="0.25" HorizontalAlignment="Center" VerticalAlignment="Center"/><Image x:Name="Artwork" Stretch="UniformToFill"/></Grid></Border>
-    <TextBlock x:Name="TrackTitle" Grid.Row="1" Text="{Binding Title}" ToolTip="{Binding Title}" FontSize="25" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="104" TextTrimming="CharacterEllipsis" Margin="0,18,0,8"/>
-    <TextBlock x:Name="TrackArtist" Grid.Row="2" Text="{Binding Artist}" FontSize="13" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" MaxHeight="40" LineHeight="20"/>
-    <TextBlock x:Name="TrackTime" Grid.Row="3" Text="{Binding Time}" FontSize="12" Foreground="{StaticResource MutedBrush}" Margin="0,18,0,6"/>
-    <Slider Grid.Row="4" x:Name="SeekSlider" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position,Mode=OneWay}" IsEnabled="{Binding CanSeek}" ToolTip="{Binding Time}" AutomationProperties.Name="播放进度" PreviewMouseLeftButtonUp="SeekReleased"/>
-    <StackPanel x:Name="PlaybackControls" Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,12,0,14"><Button Content="◀" ToolTip="上一首" IsEnabled="{Binding CanPrevious}" Click="PreviousClicked"/><Button x:Name="PlayButton" Content="播放 / 暂停" IsEnabled="{Binding CanPlay}" Click="PlayClicked"/><Button Content="▶" ToolTip="下一首" IsEnabled="{Binding CanNext}" Click="NextClicked" Margin="0"/></StackPanel>
-    <TextBlock Grid.Row="6" Text="{Binding Status}" FontSize="12" Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap"/><TextBlock Grid.Row="7" Text="{Binding Quality}" FontSize="11" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+<Window x:Class="LumaLyrics.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+ Title="浮光歌词 LumaLyrics" Style="{StaticResource {x:Type Window}}" Width="1220" Height="820" MinWidth="820" MinHeight="640" WindowStyle="None" WindowStartupLocation="CenterScreen" AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
+ <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False"/></shell:WindowChrome.WindowChrome>
+ <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="{DynamicResource WindowBrush}">
+  <Grid>
+   <Grid IsHitTestVisible="False" ClipToBounds="True" Opacity="{DynamicResource AmbientOpacity}">
+    <Ellipse Width="680" Height="680" Fill="{DynamicResource GlowBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-340,-170,0"><Ellipse.Effect><BlurEffect Radius="100"/></Ellipse.Effect></Ellipse>
+    <Ellipse Width="400" Height="480" Fill="{DynamicResource SecondaryGlowBrush}" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-180,0,0,-200"><Ellipse.Effect><BlurEffect Radius="90"/></Ellipse.Effect></Ellipse>
    </Grid>
-   <Border x:Name="LyricsPanel" Grid.Column="1" CornerRadius="18" Background="#15181E" Padding="24,10">
-    <Grid><ScrollViewer x:Name="LyricsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ManualScroll" ScrollChanged="LyricsScrollChanged"><StackPanel x:Name="LyricLines" Margin="0,90,10,110"/></ScrollViewer>
-     <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="390"><TextBlock Text="每一句，都有回响。" FontSize="27" FontWeight="SemiBold" TextAlignment="Center"/><TextBlock x:Name="EmptyHint" Text="在 Apple Music 中播放歌曲，歌词将在这里展开。也可以拖入本地 LRC / TXT。" FontSize="14" Foreground="{StaticResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="24" Margin="0,18,0,22"/><Button Content="导入本地歌词" Click="ImportClicked" HorizontalAlignment="Center"/></StackPanel>
-     <Button x:Name="ReturnButton" Content="回到当前歌词 ↓" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Click="ReturnClicked" Margin="0,0,0,8"/>
+   <Grid>
+    <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <Grid Background="Transparent" MouseLeftButtonDown="TitleBarPressed" Margin="14,0,8,0">
+     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="◒" Foreground="{DynamicResource AccentBrush}" FontSize="18" Margin="8,0,9,0"/><TextBlock Text="浮光歌词" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/><TextBlock Text=" /  LumaLyrics" Foreground="{DynamicResource MutedBrush}" Opacity=".65" FontSize="10" VerticalAlignment="Center"/></StackPanel>
+     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClicked" Height="32" Margin="0,4"/>
+      <Button Content="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="最大化或还原" AutomationProperties.Name="最大化或还原" Click="MaximizeClicked" Height="32" Margin="0,4"/>
+      <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="关闭窗口" AutomationProperties.Name="关闭窗口" Click="CloseClicked" Height="32" Margin="0,4"/>
+     </StackPanel>
     </Grid>
-   </Border>
+    <Grid Grid.Row="1">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+     <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Margin="0,6,0,20">
+      <DockPanel Margin="16,12,16,0">
+       <StackPanel DockPanel.Dock="Bottom"><Button Style="{StaticResource NavButton}" Content="&#xE713;" ToolTip="设置" AutomationProperties.Name="设置" Click="SettingsClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE9D9;" ToolTip="诊断" AutomationProperties.Name="诊断" Click="DiagnosticsClicked"/></StackPanel>
+       <StackPanel><Button Style="{StaticResource NavButton}" Content="&#xE8D6;" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="当前歌词" AutomationProperties.Name="回到当前歌词" Click="ReturnClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE8F1;" ToolTip="{Binding Library}" AutomationProperties.Name="资料库" Click="LibraryClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE790;" ToolTip="桌面歌词外观" AutomationProperties.Name="桌面歌词外观" Click="AppearanceClicked"/></StackPanel>
+      </DockPanel>
+     </Border>
+     <Grid Grid.Column="1" Margin="28,14,30,18">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Grid Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+       <StackPanel><TextBlock Text="让音乐，有迹可循。" FontSize="25" FontWeight="SemiBold"/><TextBlock Text="L I S T E N   C L O S E R" FontSize="9" Foreground="{DynamicResource MutedBrush}" Margin="1,7,0,0"/></StackPanel>
+       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="{Binding LibraryLabel}" Click="LibraryClicked" ToolTip="{Binding Library}" FontSize="11" Padding="13,9"/><Button x:Name="OverlayToggle" Content="桌面歌词" Click="ToggleOverlayClicked" ToolTip="Ctrl + Alt + L" Style="{StaticResource PrimaryButton}" FontSize="11" Padding="15,9" Margin="0"/></StackPanel>
+      </Grid>
+      <Grid x:Name="Body" Grid.Row="1">
+       <Grid.ColumnDefinitions><ColumnDefinition x:Name="InfoColumn" Width="310"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+       <Grid.RowDefinitions><RowDefinition x:Name="InfoRow" Height="*"/><RowDefinition x:Name="LyricsRow" Height="0"/></Grid.RowDefinitions>
+       <Grid x:Name="InfoPanel" Margin="0,0,28,0">
+        <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Border x:Name="ArtworkBorder" MaxHeight="290" CornerRadius="{DynamicResource PanelRadius}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="{DynamicResource ArtworkBrush}" ClipToBounds="True">
+         <Grid>
+          <Grid x:Name="CoverPlaceholder" ClipToBounds="True">
+           <Viewbox Stretch="UniformToFill"><Grid Width="310" Height="290">
+            <Ellipse Width="255" Height="255" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-30,-40" Fill="{DynamicResource AccentSoftBrush}" Opacity=".65"/>
+            <Ellipse Width="217" Height="217" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-11,-21" Opacity=".3"/>
+            <Ellipse Width="177" Height="177" Stroke="{DynamicResource AccentBrush}" StrokeThickness=".7" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,9,-1" Opacity=".3"/>
+            <Ellipse Width="137" Height="137" Stroke="{DynamicResource AccentBrush}" StrokeThickness=".7" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,29,19" Opacity=".3"/>
+            <Ellipse Width="97" Height="97" Stroke="{DynamicResource AccentBrush}" StrokeThickness=".7" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,49,39" Opacity=".3"/>
+            <Ellipse Width="15" Height="15" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,90,80"/>
+            <Path Data="M 0,130 C 70,70 125,190 195,115 S 280,60 330,85" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Opacity=".38"/>
+            <StackPanel Margin="27,30,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"><TextBlock Text="LUMA" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/><TextBlock Text="留一束光，&#10;给正在听的你。" FontSize="21" LineHeight="32" Margin="0,10,0,0" Foreground="{DynamicResource TextBrush}"/><TextBlock Text="YOUR MUSIC. YOUR MOMENT." FontSize="7" Foreground="{DynamicResource MutedBrush}" Margin="1,13,0,0"/></StackPanel>
+           </Grid></Viewbox>
+          </Grid>
+          <Image x:Name="Artwork" Stretch="UniformToFill"/>
+         </Grid>
+        </Border>
+        <TextBlock x:Name="TrackTitle" Grid.Row="1" Text="{Binding Title}" ToolTip="{Binding Title}" FontSize="25" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="70" TextTrimming="CharacterEllipsis" Margin="0,20,0,7"/>
+        <TextBlock x:Name="TrackArtist" Grid.Row="2" Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" MaxHeight="36" LineHeight="18"/>
+        <TextBlock x:Name="TrackTime" Grid.Row="3" Text="{Binding Time}" FontSize="10" Foreground="{DynamicResource MutedBrush}" Margin="0,18,0,2"/>
+        <Slider Grid.Row="4" x:Name="SeekSlider" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position,Mode=OneWay}" IsEnabled="{Binding CanSeek}" ToolTip="{Binding Time}" AutomationProperties.Name="播放进度" PreviewMouseLeftButtonUp="SeekReleased"/>
+        <StackPanel x:Name="PlaybackControls" Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,12">
+         <Button Content="&#xE892;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="上一首" AutomationProperties.Name="上一首" IsEnabled="{Binding CanPrevious}" Click="PreviousClicked" Margin="0,0,12,0"/>
+         <Button x:Name="PlayButton" Content="▷ 播放" MinWidth="100" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanPlay}" Click="PlayClicked" Margin="0" ToolTip="播放或暂停"/>
+         <Button Content="&#xE893;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="下一首" AutomationProperties.Name="下一首" IsEnabled="{Binding CanNext}" Click="NextClicked" Margin="12,0,0,0"/>
+        </StackPanel>
+        <TextBlock x:Name="ConnectionStatus" Grid.Row="6" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
+        <TextBlock x:Name="QualityStatus" Grid.Row="7" Text="{Binding Quality}" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,5,0,0"/>
+       </Grid>
+       <Border x:Name="LyricsPanel" Grid.Column="1" CornerRadius="{DynamicResource PanelRadius}" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
+        <Grid>
+         <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFFFFF"/><GradientStop Color="#00FFFFFF" Offset=".4"/><GradientStop Color="#00FFFFFF" Offset=".8"/><GradientStop Color="#9ECDF3" Offset="1"/></LinearGradientBrush></Border.Background></Border>
+         <Grid Margin="30,22,30,20">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+          <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold"/><TextBlock Text="L Y R I C S" FontSize="8" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+          <Grid Grid.Row="1" Margin="0,12,0,0">
+           <ScrollViewer x:Name="LyricsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ManualScroll" ScrollChanged="LyricsScrollChanged"><StackPanel x:Name="LyricLines" Margin="0,70,10,100"/></ScrollViewer>
+           <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="390" Margin="14,0">
+            <Border Width="62" Height="62" CornerRadius="22" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,22"><TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+            <TextBlock Text="每一句，都有回响。" FontSize="25" FontWeight="SemiBold" TextAlignment="Center"/>
+            <TextBlock x:Name="EmptyHint" Text="在 Apple Music 中播放歌曲，&#10;让歌词随旋律，在这里慢慢展开。" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="23" Margin="0,15,0,23"/>
+            <Button Content="＋  导入本地歌词" Click="ImportClicked" HorizontalAlignment="Center" Style="{StaticResource PrimaryButton}" Padding="19,11" Margin="0"/>
+            <TextBlock Text="也可以拖入 LRC / TXT 文件" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" Margin="0,15,0,0"/>
+           </StackPanel>
+           <Button x:Name="ReturnButton" Content="回到当前歌词 ↓" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Click="ReturnClicked" Margin="0,0,0,4"/>
+          </Grid>
+         </Grid>
+        </Grid>
+       </Border>
+      </Grid>
+      <Grid Grid.Row="2" Margin="0,18,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+       <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <StackPanel Orientation="Horizontal"><Button Content="−  0.1s" ToolTip="歌词提前 0.1 秒" AutomationProperties.Name="歌词提前 0.1 秒" Click="EarlierClicked" Padding="12,7" FontSize="11"/><Button Content="＋  0.1s" ToolTip="歌词延后 0.1 秒" AutomationProperties.Name="歌词延后 0.1 秒" Click="LaterClicked" Padding="12,7" FontSize="11"/><Button Content="重置" Click="ResetOffsetClicked" Padding="10,7" FontSize="11" Background="Transparent" BorderThickness="0"/></StackPanel>
+        <StackPanel Grid.Column="2" Orientation="Horizontal"><Button Content="更换歌词" Click="CandidatesClicked" Padding="12,7" FontSize="11"/><Button Content="导入" Click="ImportClicked" Padding="12,7" FontSize="11"/><Button Content="重新搜索" Click="RetryClicked" Padding="12,7" FontSize="11" Margin="0"/></StackPanel>
+       </Grid>
+       <Grid Grid.Row="1" Margin="0,13,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding LyricStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding Offset}" Foreground="{DynamicResource MutedBrush}" FontSize="10"/></Grid>
+      </Grid>
+     </Grid>
+    </Grid>
+   </Grid>
   </Grid>
-  <Grid Grid.Row="2" Margin="0,20,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><DockPanel><StackPanel Orientation="Horizontal" DockPanel.Dock="Left"><Button Content="提前 0.1 秒" Click="EarlierClicked" Padding="10,8"/><Button Content="延后 0.1 秒" Click="LaterClicked" Padding="10,8"/><Button Content="重置" Click="ResetOffsetClicked" Padding="10,8"/></StackPanel><StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="更换歌词" Click="CandidatesClicked"/><Button Content="导入" Click="ImportClicked"/><Button Content="重新搜索" Click="RetryClicked" Margin="0"/></StackPanel></DockPanel><DockPanel Grid.Row="1" Margin="0,14,0,0"><TextBlock Text="{Binding Offset}" DockPanel.Dock="Right" Foreground="{StaticResource MutedBrush}" FontSize="11"/><TextBlock Text="{Binding LyricStatus}" Foreground="{StaticResource MutedBrush}" FontSize="11" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/></DockPanel></Grid>
- </Grid>
+ </Border>
 </Window>

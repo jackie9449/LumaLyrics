@@ -30,8 +30,9 @@ public sealed class AppearanceWindow : Window
     {
         this.settings=settings;this.previewChanged=previewChanged;this.saveSettings=saveSettings;this.materialStatus=materialStatus;
         current=original=OverlayAppearance.From(settings);
-        Title="浮光歌词 · 桌面歌词外观";Width=1120;Height=850;MinWidth=920;MinHeight=720;WindowStartupLocation=WindowStartupLocation.CenterOwner;
-        Background=Brush("#10131A");Foreground=Brush("#EDF0F7");FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
+        Title="浮光歌词 · 悬浮歌词独立外观";Width=1120;Height=850;MinWidth=920;MinHeight=720;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        ThemeManager.ApplyOverlayResources(this,current);
+        ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         Resources.MergedDictionaries.Add(new(){Source=new Uri("/LumaLyrics;component/AppearanceStyles.xaml",UriKind.Relative)});
         var root=new Grid{Margin=new(28,22,28,18)};Content=root;
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
@@ -52,13 +53,6 @@ public sealed class AppearanceWindow : Window
             var item=new ListBoxItem{Content=row,Tag=theme,Padding=new(10),Margin=new(0,0,0,5),ToolTip=theme.Caption};
             item.SetResourceReference(StyleProperty,"ThemeItem");themes.Items.Add(item);
         }
-        var itemStyle=new Style(typeof(ListBoxItem));itemStyle.Setters.Add(new Setter(HorizontalContentAlignmentProperty,HorizontalAlignment.Stretch));
-        var template=new ControlTemplate(typeof(ListBoxItem));
-        var edge=new FrameworkElementFactory(typeof(Border));edge.Name="Edge";edge.SetValue(Border.CornerRadiusProperty,new CornerRadius(14));edge.SetValue(Border.BorderThicknessProperty,new Thickness(1));edge.SetValue(Border.BorderBrushProperty,Brush("#242B38"));edge.SetValue(Border.BackgroundProperty,Brush("#191E28"));edge.SetValue(Border.PaddingProperty,new Thickness(8));
-        var content=new FrameworkElementFactory(typeof(ContentPresenter));edge.AppendChild(content);template.VisualTree=edge;
-        var selected=new Trigger{Property=ListBoxItem.IsSelectedProperty,Value=true};selected.Setters.Add(new Setter(Border.BorderBrushProperty,Brush("#ADA0ED"),"Edge"));selected.Setters.Add(new Setter(Border.BackgroundProperty,Brush("#292B40"),"Edge"));template.Triggers.Add(selected);
-        var hover=new Trigger{Property=IsMouseOverProperty,Value=true};hover.Setters.Add(new Setter(Border.BorderBrushProperty,Brush("#77718F"),"Edge"));template.Triggers.Add(hover);
-        itemStyle.Setters.Add(new Setter(TemplateProperty,template));Resources["ThemeItem"]=itemStyle;
         themes.SelectionChanged+=(_,_)=>{if(!syncing && themes.SelectedItem is ListBoxItem{Tag:OverlayTheme theme})SelectTheme(theme);};
         var right=new Grid();Grid.SetColumn(right,2);body.Children.Add(right);right.RowDefinitions.Add(new(){Height=new(236)});right.RowDefinitions.Add(new(){Height=new(16)});right.RowDefinitions.Add(new());
         var previewPanel=new Grid();previewPanel.RowDefinitions.Add(new(){Height=GridLength.Auto});previewPanel.RowDefinitions.Add(new());previewPanel.RowDefinitions.Add(new(){Height=GridLength.Auto});right.Children.Add(previewPanel);
@@ -69,10 +63,9 @@ public sealed class AppearanceWindow : Window
         tryMotion.Click+=(_,_)=>{string[] phrases=["把此刻，轻轻唱成一束光。","让旋律停留在你身旁","下一句，随微风慢慢抵达。"];previewPhrase=(previewPhrase+1)%phrases.Length;previewText.Current=phrases[previewPhrase];previewText.Next=phrases[(previewPhrase+1)%phrases.Length];};backgrounds.Children.Insert(0,tryMotion);
         Grid.SetRow(scene,1);previewPanel.Children.Add(scene);scene.Child=new ScrollViewer{Content=preview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,VerticalContentAlignment=VerticalAlignment.Center};preview.VerticalAlignment=VerticalAlignment.Center;
         preview.DataContext=previewText;
-        subtitle.FontSize=10;subtitle.Foreground=Brush("#8E99AE");subtitle.Margin=new(0,7,0,0);Grid.SetRow(subtitle,2);previewPanel.Children.Add(subtitle);
+        subtitle.FontSize=10;ThemeManager.Bind(subtitle,TextBlock.ForegroundProperty,"MutedBrush");subtitle.Margin=new(0,7,0,0);Grid.SetRow(subtitle,2);previewPanel.Children.Add(subtitle);
         SetScene(2);
         var tabs=new TabControl{Background=Brushes.Transparent,BorderThickness=new(0),Padding=new(0,12,0,0)};Grid.SetRow(tabs,2);right.Children.Add(tabs);
-        tabs.Resources[typeof(TabItem)]=TabStyle();
         var typography=Columns();tabs.Items.Add(Tab("文字与排版",typography.Grid));
         font=Choice(typography.Left,"字体",Fonts.SystemFontFamilies.Select(f=>f.Source).Append(current.Font).Distinct().OrderBy(x=>x).ToArray(),a=>a with{Font=font.SelectedItem?.ToString()??a.Font});font.IsTextSearchEnabled=true;font.MaxDropDownHeight=260;
         weight=Choice(typography.Right,"字重",["常规","中等","半粗","粗体"],a=>a with{Weight=new[]{"Normal","Medium","SemiBold","Bold"}[Math.Max(0,weight.SelectedIndex)]});
@@ -100,22 +93,20 @@ public sealed class AppearanceWindow : Window
         AddCheck(layout.Right,"border","精细边框与玻璃轮廓",a=>a with{Border=checks["border"].IsChecked==true});
         layout.Left.Children.Add(Label("透明度只影响背景，文字始终清晰。",11,"#8E99AE"));
         var footer=new Grid{Margin=new(0,18,0,0)};Grid.SetRow(footer,2);root.Children.Add(footer);footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
-        var info=new StackPanel{VerticalAlignment=VerticalAlignment.Center};status.FontSize=10;status.Foreground=Brush("#A4ADC0");status.TextWrapping=TextWrapping.Wrap;info.Children.Add(status);info.Children.Add(validation);footer.Children.Add(info);
+        var info=new StackPanel{VerticalAlignment=VerticalAlignment.Center};status.FontSize=10;ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.TextWrapping=TextWrapping.Wrap;info.Children.Add(status);info.Children.Add(validation);footer.Children.Add(info);
         var actions=new StackPanel{Orientation=Orientation.Horizontal};Grid.SetColumn(actions,1);footer.Children.Add(actions);
         var reset=new Button{Content="重置当前主题",Padding=new(12,10,12,10)};reset.Click+=(_,_)=>SelectTheme(OverlayThemes.All.FirstOrDefault(t=>t.Name==current.Preset)??OverlayThemes.All[0]);actions.Children.Add(reset);
         var cancel=new Button{Content="取消",Padding=new(16,10,16,10),IsCancel=true};cancel.Click+=(_,_)=>Close();actions.Children.Add(cancel);
-        save=new Button{Content="保存外观",Background=Brush("#B9ABEB"),Foreground=Brush("#161322"),Padding=new(22,10,22,10),Margin=new(0),IsDefault=true};save.Click+=(_,_)=>Save();actions.Children.Add(save);
+        save=new Button{Content="保存外观",Style=(Style)FindResource("PrimaryButton"),Padding=new(22,10,22,10),Margin=new(0),IsDefault=true};save.Click+=(_,_)=>Save();actions.Children.Add(save);
         Loaded+=(_,_)=>{MaxHeight=SystemParameters.WorkArea.Height;MaxWidth=SystemParameters.WorkArea.Width;};
         Closing+=(_,_)=>{if(!committed){original.Apply(settings);previewChanged();saveSettings();}};
         Sync();
     }
     static Brush Brush(string hex)=>new SolidColorBrush(OverlaySurface.ColorOf(hex));
-    static TextBlock Label(string text,double size=12,string color="#C8CFDF")=>new(){Text=text,FontSize=size,Foreground=Brush(color),Margin=new(0,0,0,6),TextWrapping=TextWrapping.Wrap};
-    static Style TabStyle()
+    static TextBlock Label(string text,double size=12,string color="#C8CFDF")
     {
-        var style=new Style(typeof(TabItem));style.Setters.Add(new Setter(ForegroundProperty,Brush("#A3AEC2")));style.Setters.Add(new Setter(PaddingProperty,new Thickness(18,10,18,10)));style.Setters.Add(new Setter(FontSizeProperty,12d));
-        var template=new ControlTemplate(typeof(TabItem));var border=new FrameworkElementFactory(typeof(Border));border.Name="TabEdge";border.SetValue(Border.CornerRadiusProperty,new CornerRadius(10));border.SetValue(Border.PaddingProperty,new Thickness(18,10,18,10));border.SetValue(Border.MarginProperty,new Thickness(0,0,8,0));var content=new FrameworkElementFactory(typeof(ContentPresenter));content.SetValue(ContentPresenter.ContentSourceProperty,"Header");border.AppendChild(content);template.VisualTree=border;
-        var selected=new Trigger{Property=TabItem.IsSelectedProperty,Value=true};selected.Setters.Add(new Setter(Border.BackgroundProperty,Brush("#2E2C43"),"TabEdge"));selected.Setters.Add(new Setter(ForegroundProperty,Brush("#E1D8FF")));template.Triggers.Add(selected);style.Setters.Add(new Setter(TemplateProperty,template));return style;
+        var label=new TextBlock{Text=text,FontSize=size,Margin=new(0,0,0,6),TextWrapping=TextWrapping.Wrap};
+        ThemeManager.Bind(label,TextBlock.ForegroundProperty,color is "#C7B8FF" or "#B8AEED"?"AccentBrush":"MutedBrush");return label;
     }
     static (Grid Grid,StackPanel Left,StackPanel Right) Columns()
     {
@@ -142,7 +133,7 @@ public sealed class AppearanceWindow : Window
         panel.Children.Add(Label(title));var box=colors[id]=new(){MaxLength=7,Margin=new(0,0,0,7),FontSize=12,Padding=new(10,7,10,7)};AutomationProperties.SetName(box,title);panel.Children.Add(box);
         var chips=new StackPanel{Orientation=Orientation.Horizontal,Margin=new(0,0,0,15)};panel.Children.Add(chips);
         foreach(var color in new[]{"#F5F7FA","#202B40","#B8DFFF","#D9B8FA","#EDF3E9","#25332C","#F6EFE2","#B07957"})
-        {var chip=new Button{Width=20,Height=20,Padding=new(0),Margin=new(0,0,5,0),Background=Brush(color),ToolTip=color};AutomationProperties.SetName(chip,title+color);chip.Click+=(_,_)=>box.Text=color;chips.Children.Add(chip);}
+        {var chip=new Button{Width=20,Height=20,MinHeight=20,Padding=new(0),Margin=new(0,0,5,0),Background=Brush(color),ToolTip=color};AutomationProperties.SetName(chip,title+color);chip.Click+=(_,_)=>box.Text=color;chips.Children.Add(chip);}
         box.TextChanged+=(_,_)=>{if(syncing)return;ValidateColors();if(ValidColor(box.Text))Change(a=>set(a,box.Text.ToUpperInvariant()));};
     }
     static bool ValidColor(string text)=>System.Text.RegularExpressions.Regex.IsMatch(text,"^#[0-9A-Fa-f]{6}$");
@@ -169,6 +160,7 @@ public sealed class AppearanceWindow : Window
     }
     void RefreshPreview()
     {
+        ThemeManager.ApplyOverlayResources(this,current);
         // Same renderer and actual type sizes as the desktop overlay; scrolling handles oversized previews.
         preview.Apply(current,settings.ReduceMotion);status.Text=materialStatus();subtitle.Text=$"{current.Preset}  ·  {current.FontSize:0} px  ·  预览使用示例文字；系统模糊请在桌面悬浮窗查看";
         bool hasBackground=!current.Transparent;

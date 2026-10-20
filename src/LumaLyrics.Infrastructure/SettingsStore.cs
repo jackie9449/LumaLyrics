@@ -4,6 +4,7 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed class AppSettings
 {
+    public string UiTheme { get; set; } = AppThemes.Default;
     public bool OnlineLookup { get; set; } = true;
     public bool AutoPrefetchLibrary { get; set; } = true;
     public string? LibraryPath { get; set; }

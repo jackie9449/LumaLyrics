@@ -10,14 +10,17 @@ namespace LumaLyrics.App;
 // Opt-in, isolated-data verification only. Sample sentences are self-authored and never enter the lyrics database.
 internal static class VisualVerification
 {
-    internal static RenderTargetBitmap Render(FrameworkElement visual)
+    internal static RenderTargetBitmap Render(FrameworkElement visual,bool cropToLayout=false)
     {
         visual.UpdateLayout();var dpi=VisualTreeHelper.GetDpi(visual);
         var bitmap=new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth*dpi.DpiScaleX),(int)Math.Ceiling(visual.ActualHeight*dpi.DpiScaleY),96*dpi.DpiScaleX,96*dpi.DpiScaleY,PixelFormats.Pbgra32);
-        var drawing=new DrawingVisual();using(var dc=drawing.RenderOpen())dc.DrawRectangle(new VisualBrush(visual),null,new Rect(0,0,visual.ActualWidth,visual.ActualHeight));bitmap.Render(drawing);return bitmap;
+        var bounds=new Rect(0,0,visual.ActualWidth,visual.ActualHeight);
+        var brush=new VisualBrush(visual);
+        if(cropToLayout){brush.ViewboxUnits=BrushMappingMode.Absolute;brush.Viewbox=bounds;brush.Stretch=Stretch.Fill;}
+        var drawing=new DrawingVisual();using(var dc=drawing.RenderOpen())dc.DrawRectangle(brush,null,bounds);bitmap.Render(drawing);return bitmap;
     }
-    internal static void Save(FrameworkElement visual,string path)
-    {var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(Render(visual)));using var file=File.Create(path);png.Save(file);}
+    internal static void Save(FrameworkElement visual,string path,bool cropToLayout=false)
+    {var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(Render(visual,cropToLayout)));using var file=File.Create(path);png.Save(file);}
     internal static async Task<Dictionary<string,object?>> RunAsync(Window owner,string directory)
     {
         var checks=new Dictionary<string,object?>();

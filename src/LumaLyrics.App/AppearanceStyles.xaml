@@ -1,29 +1,3 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
- <Style TargetType="ComboBox">
-  <Setter Property="Foreground" Value="#E8ECF7"/><Setter Property="Background" Value="#1E2531"/><Setter Property="BorderBrush" Value="#354055"/><Setter Property="Padding" Value="11,8"/>
-  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
-   <Grid>
-    <ToggleButton x:Name="Toggle" Focusable="False" ClickMode="Press" IsChecked="{Binding IsDropDownOpen,Mode=TwoWay,RelativeSource={RelativeSource TemplatedParent}}">
-     <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="#1E2531" BorderBrush="#354055" BorderThickness="1" CornerRadius="8"><TextBlock Text="⌄" Foreground="#A5AFC3" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,3" FontSize="17"/></Border></ControlTemplate></ToggleButton.Template>
-    </ToggleButton>
-    <ContentPresenter Margin="11,8,32,8" IsHitTestVisible="False" VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
-    <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False">
-     <Border Background="#202734" BorderBrush="#49516A" BorderThickness="1" CornerRadius="10" Padding="5" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
-      <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer>
-     </Border>
-    </Popup>
-   </Grid>
-   <ControlTemplate.Triggers><Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Toggle" Property="Opacity" Value="0.8"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
-  </ControlTemplate></Setter.Value></Setter>
- </Style>
- <Style TargetType="ComboBoxItem">
-  <Setter Property="Foreground" Value="#E8ECF7"/><Setter Property="Padding" Value="10,7"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBoxItem"><Border x:Name="B" CornerRadius="6" Background="Transparent" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="B" Property="Background" Value="#37344F"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="#D3C4FF"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
- </Style>
- <Style TargetType="Slider" BasedOn="{StaticResource LumaSliderStyle}"/>
- <Style TargetType="CheckBox">
-  <Setter Property="Foreground" Value="#CBD3E4"/><Setter Property="VerticalContentAlignment" Value="Center"/>
-  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="Box" Width="16" Height="16" CornerRadius="5" Background="#202734" BorderBrush="#525C72" BorderThickness="1"><Path x:Name="Tick" Data="M 3,7 L 6,10 L 12,4" Stroke="#201B32" StrokeThickness="1.8" Visibility="Hidden"/></Border><ContentPresenter Grid.Column="1" Margin="9,0,0,0" VerticalAlignment="Center"/></Grid><ControlTemplate.Triggers><Trigger Property="IsChecked" Value="True"><Setter TargetName="Box" Property="Background" Value="#BBAAF0"/><Setter TargetName="Box" Property="BorderBrush" Value="#D4C8F7"/><Setter TargetName="Tick" Property="Visibility" Value="Visible"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
- </Style>
- <Style TargetType="ScrollBar" BasedOn="{StaticResource LumaScrollBarStyle}"/>
+ <!-- Controls inherit the shared application theme. -->
 </ResourceDictionary>
