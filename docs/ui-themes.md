@@ -1,12 +1,26 @@
-# 浮光歌词 0.4.1 · 应用界面与独立悬浮歌词
+# 浮光歌词 0.5.1 · 封面取色与独立悬浮歌词
 
 主界面已移除主题切换条。点击左下角设置，在「应用界面」中选择「液态玻璃」「毛玻璃」或「谷歌平面」，立即切换并自动保存。应用主题只影响主窗口和应用设置、导入等业务弹窗。
 
 | 主题 | 设计 |
 | --- | --- |
-| 液态玻璃 | 深海蓝、冰蓝强调色、半透明渐层、细腻高光与轮廓 |
-| 毛玻璃 | 浅矿物绿、柔和雾面、低饱和绿色、舒展留白 |
+| 液态玻璃 | 随封面变化的深色渐层、流光、半透明表面及细腻高光；无封面时使用深海蓝 |
+| 毛玻璃 | 随封面变化的浅色柔雾、低饱和表面与舒展留白；无封面时使用浅矿物绿 |
 | 谷歌平面 | 浅丁香底色、紫色强调、纯色层次、大圆角 |
+
+## 封面与色彩
+
+两种玻璃主题会直接从当前显示的封面取色。暖色封面对应深琥珀或浅米杏背景，冷色封面对应深蓝灰或浅蓝灰背景，背景光晕、面板高光、按钮和滚动条也会协调变化。黑白封面使用中性灰。缺失、损坏、完全透明的封面会恢复所选主题的默认配色，不沿用上一首的颜色。
+
+取色在本机将已解码封面缩小到最多 64 × 64 像素，按可见像素提取主色和有足够占比的辅助色，降低黑白边框及小噪点的影响。主题分别限制深色与浅色表面的明度、饱和度，保持正文和控件可读。不会额外下载图片、保存派生封面或修改个人缓存。
+
+切歌后的配色以 650 毫秒柔和过渡；连续切歌从当前可见颜色继续，结束后释放动画时钟。设置「常规 → 减少界面动画」和 Windows 界面动画偏好均会生效。切换明暗主题立即应用，避免跨明暗过渡中出现文字难读的帧。切到谷歌平面时保留固定丁香色，返回玻璃主题时使用当前封面配色。
+
+| 封面 | 液态玻璃 | 毛玻璃 |
+| --- | --- | --- |
+| 暖色 | [深色流光](screenshots-ui-v051/cover-liquid-warm.png) | [浅色柔雾](screenshots-ui-v051/cover-frost-warm.png) |
+| 冷色 | [深蓝灰](screenshots-ui-v051/cover-liquid-cool.png) | [浅蓝灰](screenshots-ui-v051/cover-frost-cool.png) |
+| 黑白 | [深中性灰](screenshots-ui-v051/cover-liquid-gray.png) | [浅中性灰](screenshots-ui-v051/cover-frost-gray.png) |
 
 左侧依次提供当前歌词、资料库、桌面歌词外观、设置和诊断。顶部「桌面歌词」控制悬浮窗；底部保留校准、导入、更换歌词和重新搜索。窗口缩小时转为上下布局，进度与播放控制仍可使用。
 
@@ -33,17 +47,19 @@ Windows x64，SDK 10.0.402。scripts/common.ps1 优先使用仓库内 .tools/dot
 独立数据目录的 UI 验证（不会启动媒体连接和网络预缓存）：
 
 ```powershell
-./.tools/dotnet/dotnet.exe ./src/LumaLyrics.App/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.dll --data-dir ./.tools/qa-ui --verify-ui ./docs/screenshots-ui-v041 --exit-after-capture
+./.tools/dotnet/dotnet.exe exec ./src/LumaLyrics.App/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.dll --data-dir ./.tools/qa-ui-v051 --verify-ui ./.tools/qa-ui-v051-captures --exit-after-capture
 ```
 
 验证涵盖三种主题的保存、歌词颜色继承、封面裁切、外观控件、保存/取消、导入弹窗，以及 1220×820、980×700、820×640 的布局和播放控件。另运行原有歌词渐变、快速切换、关闭动画、圆角与滑块回归检查。示例歌词为自写文字，测试数据位于独立目录。
 
-本次结果：61 项单元测试、84 项 UI 检查全部通过。检查通过真实设置控件选择应用主题，并确认主界面无选择器、悬浮工具栏与编辑器不随应用主题变化。Release 编译无警告。
+0.5.1 验证：94 项单元测试、125 项 UI 检查全部通过。新增暖/冷/灰度封面、透明和损坏封面回退、窄长图片采样、同主题渐变、动画打断与结束释放、减少动画及谷歌平面固定色检查；确认应用设置随封面变化，而悬浮工具栏与外观编辑器保持独立。Release 编译无警告。
+
+源码版和 0.5.1 自包含包分别通过相同的 125 项检查；运行包使用随包 Microsoft host，SDK 列表为空。
 
 本次 UI 调试不代表已完成 Apple Music 实际播放同步、多显示器跨屏、两小时稳定性及全库网络缓存验收。
 
 本机自动化直接启动 apphost EXE 会在运行时加载前停顿，与原仓库兼容报告中的记录一致；本次未确认其原因。随包 Microsoft host（SDK 列表为空）已完成整套 UI 检查，建议使用 Launch.vbs 启动。
 
-实图：[主界面](screenshots-ui-v041/main-liquid.png)、[应用界面设置](screenshots-ui-v041/settings-liquid.png)、[悬浮歌词设置](screenshots-ui-v041/settings-overlay-liquid.png)、[独立外观编辑器](screenshots-ui-v041/appearance-liquid.png)。
+实图：[主界面](screenshots-ui-v051/cover-liquid-warm.png)、[应用界面设置](screenshots-ui-v051/settings-liquid.png)、[悬浮歌词设置](screenshots-ui-v041/settings-overlay-liquid.png)、[独立外观编辑器](screenshots-ui-v041/appearance-liquid.png)。
 
-机器可读结果见 [ui-check.json](screenshots-ui-v041/ui-check.json)。后续提交、验证与 GitHub 同步规范记录在仓库根目录 [AGENTS.md](../AGENTS.md)。
+机器可读结果见 [ui-check.json](screenshots-ui-v051/ui-check.json)。后续提交、验证与 GitHub 同步规范记录在仓库根目录 [AGENTS.md](../AGENTS.md)。

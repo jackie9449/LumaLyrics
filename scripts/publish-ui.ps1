@@ -25,6 +25,7 @@ Copy-Item -LiteralPath docs/ui-themes.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/library-assets.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/screenshots-ui-v051 -Destination $guide -Recurse -Force
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force
 $hash = Get-FileHash -LiteralPath $archive -Algorithm SHA256

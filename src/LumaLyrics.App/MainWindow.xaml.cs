@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceWindow? appearanceWindow;
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
+    ArtworkPalette? artworkPalette;
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
@@ -37,7 +38,7 @@ public partial class MainWindow : Window
     }
     internal void SelectUiTheme(string id,bool persist=true)
     {
-        var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id);
+        var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id,artworkPalette);
         ClipArtwork();
         StyleLyricLines(-1,currentIndex);
         if(persist)coordinator.SaveSettings();
@@ -188,8 +189,21 @@ public partial class MainWindow : Window
     void ReturnClicked(object s,RoutedEventArgs e) {manualUntil=DateTime.MinValue;ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
     void SetArtwork(byte[]? bytes)
     {
-        Artwork.Source=null;CoverPlaceholder.Visibility=Visibility.Visible;if(bytes is null)return;
-        try {var b=new BitmapImage();b.BeginInit();b.CacheOption=BitmapCacheOption.OnLoad;b.StreamSource=new MemoryStream(bytes);b.EndInit();b.Freeze();Artwork.Source=b;CoverPlaceholder.Visibility=Visibility.Collapsed;}catch(Exception ex){store.Log("Artwork decode: "+ex.GetType().Name);}
+        Artwork.Source=null;CoverPlaceholder.Visibility=Visibility.Visible;artworkPalette=null;
+        if(bytes is not null)
+        {
+            try
+            {
+                using var stream=new MemoryStream(bytes);
+                var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.StreamSource=stream;image.EndInit();image.Freeze();
+                Artwork.Source=image;CoverPlaceholder.Visibility=Visibility.Collapsed;
+                try{artworkPalette=ArtworkPaletteSampler.Extract(image);}
+                catch(Exception ex){store.Log("Artwork palette: "+ex.GetType().Name);}
+            }
+            catch(Exception ex){store.Log("Artwork decode: "+ex.GetType().Name);}
+        }
+        ThemeManager.Apply(settings.UiTheme,artworkPalette,animate:!settings.ReduceMotion);
+        StyleLyricLines(-1,currentIndex);
     }
     void OnSize(object s,SizeChangedEventArgs e)
     {
@@ -220,7 +234,7 @@ public partial class MainWindow : Window
     void OnDragOver(object s,DragEventArgs e) {e.Effects=e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     void OnDrop(object s,DragEventArgs e) {if(e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length>0)new ImportWindow(coordinator,files[0]){Owner=this}.ShowDialog();}
     void CandidatesClicked(object s,RoutedEventArgs e)=>new CandidateWindow(coordinator){Owner=this}.ShowDialog();
-    void SettingsClicked(object s,RoutedEventArgs e) {new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this}.ShowDialog();overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();}
+    void SettingsClicked(object s,RoutedEventArgs e) {new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this}.ShowDialog();SelectUiTheme(settings.UiTheme,false);overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();}
     void AppearanceClicked(object s,RoutedEventArgs e)=>ShowAppearance();
     public void ShowAppearance(Window? dialogOwner=null)
     {

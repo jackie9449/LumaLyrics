@@ -3,6 +3,7 @@
 ## Product requirements
 
 - Application UI themes are selected in Settings. Keep theme selectors off the playback/lyrics main page.
+- Liquid Glass and Frosted Glass derive readable surfaces, glows and control colors from the current cover. Preserve neutral grayscale and default fallbacks, reduced-motion behavior and interruption continuity. Material keeps its fixed palette.
 - Floating desktop lyrics have independent appearance settings, previews, save/cancel behavior and scoped UI resources. Changing the application theme must not change floating lyrics, their toolbar or their appearance editor.
 - Preserve existing lyric bindings, library data, playback behavior and compatibility fallbacks.
 - Automatically import only checked timed lyrics. Preserve manual bindings, never fabricate timestamps, and do not label missing lyrics as instrumental.

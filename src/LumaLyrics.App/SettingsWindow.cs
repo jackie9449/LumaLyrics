@@ -32,6 +32,7 @@ public sealed class SettingsWindow : Window
         var appPanel=new StackPanel();
         appPanel.Children.Add(new TextBlock{Text="应用界面",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,8)});
         appPanel.Children.Add(Text("为主窗口和应用设置挑选一种氛围。选择后立即保存。",12));
+        appPanel.Children.Add(Text("两种玻璃主题随当前封面取色，切歌时柔和过渡。",12));
         appPanel.Children.Add(Text("悬浮歌词拥有自己的外观，不会随这里的选择改变。",12));
         foreach(var theme in AppThemes.All)
         {

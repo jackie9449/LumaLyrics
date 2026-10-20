@@ -67,7 +67,7 @@
        </Grid>
        <Border x:Name="LyricsPanel" Grid.Column="1" CornerRadius="{DynamicResource PanelRadius}" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">
         <Grid>
-         <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}"><Border.Background><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FFFFFF"/><GradientStop Color="#00FFFFFF" Offset=".4"/><GradientStop Color="#00FFFFFF" Offset=".8"/><GradientStop Color="#9ECDF3" Offset="1"/></LinearGradientBrush></Border.Background></Border>
+         <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}" Background="{DynamicResource SheenBrush}"/>
          <Grid Margin="30,22,30,20">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
           <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold"/><TextBlock Text="L Y R I C S" FontSize="8" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
