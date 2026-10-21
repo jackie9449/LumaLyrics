@@ -22,7 +22,11 @@ internal sealed class NativeBackdrop : IDisposable
     public void Apply(OverlayAppearance a,bool force=false)
     {
         bool requested=a.SystemBlur && !a.Transparent && a.Opacity>0 && a.Material is "liquid" or "frost";
-        bool allowed=requested && !SystemParameters.HighContrast && TransparencyAllowed();
+        // Accent blur covers the entire layered HWND, ignoring both its HRGN and WPF alpha mask.
+        // A successful native call therefore still paints square corners. Keep the antialiased
+        // glass layers for rounded surfaces; retain the user's blur preference for radius zero.
+        bool roundedFallback=requested && window.AllowsTransparency && a.Radius>0;
+        bool allowed=requested && !roundedFallback && !SystemParameters.HighContrast && TransparencyAllowed();
         if(NativeWindow.Handle(window)==0)return;
         if(force || enabled!=allowed)
         {
@@ -36,7 +40,7 @@ internal sealed class NativeBackdrop : IDisposable
             catch(Exception ex) when(ex is EntryPointNotFoundException or DllNotFoundException or ExternalException){Accepted=false;}
             enabled=allowed;
         }
-        Status=!requested?"背景模糊未启用":Accepted?"已请求系统背景模糊 · 效果由系统决定":"使用半透明材质 · 系统模糊不可用";
+        Status=!requested?"背景模糊未启用":roundedFallback?"圆角玻璃材质 · 已避免系统模糊溢出":Accepted?"已请求系统背景模糊 · 效果由系统决定":"使用半透明材质 · 系统模糊不可用";
     }
     public void RoundRegion(double radius)
     {

@@ -16,6 +16,11 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-overlay-corners"))
+        {
+            await VerifyOverlayCornersAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         var originalTheme=settings.UiTheme;var originalOverlay=OverlayAppearance.From(settings);
         overlay.ApplyStyle();
         var overlayChrome=overlay.FindResource("RaisedBrush").ToString();
@@ -120,6 +125,7 @@ public partial class MainWindow
         Width=1220;Height=820;SelectUiTheme(originalTheme);originalOverlay.Apply(settings);coordinator.SaveSettings();
         var overlayChecks=await VisualVerification.RunAsync(this,directory);
         checks["overlayRegression"]=overlayChecks;
+        await VerifyOverlayCornersAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

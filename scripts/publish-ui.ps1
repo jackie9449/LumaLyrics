@@ -28,6 +28,7 @@ Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Fo
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v051 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v060 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/screenshots-ui-v061 -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force
