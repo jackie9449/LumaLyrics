@@ -13,7 +13,7 @@ using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 namespace LumaLyrics.App;
 
-internal sealed class MusicLibraryView:UserControl,IDisposable
+internal sealed partial class MusicLibraryView:UserControl,IDisposable
 {
     readonly Func<CancellationToken,Task<MusicLibraryResult>> load;
     readonly Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play;
@@ -57,6 +57,7 @@ internal sealed class MusicLibraryView:UserControl,IDisposable
         AutomationProperties.SetName(songs,"音乐库歌曲");songs.SelectionChanged+=(_,_)=>playSelected.IsEnabled=songs.SelectedItem is MusicRow{Song.CanPlay:true};
         songs.MouseDoubleClick+=(_,e)=>{if(FindRow(e.OriginalSource as DependencyObject) is { } row)BeginPlay(row);};songs.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Enter && songs.SelectedItem is MusicRow row){e.Handled=true;BeginPlay(row);}};
         body.Children.Add(songs);empty.VerticalAlignment=VerticalAlignment.Center;empty.Margin=new(24);ThemeManager.Bind(empty,TextBlock.ForegroundProperty,"MutedBrush");body.Children.Add(empty);
+        SetupAlbumNavigation(heading,manageButton,body);
         var footer=new Grid{Margin=new(0,16,0,0)};Grid.SetRow(footer,3);root.Children.Add(footer);footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.Margin=new(0,0,14,14);footer.Children.Add(status);playSelected.SetResourceReference(StyleProperty,"PrimaryButton");Grid.SetColumn(playSelected,1);footer.Children.Add(playSelected);playSelected.Click+=(_,_)=>{if(songs.SelectedItem is MusicRow row)BeginPlay(row);};
         var now=new Border{CornerRadius=new(16),Padding=new(16,10,16,10),Margin=new(0,4,0,0),BorderThickness=new(1)};ThemeManager.Bind(now,Border.BackgroundProperty,"PanelBrush");ThemeManager.Bind(now,Border.BorderBrushProperty,"BorderBrush");Grid.SetRow(now,1);Grid.SetColumnSpan(now,2);footer.Children.Add(now);
@@ -90,7 +91,7 @@ internal sealed class MusicLibraryView:UserControl,IDisposable
         try
         {
             var result=await load(token);token.ThrowIfCancellationRequested();if(disposed)return;
-            thumbnails.Clear();lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;loaded=true;Filter();
+            thumbnails.Clear();albumCovers.Clear();lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
             status.Text=result.Message.Length>0?result.Message:"双击歌曲或按 Enter 播放 · 歌词与封面随实际播放同步";
         }
         catch(OperationCanceledException){}
@@ -100,13 +101,14 @@ internal sealed class MusicLibraryView:UserControl,IDisposable
     void Filter()
     {
         if(view is null)return;terms=search.Text.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(MatchRules.Normalize).Where(s=>s.Length>0).ToArray();
+        UpdateAlbumSurface();if(showAlbumShelf){FilterAlbums();return;}
         using(view.DeferRefresh())
         {
-            view.Filter=item=>item is MusicRow row && terms.All(t=>row.SearchText.Contains(t,StringComparison.Ordinal));view.SortDescriptions.Clear();
+            view.Filter=item=>item is MusicRow row && (albumSongKeys is null || albumSongKeys.Contains(row.Song.Key)) && terms.All(t=>row.SearchText.Contains(t,StringComparison.Ordinal));view.SortDescriptions.Clear();
             view.SortDescriptions.Add(new(sort.SelectedIndex switch{1=>nameof(MusicRow.Artist),2=>nameof(MusicRow.Album),_=>nameof(MusicRow.Title)},ListSortDirection.Ascending));
             if(sort.SelectedIndex!=0)view.SortDescriptions.Add(new(nameof(MusicRow.Title),ListSortDirection.Ascending));
         }
-        int total=view.SourceCollection.Cast<object>().Count();count.Text=$"{view.Count:N0} / {total:N0} 首歌曲";
+        int total=selectedAlbum?.Songs.Count??view.SourceCollection.Cast<object>().Count();count.Text=$"{view.Count:N0} / {total:N0} 首歌曲";
         empty.Text=total==0?"音乐库还在等第一首歌。\n打开 Apple Music 完成同步，或在缓存管理中选择资料库。":"没有找到匹配的歌曲\n试试歌曲名、艺人或专辑。";empty.Visibility=view.Count==0?Visibility.Visible:Visibility.Collapsed;
     }
     void BeginPlay(MusicRow row){ActivePlayback=PlayAsync(row);}
@@ -124,7 +126,7 @@ internal sealed class MusicLibraryView:UserControl,IDisposable
         string key=track?.Fingerprint??"";if(key==lastTrack || view is null)return;lastTrack=key;
         foreach(MusicRow row in view.SourceCollection)row.NowPlaying=track is not null && MusicLibraryPlayback.IsRequestedRecording(row.Song.Track,track);
     }
-    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();thumbnails.Clear();}
+    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();thumbnails.Clear();albumCovers.Clear();}
     internal sealed class MusicRow(MusicLibrarySong song,ThumbnailCache cache):INotifyPropertyChanged
     {
         public MusicLibrarySong Song=>song;
@@ -140,12 +142,14 @@ internal sealed class MusicLibraryView:UserControl,IDisposable
     }
     internal sealed class ThumbnailCache
     {
+        readonly int decodeWidth;
+        internal ThumbnailCache(int decodeWidth=96)=>this.decodeWidth=decodeWidth;
         readonly Dictionary<string,BitmapImage?> images=new(StringComparer.OrdinalIgnoreCase);readonly Queue<string> order=[];
         internal int Count=>images.Count;
         internal ImageSource? Get(string? path)
         {
             if(path is null)return null;if(images.TryGetValue(path,out var cached))return cached;
-            BitmapImage? image=null;try{if(File.Exists(path)){image=new();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.DecodePixelWidth=96;image.UriSource=new Uri(path);image.EndInit();image.Freeze();}}catch(Exception ex) when(ex is IOException or FormatException or UnauthorizedAccessException or NotSupportedException or ArgumentException){image=null;}
+            BitmapImage? image=null;try{if(File.Exists(path)){image=new();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.DecodePixelWidth=decodeWidth;image.UriSource=new Uri(path);image.EndInit();image.Freeze();}}catch(Exception ex) when(ex is IOException or FormatException or UnauthorizedAccessException or NotSupportedException or ArgumentException){image=null;}
             while(order.Count>=128)images.Remove(order.Dequeue());images[path]=image;order.Enqueue(path);return image;
         }
         internal void Clear(){images.Clear();order.Clear();}

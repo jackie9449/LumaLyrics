@@ -1,6 +1,6 @@
 # 浮光歌词 0.5.1 · 封面取色与独立悬浮歌词
 
-0.8.0 新增[内置音乐库、悬浮拖动优化和双向主题隔离检查](music-library.md)，保留[各悬浮主题自定义记忆](theme-memory.md)、[两种悬浮玻璃](glass-materials.md)、字体悬停预览及[个人资料管理](personal-library.md)。当前回归结果见 [0.8.0 UI 检查](screenshots-ui-v080/ui-check.json)；以下 0.5.1/0.6.1 结果保留为历史版本记录。
+0.9.0 为三种主题加入[专辑网格与专辑内选曲](music-library.md)，保留[各悬浮主题自定义记忆](theme-memory.md)、[两种悬浮玻璃](glass-materials.md)、字体悬停预览及[个人资料管理](personal-library.md)。当前回归结果见 [0.9.0 UI 检查](screenshots-ui-v090/ui-check.json)；以下 0.5.1/0.6.1 结果保留为历史版本记录。
 
 主界面已移除主题切换条。点击左下角设置，在「应用界面」中选择「液态玻璃」「毛玻璃」或「谷歌平面」，立即切换并自动保存。应用主题只影响主窗口和应用设置、导入等业务弹窗。
 

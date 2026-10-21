@@ -144,7 +144,7 @@
       "lumalyrics.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "LumaLyrics.Core": "[0.8.0, )",
+          "LumaLyrics.Core": "[0.9.0, )",
           "Microsoft.Data.Sqlite": "[10.0.13, )"
         }
       }

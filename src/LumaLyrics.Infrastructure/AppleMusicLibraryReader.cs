@@ -5,7 +5,7 @@ using System.Text;
 using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
-public sealed record LibraryTrack(string PersistentId,Track Track,string? AlbumPersistentId=null);
+public sealed record LibraryTrack(string PersistentId,Track Track,string? AlbumPersistentId=null,string AlbumArtist="");
 public sealed record LibrarySnapshot(string Path,int DeclaredCount,IReadOnlyList<LibraryTrack> Tracks,string SourceHash);
 
 /// <summary>Original, read-only metadata reader. Binary field definitions are documented
@@ -68,23 +68,23 @@ public sealed class AppleMusicLibraryReader
             // A fallback is used only if artwork.sqlite confirms it is an album (source_kind 45).
             string? albumId=size>=188?BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(offset+180,8)).ToString("X16"):null;
             int children=Int(payload,offset+12);if(children<0||children>10000)throw new InvalidDataException("曲目子记录数异常。");
-            offset+=size;string title="",artist="",album="";double? duration=null;
+            offset+=size;string title="",artist="",album="",albumArtist="";double? duration=null;
             for(int j=0;j<children;j++)
             {
                 if(offset+20>payload.Length||!payload.AsSpan(offset,4).SequenceEqual("boma"u8))throw new InvalidDataException("曲目元数据记录不完整。");
                 int length=Int(payload,offset+8),type=Int(payload,offset+12);
                 if(length<20||length>payload.Length-offset)throw new InvalidDataException("曲目元数据边界无效。");
-                if(type is 2 or 3 or 4 && length>=36)
+                if(type is 2 or 3 or 4 or 0x1B && length>=36)
                 {
                     int encoding=Int(payload,offset+20),count=Int(payload,offset+24);
                     if(count<0||count>length-36)throw new InvalidDataException("曲目文字长度无效。");
                     var text=(encoding==1?Encoding.Unicode:encoding==2?Encoding.UTF8:throw new InvalidDataException("曲目文字编码不受支持。")).GetString(payload,offset+36,count).TrimEnd('\0');
-                    if(type==2)title=text;else if(type==3)album=text;else artist=text;
+                    if(type==2)title=text;else if(type==3)album=text;else if(type==4)artist=text;else albumArtist=text;
                 }
                 else if(type==1 && length>=180){var value=Int(payload,offset+176);if(value>0 && value<86400000)duration=value;}
                 offset+=length;
             }
-            tracks.Add(new(id,new(title,artist,album,duration),albumId));
+            tracks.Add(new(id,new(title,artist,album,duration),albumId,albumArtist));
             if(expected>=0 && tracks.Count==expected)break; // Only the declared track section is needed.
         }
         if(expected<0||tracks.Count!=expected)throw new InvalidDataException($"资料库曲目计数不一致：声明 {expected}，读取 {tracks.Count}，未把部分结果当作全库。");

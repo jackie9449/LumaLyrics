@@ -3,7 +3,7 @@ using LumaLyrics.Core;
 using Microsoft.Data.Sqlite;
 namespace LumaLyrics.Infrastructure;
 
-public sealed record MusicLibrarySong(string Source,string PersistentId,Track Track,string? CoverPath=null,string LyricsKind="")
+public sealed record MusicLibrarySong(string Source,string PersistentId,Track Track,string? CoverPath=null,string LyricsKind="",string AlbumArtist="",string? AlbumPersistentId=null)
 {
     public string Key=>Source+"\0"+PersistentId;
     public string Title=>Track.Title;
@@ -29,7 +29,10 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
         }
         if(snapshot is null && cached.Count==0)return new([],"尚未找到音乐库。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库。");
         var covers=ReadCovers(token);
-        var items=snapshot?.Tracks.Select(t=>new MusicLibrarySong(snapshot.Path,t.PersistentId,t.Track)).ToArray()??cached.Values.ToArray();
+        IReadOnlyDictionary<string,AppleArtworkSource>? albumReferences=null;
+        if(snapshot is not null)try{albumReferences=new AppleMusicArtworkReader().Read(snapshot.Path);}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or SqliteException){}
+        var items=snapshot?.Tracks.Select(t=>new MusicLibrarySong(snapshot.Path,t.PersistentId,t.Track,AlbumArtist:t.AlbumArtist,
+            AlbumPersistentId:t.AlbumPersistentId is { } id && albumReferences?.TryGetValue(id,out var reference)==true && reference.SourceKind==45?id:null)).ToArray()??cached.Values.ToArray();
         var songs=new List<MusicLibrarySong>(items.Length);
         foreach(var item in items)
         {

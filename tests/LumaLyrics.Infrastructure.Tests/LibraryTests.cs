@@ -8,15 +8,15 @@ public class LibraryTests : IDisposable
 {
     readonly string dir=Path.Combine(Path.GetTempPath(),"Luma-library-"+Guid.NewGuid().ToString("N"));
     public LibraryTests(){Directory.CreateDirectory(dir);}
-    static byte[] Library(int count=2,int? declared=null)
+    static byte[] Library(int count=2,int? declared=null,string? albumArtist=null)
     {
         using var content=new MemoryStream();using var writer=new BinaryWriter(content,Encoding.UTF8,true);
         writer.Write("ltma"u8);writer.Write(12);writer.Write(declared??count);
         for(int i=0;i<count;i++)
         {
-            writer.Write("itma"u8);writer.Write(24);writer.Write(0);writer.Write(4);writer.Write((ulong)(i+1));
+            writer.Write("itma"u8);writer.Write(24);writer.Write(0);writer.Write(albumArtist is null?4:5);writer.Write((ulong)(i+1));
             void Text(int type,string value){var b=Encoding.Unicode.GetBytes(value);var chunk=new byte[36+b.Length];"boma"u8.CopyTo(chunk);BitConverter.GetBytes(20).CopyTo(chunk,4);BitConverter.GetBytes(chunk.Length).CopyTo(chunk,8);BitConverter.GetBytes(type).CopyTo(chunk,12);BitConverter.GetBytes(1).CopyTo(chunk,20);BitConverter.GetBytes(b.Length).CopyTo(chunk,24);b.CopyTo(chunk,36);writer.Write(chunk);}
-            Text(2,$"Track {i+1}");Text(3,"Album");Text(4,"Artist");var numeric=new byte[180];"boma"u8.CopyTo(numeric);BitConverter.GetBytes(20).CopyTo(numeric,4);BitConverter.GetBytes(180).CopyTo(numeric,8);BitConverter.GetBytes(1).CopyTo(numeric,12);BitConverter.GetBytes(180000).CopyTo(numeric,176);writer.Write(numeric);
+            Text(2,$"Track {i+1}");Text(3,"Album");Text(4,"Artist");if(albumArtist is not null)Text(0x1B,albumArtist);var numeric=new byte[180];"boma"u8.CopyTo(numeric);BitConverter.GetBytes(20).CopyTo(numeric,4);BitConverter.GetBytes(180).CopyTo(numeric,8);BitConverter.GetBytes(1).CopyTo(numeric,12);BitConverter.GetBytes(180000).CopyTo(numeric,176);writer.Write(numeric);
         }
         using var zipped=new MemoryStream();using(var z=new ZLibStream(zipped,CompressionLevel.SmallestSize,true))z.Write(content.ToArray());var compressed=zipped.ToArray();int crypt=compressed.Length-compressed.Length%16;
         var file=new byte[160+compressed.Length];"hfma"u8.CopyTo(file);BitConverter.GetBytes(160).CopyTo(file,4);BitConverter.GetBytes(file.Length).CopyTo(file,8);BitConverter.GetBytes(crypt).CopyTo(file,84);
@@ -25,6 +25,10 @@ public class LibraryTests : IDisposable
     [Fact] public void ReadsFullTrackCountAndDoesNotModifySource()
     {
         var bytes=Library();var file=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(file,bytes);var snapshot=new AppleMusicLibraryReader().Read(file);Assert.Equal(2,snapshot.DeclaredCount);Assert.Equal(2,snapshot.Tracks.Count);Assert.All(snapshot.Tracks,x=>Assert.Equal(180000,x.Track.DurationMs));Assert.Equal(bytes,File.ReadAllBytes(file));
+    }
+    [Fact] public void AlbumArtistMetadataDoesNotReplaceTheTrackArtist()
+    {
+        var library=new AppleMusicLibraryReader().Parse(Library(albumArtist:"Various Artists"));Assert.All(library.Tracks,t=>{Assert.Equal("Various Artists",t.AlbumArtist);Assert.Equal("Artist",t.Track.Artist);});
     }
     [Fact] public void InvalidEnvelopeAndPartialTrackSectionAreRejected()
     {

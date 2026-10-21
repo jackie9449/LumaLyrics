@@ -39,7 +39,7 @@ public partial class MainWindow
         async Task<MusicLibraryResult> Load(CancellationToken token)
         {
             await Task.Delay(10,token);
-            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),_=>new(fixture,"")};
+            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),3=>new(fixture.Select((song,i)=>song with{Track=song.Track with{Album="专辑 "+i.ToString("0000")},CoverPath=i%17==1?null:song.CoverPath}).ToArray(),""),_=>new(fixture,"")};
         }
         async Task<LibraryPlayResult> Play(MusicLibrarySong song,CancellationToken token)
         {
@@ -55,6 +55,7 @@ public partial class MainWindow
         try
         {
             Width=1220;Height=820;MusicNav.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,MusicNav));await Task.Delay(200);UpdateLayout();
+            checks["albums.defaultEntry"]=browser.IsAlbumShelf && browser.AlbumShelf.Albums.Count>0;browser.ShowAllSongs();await Task.Delay(80);UpdateLayout();
             checks["musicLibrary.navigationOpensIntegratedPage"]=browser.IsVisible && LyricsPage.Visibility==Visibility.Collapsed && browser.SongList.Items.Count==3003;
             checks["musicLibrary.virtualizedRows"]=Descendants<ListBoxItem>(browser.SongList).Count() is >0 and <80;
             checks["musicLibrary.visibleCoversDecoded"]=Descendants<Image>(browser).Any(i=>i.Source is BitmapImage {PixelWidth:96,IsFrozen:true});
@@ -101,6 +102,8 @@ public partial class MainWindow
             for(int i=0;i<140;i++)cache.Get(Path.Combine(fixtureRoot,"missing-"+i+".png"));
             checks["musicLibrary.thumbnailCacheBounded"]=cache.Count==128;
             string bad=Path.Combine(fixtureRoot,"invalid.png");File.WriteAllText(bad,"invalid fixture");checks["musicLibrary.corruptCoverHandled"]=cache.Get(bad) is null;
+            await VerifyAlbumBrowserAsync(browser,directory,checks,async large=>{mode=large?3:0;await browser.RefreshAsync();});
+            browser.ShowAllSongs();
             await Search("微光");SelectSong("one");Click(ButtonWith("播放所选"));var pending=browser.ActivePlayback!;browser.Dispose();await pending;
             checks["musicLibrary.disposeCancelsPlayback"]=cancelled==2;
         }
