@@ -10,7 +10,7 @@ public partial class MainWindow
 {
     async Task VerifyAppearanceInteractionsAsync(string directory,Dictionary<string,object?> checks)
     {
-        var original=OverlayAppearance.From(settings);bool wasVisible=overlay.IsVisible,wasLocked=overlay.IsLocked,prefVisible=settings.OverlayVisible;
+        var original=OverlayAppearance.From(settings);var originalProfiles=settings.OverlayThemeProfiles;bool wasVisible=overlay.IsVisible,wasLocked=overlay.IsLocked,prefVisible=settings.OverlayVisible;
         var position=NativeWindow.Location(overlay);double originalOpacity=overlay.Opacity;string originalCurrent=vm.Current,originalNext=vm.Next;
         async Task Settle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(100);}
         static void Hover(ComboBoxItem row)=>row.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice,0){RoutedEvent=MouseEnterEvent});
@@ -49,6 +49,7 @@ public partial class MainWindow
             picker.IsDropDownOpen=true;await Settle();picker.SelectedIndex=1;await Settle();checks["fontPreview.selectingCommitsChosenFont"]=settings.OverlayFont==first && picker.HoveredFont is null;
             row2=(ComboBoxItem)picker.ItemContainerGenerator.ContainerFromIndex(2);Hover(row2);await Settle();editor.Save();await Settle();
             checks["fontPreview.saveIgnoresUnselectedHover"]=store.Load().OverlayFont==first && settings.OverlayFont==first;
+            checks["fontPreview.themeProfileIgnoresUnselectedHover"]=store.Load().OverlayThemeProfiles.GetValueOrDefault(OverlayThemes.All[0].Name)?.Font==first;
             checks["editing.closeRestoresLockAndVisibility"]=!overlay.IsVisible && overlay.IsLocked && NativeWindow.IsClickThrough(overlay) && !overlay.AppearanceEditing && !overlay.GlassHostVisible;
             checks["editing.closeRestoresPriorFade"]=overlay.Opacity==.25;
             checks["editing.saveKeepsDraggedAnchor"]=Math.Abs(overlay.CurrentScreenY-movedAnchor)<3;
@@ -62,7 +63,7 @@ public partial class MainWindow
         }
         finally
         {
-            appearanceWindow?.Close();settingsWindow?.Close();original.Apply(settings);settings.OverlayVisible=prefVisible;
+            appearanceWindow?.Close();settingsWindow?.Close();settings.OverlayThemeProfiles=originalProfiles;original.Apply(settings);settings.OverlayVisible=prefVisible;
             overlay.SetLocked(wasLocked,false);overlay.ApplyStyle();overlay.Opacity=originalOpacity;if(wasVisible)overlay.Show();else overlay.Hide();
             NativeWindow.Place(overlay,position.Left,position.Top);vm.Current=originalCurrent;vm.Next=originalNext;coordinator.SaveSettings();
         }

@@ -31,7 +31,7 @@ public partial class MainWindow
             await VerifyGlassVisualsAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
-        var originalTheme=settings.UiTheme;var originalOverlay=OverlayAppearance.From(settings);
+        var originalTheme=settings.UiTheme;var originalOverlay=OverlayAppearance.From(settings);var originalProfiles=settings.OverlayThemeProfiles;
         overlay.ApplyStyle();
         var overlayChrome=overlay.FindResource("RaisedBrush").ToString();
         var toolbarChrome=overlay.Toolbar.Background.ToString();
@@ -102,7 +102,7 @@ public partial class MainWindow
         var saveWindow=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
         saveWindow.Show();saveWindow.PreviewTheme(OverlayThemes.All[1]);saveWindow.Save();
         checks["appearanceSavePersists"]=saveWindow.Saved && OverlayAppearance.From(store.Load()).Preset==OverlayThemes.All[1].Name;
-        originalOverlay.Apply(settings);overlay.ApplyStyle();coordinator.SaveSettings();
+        settings.OverlayThemeProfiles=originalProfiles;originalOverlay.Apply(settings);overlay.ApplyStyle();coordinator.SaveSettings();
         foreach(var (width,height) in new[]{(1220d,820d),(980d,700d),(820d,640d)})
         {
             Width=width;Height=height;await Task.Delay(250);UpdateLayout();
@@ -136,6 +136,7 @@ public partial class MainWindow
         var overlayChecks=await VisualVerification.RunAsync(this,directory);
         checks["overlayRegression"]=overlayChecks;
         await VerifyOverlayCornersAsync(directory,checks);
+        await VerifyThemeProfilesAsync(directory,checks);
         await VerifyAppearanceInteractionsAsync(directory,checks);
         await VerifyGlassVisualsAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));

@@ -16,6 +16,7 @@ public sealed class AppSettings
     public string OverlayFont { get; set; } = "Microsoft YaHei UI";
     public double OverlayBackgroundOpacity { get; set; } = .65;
     public string OverlayPreset { get; set; } = "柔和卡片";
+    public Dictionary<string, OverlayAppearance> OverlayThemeProfiles { get; set; } = [];
     public bool OverlayTwoLines { get; set; } = true;
     public bool OverlayShadow { get; set; } = true;
     public bool OverlayAdaptiveContrast { get; set; }

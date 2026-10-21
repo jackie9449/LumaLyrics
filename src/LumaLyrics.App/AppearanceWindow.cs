@@ -11,8 +11,8 @@ public sealed class AppearanceWindow : Window
     readonly Action<OverlayAppearance?> previewChanged;
     readonly Action saveSettings;
     readonly Func<string> materialStatus;
-    readonly OverlayAppearance original;
-    OverlayAppearance current;
+    readonly OverlayThemeSession edit;
+    OverlayAppearance current=>edit.Current;
     readonly OverlaySurface preview=new();
     readonly GlassPreviewScene scene;
     readonly TextBlock subtitle=new(),status=new(),validation=new(){Foreground=Brushes.Salmon,FontSize=11};
@@ -34,7 +34,7 @@ public sealed class AppearanceWindow : Window
     public AppearanceWindow(AppSettings settings,Action<OverlayAppearance?> previewChanged,Action saveSettings,Func<string> materialStatus)
     {
         this.settings=settings;this.previewChanged=previewChanged;this.saveSettings=saveSettings;this.materialStatus=materialStatus;
-        current=original=OverlayAppearance.From(settings);
+        edit=new(settings);
         scene=new(preview);
         Title="浮光歌词 · 悬浮歌词独立外观";Width=1120;Height=850;MinWidth=920;MinHeight=720;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         ThemeManager.ApplyOverlayResources(this,current);
@@ -45,7 +45,7 @@ public sealed class AppearanceWindow : Window
         var heading=new StackPanel{Margin=new(0,0,0,22)};
         heading.Children.Add(Label("A P P E A R A N C E",10,"#B8AEED"));
         heading.Children.Add(new TextBlock{Text="让每一句，都有你的风格。",FontSize=26,FontWeight=FontWeights.SemiBold,Margin=new(0,6,0,7)});
-        heading.Children.Add(Label("挑选一种氛围，再慢慢调成喜欢的样子。所有调整都会实时预览。",12,"#9BA4B8"));root.Children.Add(heading);
+        heading.Children.Add(Label("每个主题分别记住你的调整。实时预览，保存后下次继续使用。",12,"#9BA4B8"));root.Children.Add(heading);
         var body=new Grid();Grid.SetRow(body,1);root.Children.Add(body);body.ColumnDefinitions.Add(new(){Width=new(248)});body.ColumnDefinitions.Add(new(){Width=new(24)});body.ColumnDefinitions.Add(new());
         var left=new Grid();left.RowDefinitions.Add(new(){Height=GridLength.Auto});left.RowDefinitions.Add(new());
         left.Children.Add(new TextBlock{Text="精选主题",FontWeight=FontWeights.SemiBold,FontSize=14,Margin=new(0,0,0,12)});
@@ -74,7 +74,8 @@ public sealed class AppearanceWindow : Window
         var tabs=new TabControl{Background=Brushes.Transparent,BorderThickness=new(0),Padding=new(0,12,0,0)};Grid.SetRow(tabs,2);right.Children.Add(tabs);
         var typography=Columns();tabs.Items.Add(Tab("文字与排版",typography.Grid));
         typography.Left.Children.Add(Label("字体 · 悬停预览，点击选定"));
-        font=new InstalledFontPicker{ItemsSource=Fonts.SystemFontFamilies.Select(f=>f.Source).Append(current.Font).Distinct().OrderBy(x=>x).ToArray(),Margin=new(0,0,0,16),MinWidth=80};
+        var savedFonts=settings.OverlayThemeProfiles?.Values.Where(a=>a is not null).Select(a=>a.Normalize().Font)??[];
+        font=new InstalledFontPicker{ItemsSource=Fonts.SystemFontFamilies.Select(f=>f.Source).Concat(savedFonts).Append(current.Font).Distinct().OrderBy(x=>x).ToArray(),Margin=new(0,0,0,16),MinWidth=80};
         AutomationProperties.SetName(font,"字体");typography.Left.Children.Add(font);
         font.SelectionChanged+=(_,_)=>{if(!syncing)Change(a=>a with{Font=font.SelectedItem?.ToString()??a.Font});};
         font.PreviewFontChanged+=family=>{hoverFont=family;previewChanged(family is null?null:current with{Font=family});RefreshPreview();};
@@ -106,7 +107,7 @@ public sealed class AppearanceWindow : Window
         var footer=new Grid{Margin=new(0,18,0,0)};Grid.SetRow(footer,2);root.Children.Add(footer);footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         var info=new StackPanel{VerticalAlignment=VerticalAlignment.Center};status.FontSize=10;ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.TextWrapping=TextWrapping.Wrap;info.Children.Add(status);info.Children.Add(validation);footer.Children.Add(info);
         var actions=new StackPanel{Orientation=Orientation.Horizontal};Grid.SetColumn(actions,1);footer.Children.Add(actions);
-        var reset=new Button{Content="重置当前主题",Padding=new(12,10,12,10)};reset.Click+=(_,_)=>SelectTheme(OverlayThemes.All.FirstOrDefault(t=>t.Name==current.Preset)??OverlayThemes.All[0]);actions.Children.Add(reset);
+        var reset=new Button{Content="重置当前主题",Padding=new(12,10,12,10)};reset.Click+=(_,_)=>ResetCurrentTheme();actions.Children.Add(reset);
         var cancel=new Button{Content="取消",Padding=new(16,10,16,10),IsCancel=true};cancel.Click+=(_,_)=>Close();actions.Children.Add(cancel);
         save=new Button{Content="保存外观",Style=(Style)FindResource("PrimaryButton"),Padding=new(22,10,22,10),Margin=new(0),IsDefault=true};save.Click+=(_,_)=>Save();actions.Children.Add(save);
         Loaded+=(_,_)=>{
@@ -114,7 +115,7 @@ public sealed class AppearanceWindow : Window
             MinHeight=Math.Min(MinHeight,maxHeight);MinWidth=Math.Min(MinWidth,maxWidth);MaxHeight=maxHeight;MaxWidth=maxWidth;
             Height=Math.Min(Height,maxHeight);Width=Math.Min(Width,maxWidth);UpdateLayout();NativeWindow.ClampVisible(this);
         };
-        Closing+=(_,_)=>{hoverFont=null;if(!committed){original.Apply(settings);previewChanged(null);saveSettings();}else previewChanged(null);};
+        Closing+=(_,_)=>{hoverFont=null;if(!committed){edit.Cancel();previewChanged(null);saveSettings();}else previewChanged(null);};
         Sync();
     }
     static Brush Brush(string hex)=>new SolidColorBrush(OverlaySurface.ColorOf(hex));
@@ -155,13 +156,13 @@ public sealed class AppearanceWindow : Window
     void ValidateColors(){bool valid=colors.Values.All(x=>ValidColor(x.Text));validation.Text=valid?"":"颜色请填写完整的 #RRGGBB。";if(save is not null)save.IsEnabled=valid;}
     void Change(Func<OverlayAppearance,OverlayAppearance> change)
     {
-        current=change(current).Normalize();current.Apply(settings);previewChanged(hoverFont is null?null:current with{Font=hoverFont});RefreshPreview();
+        edit.Update(change(current));previewChanged(hoverFont is null?null:current with{Font=hoverFont});RefreshPreview();
     }
     void SelectTheme(OverlayTheme theme)
     {
-        current=theme.Appearance with{Font=current.Font,FontSize=current.FontSize,Weight=current.Weight,Width=current.Width,TwoLines=current.TwoLines,Alignment=current.Alignment,Animations=current.Animations,TransitionMs=current.TransitionMs};
-        font.EndPreview();current.Apply(settings);previewChanged(null);Sync();
+        font.EndPreview();edit.Select(theme);previewChanged(null);Sync();
     }
+    internal void ResetCurrentTheme(){font.EndPreview();edit.ResetCurrent();previewChanged(null);Sync();}
     void Sync()
     {
         syncing=true;
@@ -197,7 +198,7 @@ public sealed class AppearanceWindow : Window
         scene.SetScene(id);
     }
     internal void PreviewTheme(OverlayTheme theme)=>SelectTheme(theme);
-    internal void PreviewOptions(OverlayAppearance options){font.EndPreview();current=options.Normalize();current.Apply(settings);previewChanged(null);Sync();}
+    internal void PreviewOptions(OverlayAppearance options){font.EndPreview();edit.Update(options);previewChanged(null);Sync();}
     internal Dictionary<string,bool> VerifyControls()
     {
         var result=new Dictionary<string,bool>();var before=current;
@@ -218,6 +219,6 @@ public sealed class AppearanceWindow : Window
     public void Save()
     {
         ValidateColors();if(!save.IsEnabled)return;font.EndPreview();current.Apply(settings);previewChanged(null);
-        try{saveSettings();committed=true;Close();}catch(Exception ex) when(ex is System.IO.IOException or UnauthorizedAccessException){validation.Text="保存失败："+ex.Message;}
+        try{edit.Save(saveSettings);committed=true;Close();}catch(Exception ex) when(ex is System.IO.IOException or UnauthorizedAccessException){validation.Text="保存失败："+ex.Message;}
     }
 }

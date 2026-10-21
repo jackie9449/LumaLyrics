@@ -34,6 +34,7 @@ public sealed record OverlayAppearance
     static double Clamp(double v,double min,double max,double fallback) => double.IsFinite(v)?Math.Clamp(v,min,max):fallback;
     static string Hex(string? v,string fallback) => v is not null && Regex.IsMatch(v,"^#[0-9A-Fa-f]{6}$")?v.ToUpperInvariant():fallback;
     public OverlayAppearance Normalize() => this with {
+        Preset=string.IsNullOrWhiteSpace(Preset)?"柔和卡片":Preset=="极简透明"?"纯净透明":Preset,
         Font=string.IsNullOrWhiteSpace(Font)?"Microsoft YaHei UI":Font,
         Weight=new[]{"Normal","Medium","SemiBold","Bold"}.Contains(Weight)?Weight:"SemiBold",
         Material=new[]{"card","liquid","frost","material","aurora","paper","none"}.Contains(Material)?Material:"card",
