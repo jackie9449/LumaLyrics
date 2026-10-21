@@ -26,7 +26,7 @@ public partial class MainWindow : Window
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
-        store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme);
+        store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();DataContext=vm;coordinator=new(Dispatcher,store,settings);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
@@ -39,7 +39,7 @@ public partial class MainWindow : Window
     }
     internal void SelectUiTheme(string id,bool persist=true)
     {
-        var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id,artworkPalette);
+        var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id,artworkPalette,applicationScope:Resources);
         ClipArtwork();
         StyleLyricLines(-1,currentIndex);
         if(persist)coordinator.SaveSettings();
@@ -84,6 +84,7 @@ public partial class MainWindow : Window
             await CaptureAsync(args[captureArg+1]);if(args.Contains("--exit-after-capture"))await QuitAsync();
         }
         if(args.Contains("--appearance") && !quitting)ShowAppearance();
+        if(args.Contains("--music-library") && !quitting)await ShowMusicLibraryAsync();
     }
     void SetupTray()
     {
@@ -109,6 +110,7 @@ public partial class MainWindow : Window
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
         vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
+        musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
         if(!ReferenceEquals(displayed,coordinator.Document))BuildLyrics();
@@ -187,7 +189,7 @@ public partial class MainWindow : Window
     }
     void ManualScroll(object s,MouseWheelEventArgs e) {manualUntil=DateTime.UtcNow.AddSeconds(8);ReturnButton.Visibility=Visibility.Visible;BeginAnimation(AnimatedOffsetProperty,null);}
     void LyricsScrollChanged(object s,ScrollChangedEventArgs e) {if(!scrollProgrammatically && LyricsScroll.IsMouseCaptureWithin){manualUntil=DateTime.UtcNow.AddSeconds(8);ReturnButton.Visibility=Visibility.Visible;}}
-    void ReturnClicked(object s,RoutedEventArgs e) {manualUntil=DateTime.MinValue;ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
+    void ReturnClicked(object s,RoutedEventArgs e) {ShowLyricsPage();manualUntil=DateTime.MinValue;ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
     void SetArtwork(byte[]? bytes)
     {
         Artwork.Source=null;CoverPlaceholder.Visibility=Visibility.Visible;artworkPalette=null;
@@ -203,7 +205,7 @@ public partial class MainWindow : Window
             }
             catch(Exception ex){store.Log("Artwork decode: "+ex.GetType().Name);}
         }
-        ThemeManager.Apply(settings.UiTheme,artworkPalette,animate:!settings.ReduceMotion);
+        ThemeManager.Apply(settings.UiTheme,artworkPalette,animate:!settings.ReduceMotion,applicationScope:Resources);
         StyleLyricLines(-1,currentIndex);
     }
     void OnSize(object s,SizeChangedEventArgs e)
@@ -262,7 +264,7 @@ public partial class MainWindow : Window
     public async Task QuitAsync()
     {
         if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();tray?.Dispose();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
-        appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
+        musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)
     {

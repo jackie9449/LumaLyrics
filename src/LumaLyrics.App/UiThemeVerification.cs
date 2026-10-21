@@ -16,6 +16,21 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-library-browser"))
+        {
+            await VerifyMusicLibraryAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--verify-overlay-motion"))
+        {
+            await VerifyOverlayMotionAsync(checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--verify-overlay-isolation"))
+        {
+            await VerifyOverlayIsolationAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-overlay-corners"))
         {
             await VerifyOverlayCornersAsync(directory,checks);
@@ -139,6 +154,9 @@ public partial class MainWindow
         await VerifyThemeProfilesAsync(directory,checks);
         await VerifyAppearanceInteractionsAsync(directory,checks);
         await VerifyGlassVisualsAsync(directory,checks);
+        await VerifyOverlayMotionAsync(checks);
+        await VerifyOverlayIsolationAsync(directory,checks);
+        await VerifyMusicLibraryAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

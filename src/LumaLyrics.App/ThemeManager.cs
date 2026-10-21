@@ -22,12 +22,17 @@ internal static class ThemeManager
         brush.Freeze();return brush;
     }
 
-    public static void Apply(string? id,ArtworkPalette? artwork=null,bool animate=false)
+    public static void Apply(string? id,ArtworkPalette? artwork=null,bool animate=false,ResourceDictionary? applicationScope=null)
     {
         var theme=AppThemes.Find(id);
         animate=animate && theme.Id is ("liquid" or "frost") && Current.Id==theme.Id && SystemParameters.ClientAreaAnimation;
         Current = artwork?.ApplyTo(theme) ?? theme;
         Populate(System.Windows.Application.Current.Resources,Current,animate);
+        // Give the main view an explicit palette scope while sharing the exact application
+        // brushes with owned settings/dialogs, including their in-progress cover animations.
+        if(applicationScope is not null)
+            foreach(string key in new[]{"TextBrush","MutedBrush","AccentBrush","AccentTextBrush","AccentSoftBrush","RaisedBrush","ControlBrush","HoverBrush","BorderBrush","GlowBrush","SecondaryGlowBrush","ScrollThumbBrush","WindowBrush","PanelBrush","ArtworkBrush","SheenBrush","PanelRadius","SurfaceSheenOpacity","AmbientOpacity"})
+                applicationScope[key]=System.Windows.Application.Current.Resources[key];
     }
 
     static void Populate(ResourceDictionary resources,AppTheme t,bool animate=false)

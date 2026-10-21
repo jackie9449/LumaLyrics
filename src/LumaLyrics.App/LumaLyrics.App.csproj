@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><ApplicationManifest>app.manifest</ApplicationManifest><ApplicationIcon>Assets/luma.ico</ApplicationIcon><AssemblyName>LumaLyrics</AssemblyName></PropertyGroup>
   <ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/><ProjectReference Include="../LumaLyrics.Core/LumaLyrics.Core.csproj"/><ProjectReference Include="../LumaLyrics.Windows/LumaLyrics.Windows.csproj"/><ProjectReference Include="../LumaLyrics.Infrastructure/LumaLyrics.Infrastructure.csproj"/></ItemGroup>
+  <ItemGroup><PackageReference Include="FlaUI.UIA3" Version="5.0.0"/></ItemGroup>
 </Project>

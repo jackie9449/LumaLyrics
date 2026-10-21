@@ -6,8 +6,10 @@ namespace LumaLyrics.App;
 
 internal static class OverlayAmbientContrast
 {
+    internal static long SampleCount {get;private set;}
     internal static double? Brightness(Window window,OverlayAppearance appearance)
     {
+        SampleCount++;
         if(!GetWindowRect(NativeWindow.Handle(window),out var r))return null;
         // Eight ephemeral color points outside the lyric window: no screenshot, image,
         // text extraction or stored desktop data. Outside points also avoid feedback.

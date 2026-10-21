@@ -15,6 +15,7 @@ internal sealed class NativeBackdrop : IDisposable
     DesktopGlassHost? host;
     OverlayAppearance appearance=new();
     bool allowed,disposed,unavailable;
+    (int Width,int Height,int RadiusX,int RadiusY)? foregroundRegion;
     readonly UserPreferenceChangedEventHandler preferencesChanged;
     readonly DependencyPropertyDescriptor opacityProperty=DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty,typeof(Window));
     public string Status {get;private set;}="背景模糊未启用";
@@ -29,6 +30,9 @@ internal sealed class NativeBackdrop : IDisposable
     internal bool HostVisible=>host?.IsVisible==true;
     internal bool HostInputTransparent=>host?.IsInputTransparent==true;
     internal nint HostHandle=>host?.Handle??0;
+    internal long GeometryUpdates=>host?.GeometryUpdates??0;
+    internal long PositionUpdates=>host?.PositionUpdates??0;
+    internal long RegionUpdates {get;private set;}
     public void Apply(OverlayAppearance a,bool force=false)
     {
         appearance=a;
@@ -55,8 +59,11 @@ internal sealed class NativeBackdrop : IDisposable
         var dpi=System.Windows.Media.VisualTreeHelper.GetDpi(window);
         // HRGN has integer-only coverage. Keep its cutoff outside the antialiased WPF silhouette.
         const int guard=2;
-        var region=CreateRoundRectRgn(-guard,-guard,(int)Math.Ceiling(window.ActualWidth*dpi.DpiScaleX)+guard+1,(int)Math.Ceiling(window.ActualHeight*dpi.DpiScaleY)+guard+1,(int)Math.Ceiling(radius*2*dpi.DpiScaleX)+guard*2,(int)Math.Ceiling(radius*2*dpi.DpiScaleY)+guard*2);
+        var size=((int)Math.Ceiling(window.ActualWidth*dpi.DpiScaleX),(int)Math.Ceiling(window.ActualHeight*dpi.DpiScaleY),(int)Math.Ceiling(radius*2*dpi.DpiScaleX),(int)Math.Ceiling(radius*2*dpi.DpiScaleY));
+        if(foregroundRegion==size)return;
+        RegionUpdates++;var region=CreateRoundRectRgn(-guard,-guard,size.Item1+guard+1,size.Item2+guard+1,size.Item3+guard*2,size.Item4+guard*2);
         if(region!=0 && SetWindowRgn(handle,region,true)==0)DeleteObject(region); // Successful SetWindowRgn transfers ownership to Windows.
+        else if(region!=0)foregroundRegion=size;
     }
     static bool TransparencyAllowed()
     {

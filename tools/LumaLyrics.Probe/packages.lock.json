@@ -53,14 +53,14 @@
       "lumalyrics.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "LumaLyrics.Core": "[0.1.0, )",
+          "LumaLyrics.Core": "[0.8.0, )",
           "Microsoft.Data.Sqlite": "[10.0.13, )"
         }
       },
       "lumalyrics.windows": {
         "type": "Project",
         "dependencies": {
-          "LumaLyrics.Core": "[0.1.0, )"
+          "LumaLyrics.Core": "[0.8.0, )"
         }
       }
     },

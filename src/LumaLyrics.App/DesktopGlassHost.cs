@@ -27,7 +27,11 @@ internal sealed class DesktopGlassHost : IDisposable
     CompositionRoundedRectangleGeometry? geometry;
     CompositionGeometricClip? clip;
     (int Width,int Height,int RadiusX,int RadiusY) regionSize;
+    (int Width,int Height,float RadiusX,float RadiusY) visualSize;
+    (int Left,int Top,int Width,int Height)? placement;
     byte opacity=255;
+    internal long GeometryUpdates {get;private set;}
+    internal long PositionUpdates {get;private set;}
     public bool IsVisible=>handle!=0 && IsWindowVisible(handle);
     internal bool IsInputTransparent=>handle!=0 && (GetWindowLongPtr(handle,-20)&0x80020)==0x80020;
     internal nint Handle=>handle;
@@ -78,7 +82,11 @@ internal sealed class DesktopGlassHost : IDisposable
         int width=bounds.Right-bounds.Left,height=bounds.Bottom-bounds.Top;if(width<=0 || height<=0){Hide();return;}
         var dpi=VisualTreeHelper.GetDpi(foreground);
         float rx=(float)Math.Min(appearance.Radius*dpi.DpiScaleX,width/2d),ry=(float)Math.Min(appearance.Radius*dpi.DpiScaleY,height/2d);
-        surface!.Size=geometry!.Size=new Vector2(width,height);geometry.CornerRadius=new(rx,ry);
+        var visual=(width,height,rx,ry);
+        if(visualSize!=visual)
+        {
+            GeometryUpdates++;surface!.Size=geometry!.Size=new Vector2(width,height);geometry.CornerRadius=new(rx,ry);visualSize=visual;
+        }
         // Constant window alpha blends the blurred substrate with the desktop. Sprite alpha
         // on a legacy layered HWND would instead expose its black redirection background.
         byte nextOpacity=(byte)Math.Round(255*Math.Clamp((appearance.Material=="frost"?.98:.78)*foreground.Opacity,0,1));
@@ -94,9 +102,17 @@ internal sealed class DesktopGlassHost : IDisposable
             regionSize=size;
         }
         // Never activate or put the substrate above the sharp WPF lyric window.
-        if(!SetWindowPos(handle,NativeWindow.Handle(foreground),bounds.Left,bounds.Top,width,height,0x0050))throw new Win32Exception();
+        var next=(bounds.Left,bounds.Top,width,height);bool show=!IsVisible;
+        if(placement!=next || show)
+        {
+            // Moving an existing substrate needs neither geometry commits nor repeated z-order changes.
+            uint flags=0x0010|0x0200|0x0400|(show?0x0040u:0x0004u);
+            if(placement is { } previous && previous.Width==width && previous.Height==height)flags|=0x0001;
+            PositionUpdates++;if(!SetWindowPos(handle,NativeWindow.Handle(foreground),bounds.Left,bounds.Top,width,height,flags))throw new Win32Exception();
+            placement=next;
+        }
     }
-    public void Hide(){if(handle!=0)ShowWindow(handle,0);}
+    public void Hide(){if(IsVisible)ShowWindow(handle,0);}
     public void Dispose()
     {
         Hide();if(target is not null)target.Root=null;

@@ -26,6 +26,7 @@ Copy-Item -LiteralPath docs/library-assets.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/personal-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/glass-materials.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/theme-memory.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/music-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v051 -Destination $guide -Recurse -Force
@@ -33,6 +34,7 @@ Copy-Item -LiteralPath docs/screenshots-ui-v060 -Destination $guide -Recurse -Fo
 Copy-Item -LiteralPath docs/screenshots-ui-v061 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v070 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v071 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/screenshots-ui-v080 -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force

@@ -12,6 +12,9 @@
 | xUnit | 2.9.3 | 测试依赖，Apache-2.0，不随运行程序加载 |
 | xunit.runner.visualstudio | 2.8.2 | 测试依赖，Apache-2.0 |
 | Microsoft.NET.Test.Sdk | 17.14.1 | 测试依赖，MIT |
+| FlaUI.Core / FlaUI.UIA3 | 5.0.0 | [FlaUI](https://github.com/FlaUI/FlaUI)，MIT，原始许可见 licenses/FlaUI-LICENSE.txt |
+| Interop.UIAutomationClient | 10.19041.0 | [UIAutomation-Interop](https://github.com/Roemer/UIAutomation-Interop)，MIT，原始许可随包附带 |
+| System.Management | 8.0.0 | [dotnet/runtime](https://github.com/dotnet/runtime)，MIT，原始许可与 notices 随包附带 |
 
 直接与传递 NuGet 版本和完整内容哈希固定在各项目 `packages.lock.json`，SDK 在 `global.json`。本次 SDK 为 10.0.402，仅用于开发，不把整个 SDK 分发给用户。附带的备用 dotnet host 和 hostfxr 来自相同微软发行版。
 
@@ -20,3 +23,5 @@
 图标为本项目用几何图形生成的原生资产；未使用外部照片、字体文件或商业图标包。显示字体使用系统已有字体，不捆绑分发。
 
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。
+
+原生 Apple Music 的无障碍播放命令研究参考 [windows-apple-music-remote](https://github.com/ahmetberber/windows-apple-music-remote) 的公开说明。浮光独立实现本地歌曲列表适配与录音核对，不启动远程服务或网络监听。

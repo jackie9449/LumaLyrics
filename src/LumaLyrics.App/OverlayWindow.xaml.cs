@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using System.Windows.Interop;
 using LumaLyrics.Infrastructure;
 namespace LumaLyrics.App;
 public partial class OverlayWindow : Window
@@ -14,6 +15,8 @@ public partial class OverlayWindow : Window
     bool darkAdaptiveText;
     readonly DispatcherTimer contrastTimer=new(){Interval=TimeSpan.FromMilliseconds(400)};
     bool appearanceEditing,visibleBeforeEditing,visibilityPreferenceBeforeEditing;
+    bool interactiveMove,closed;
+    HwndSource? nativeSource;
     double opacityBeforeEditing;
     OverlayAppearance? previewAppearance;
     OverlayAppearance CurrentAppearance=>previewAppearance??OverlayAppearance.From(settings);
@@ -22,6 +25,8 @@ public partial class OverlayWindow : Window
     internal bool GlassHostVisible=>backdrop.HostVisible;
     internal bool GlassHostInputTransparent=>backdrop.HostInputTransparent;
     internal nint GlassHostHandle=>backdrop.HostHandle;
+    internal (long Samples,long Geometry,long Regions,long Positions) MovementWork=>(OverlayAmbientContrast.SampleCount,backdrop.GeometryUpdates,backdrop.RegionUpdates,backdrop.PositionUpdates);
+    internal bool InteractiveMove=>interactiveMove;
     readonly DispatcherTimer toolbarDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
     readonly NativeBackdrop backdrop;
     public string MaterialStatus=>backdrop.Status;
@@ -30,18 +35,34 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent(); this.owner=owner; this.settings=settings; DataContext=vm;backdrop=new(this);
         ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new(new Point(Math.Max(0,target.Width-popup.Width),-popup.Height-4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical),new(new Point(Math.Max(0,target.Width-popup.Width),target.Height+4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical)];
-        SourceInitialized+=(_,_)=>NativeWindow.NoActivate(this);
+        SourceInitialized+=(_,_)=>{NativeWindow.NoActivate(this);nativeSource=HwndSource.FromHwnd(NativeWindow.Handle(this));nativeSource.AddHook(MoveHook);};
         Loaded+=(_,_)=> {var left=settings.OverlayLeft;var top=settings.OverlayTop;ApplyStyle();UpdateLayout();NativeWindow.Place(this,left,top,true,DefaultBottomInset());placed=true;RememberPosition();};
-        MouseEnter+=(_,_)=>{toolbarDelay.Stop();if(!IsLocked && !instrumental && !appearanceEditing)ToolbarPopup.IsOpen=true;LyricSurface.SetInteraction(new(.35,0),true);};
-        MouseMove+=(_,e)=>{var p=e.GetPosition(LyricSurface);LyricSurface.SetInteraction(new(p.X/Math.Max(1,LyricSurface.ActualWidth),p.Y/Math.Max(1,LyricSurface.ActualHeight)),true);};
-        MouseLeave+=(_,_)=>{toolbarDelay.Start();LyricSurface.SetInteraction(new(.25,0),false);};
+        MouseEnter+=(_,_)=>{if(interactiveMove)return;toolbarDelay.Stop();if(!IsLocked && !instrumental && !appearanceEditing)ToolbarPopup.IsOpen=true;LyricSurface.SetInteraction(new(.35,0),true);};
+        MouseMove+=(_,e)=>{if(interactiveMove)return;var p=e.GetPosition(LyricSurface);LyricSurface.SetInteraction(new(p.X/Math.Max(1,LyricSurface.ActualWidth),p.Y/Math.Max(1,LyricSurface.ActualHeight)),true);};
+        MouseLeave+=(_,_)=>{if(interactiveMove)return;toolbarDelay.Start();LyricSurface.SetInteraction(new(.25,0),false);};
         toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver)ToolbarPopup.IsOpen=false;};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible){ToolbarPopup.IsOpen=false;toolbarDelay.Stop();}UpdateAdaptiveText();backdrop.Refresh();};
-        LocationChanged+=(_,_)=> {if(placed)RememberPosition();backdrop.Refresh();UpdateAdaptiveText();};
+        LocationChanged+=(_,_)=> {if(placed)RememberPosition();backdrop.Refresh();};
         SizeChanged+=(_,_)=> { if(placed) {settings.OverlayWidth=Width;backdrop.RoundRegion(CurrentAppearance.Radius);}backdrop.Refresh();};
         DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{backdrop.RoundRegion(CurrentAppearance.Radius);backdrop.Refresh();}));
         contrastTimer.Tick+=(_,_)=>UpdateAdaptiveText();
-        Closed+=(_,_)=>{toolbarDelay.Stop();contrastTimer.Stop();ToolbarPopup.IsOpen=false;backdrop.Dispose();};
+        Closed+=(_,_)=>{closed=true;nativeSource?.RemoveHook(MoveHook);nativeSource=null;toolbarDelay.Stop();contrastTimer.Stop();ToolbarPopup.IsOpen=false;backdrop.Dispose();};
+    }
+    nint MoveHook(nint handle,int message,nint w,nint l,ref bool handled)
+    {
+        if(message==0x231)SetInteractiveMove(true);
+        else if(message is 0x232 or 0x1F)SetInteractiveMove(false);
+        return 0;
+    }
+    void SetInteractiveMove(bool active)
+    {
+        if(interactiveMove==active)return;interactiveMove=active;
+        if(active){contrastTimer.Stop();toolbarDelay.Stop();ToolbarPopup.IsOpen=false;}
+        else
+        {
+            backdrop.Refresh();
+            Dispatcher.BeginInvoke(DispatcherPriority.Background,new Action(()=>{if(!closed && !interactiveMove)UpdateAdaptiveText();}));
+        }
     }
     public void ApplyStyle()
     {
@@ -56,7 +77,7 @@ public partial class OverlayWindow : Window
     void UpdateAdaptiveText()
     {
         var a=CurrentAppearance;
-        if(!IsVisible || instrumental || !a.AdaptiveContrast || a.Material!="liquid" || a.Transparent){contrastTimer.Stop();return;}
+        if(interactiveMove || !IsVisible || instrumental || !a.AdaptiveContrast || a.Material!="liquid" || a.Transparent){contrastTimer.Stop();return;}
         contrastTimer.Start();var brightness=OverlayAmbientContrast.Brightness(this,a);if(!brightness.HasValue)return;
         bool next=OverlayContrast.UseDarkText(brightness.Value,darkAdaptiveText);if(next==darkAdaptiveText)return;
         darkAdaptiveText=next;LyricSurface.Apply(OverlayContrast.Paint(a,next),settings.ReduceMotion);
@@ -94,7 +115,7 @@ public partial class OverlayWindow : Window
         if(locked && firstLock && showTip) { MessageBox.Show($"锁定后可点击穿透。\n从托盘选择“解锁歌词”，或按 {settings.UnlockHotkey} 解锁。","桌面歌词"); firstLock=false; }
         IsLocked=locked; NativeWindow.ClickThrough(this,locked && !appearanceEditing);ToolbarPopup.IsOpen=false; ResizeMode=locked && !appearanceEditing?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
     }
-    void DragOverlay(object sender,MouseButtonEventArgs e) { if(CanDrag && e.ButtonState==MouseButtonState.Pressed) { try {ToolbarPopup.IsOpen=false;DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } } }
+    void DragOverlay(object sender,MouseButtonEventArgs e) { if(CanDrag && e.ButtonState==MouseButtonState.Pressed) { try {SetInteractiveMove(true);DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } finally{SetInteractiveMove(false);} } }
     void LockClicked(object s,RoutedEventArgs e) { e.Handled=true; SetLocked(true); }
     void MainClicked(object s,RoutedEventArgs e) { e.Handled=true; owner.Restore(); }
     void AppearanceClicked(object s,RoutedEventArgs e) {e.Handled=true;owner.ShowAppearance();}
