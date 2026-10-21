@@ -2,45 +2,52 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using Microsoft.Win32;
 using LumaLyrics.Infrastructure;
+using System.ComponentModel;
 namespace LumaLyrics.App;
 
-// Accent policy is a compatibility path for Windows 10, not Windows 11's Mica API.
-// It is optional, bounded to this HWND, and must be disabled for a truly clear background.
+// The OS backdrop is clipped in its own compositor visual, behind the layered lyric text.
 internal sealed class NativeBackdrop : IDisposable
 {
-    [StructLayout(LayoutKind.Sequential)] struct Accent {public int State;public int Flags;public uint Color;public int Animation;}
-    [StructLayout(LayoutKind.Sequential)] struct AttributeData {public int Attribute;public nint Data;public nuint Size;}
-    [DllImport("user32.dll")] [return:MarshalAs(UnmanagedType.Bool)] static extern bool SetWindowCompositionAttribute(nint hwnd,ref AttributeData data);
     [DllImport("user32.dll")] static extern int SetWindowRgn(nint hwnd,nint region,bool redraw);
     [DllImport("gdi32.dll")] static extern nint CreateRoundRectRgn(int l,int t,int r,int b,int ellipseWidth,int ellipseHeight);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(nint obj);
     readonly Window window;
-    bool? enabled;
+    DesktopGlassHost? host;
+    OverlayAppearance appearance=new();
+    bool allowed,disposed,unavailable;
+    readonly UserPreferenceChangedEventHandler preferencesChanged;
+    readonly DependencyPropertyDescriptor opacityProperty=DependencyPropertyDescriptor.FromProperty(UIElement.OpacityProperty,typeof(Window));
     public string Status {get;private set;}="背景模糊未启用";
     public bool Accepted {get;private set;}
-    public NativeBackdrop(Window window)=>this.window=window;
+    public NativeBackdrop(Window window)
+    {
+        this.window=window;opacityProperty.AddValueChanged(window,OpacityChanged);
+        preferencesChanged=(_,_)=>{if(!disposed && !window.Dispatcher.HasShutdownStarted)window.Dispatcher.BeginInvoke(new Action(()=>{if(!disposed)Apply(appearance,true);}));};
+        SystemEvents.UserPreferenceChanged+=preferencesChanged;
+    }
+    void OpacityChanged(object? sender,EventArgs e)=>Refresh();
+    internal bool HostVisible=>host?.IsVisible==true;
+    internal bool HostInputTransparent=>host?.IsInputTransparent==true;
+    internal nint HostHandle=>host?.Handle??0;
     public void Apply(OverlayAppearance a,bool force=false)
     {
+        appearance=a;
         bool requested=a.SystemBlur && !a.Transparent && a.Opacity>0 && a.Material is "liquid" or "frost";
-        // Accent blur covers the entire layered HWND, ignoring both its HRGN and WPF alpha mask.
-        // A successful native call therefore still paints square corners. Keep the antialiased
-        // glass layers for rounded surfaces; retain the user's blur preference for radius zero.
-        bool roundedFallback=requested && window.AllowsTransparency && a.Radius>0;
-        bool allowed=requested && !roundedFallback && !SystemParameters.HighContrast && TransparencyAllowed();
-        if(NativeWindow.Handle(window)==0)return;
-        if(force || enabled!=allowed)
+        bool nextAllowed=requested && !SystemParameters.HighContrast && TransparencyAllowed();
+        if(force || nextAllowed!=allowed)unavailable=false;allowed=nextAllowed;
+        Refresh();
+        Status=!requested?"背景模糊未启用":!allowed?"使用半透明材质 · 系统透明效果不可用":Accepted?"实时圆角背景柔化 · 文字保持清晰":window.IsVisible?"使用半透明材质 · 系统玻璃不可用":"显示悬浮歌词后预览实时玻璃";
+    }
+    public void Refresh()
+    {
+        if(disposed)return;
+        if(unavailable || !allowed || !window.IsVisible || NativeWindow.Handle(window)==0){host?.Hide();Accepted=false;return;}
+        try
         {
-            try
-            {
-                // Blur (rather than acrylic) avoids Windows 10 acrylic's drag-time stalls.
-                var accent=new Accent{State=allowed?3:0};var ptr=Marshal.AllocHGlobal(Marshal.SizeOf<Accent>());
-                try {Marshal.StructureToPtr(accent,ptr,false);var data=new AttributeData{Attribute=19,Data=ptr,Size=(nuint)Marshal.SizeOf<Accent>()};Accepted=SetWindowCompositionAttribute(NativeWindow.Handle(window),ref data)&&allowed;}
-                finally{Marshal.FreeHGlobal(ptr);}
-            }
-            catch(Exception ex) when(ex is EntryPointNotFoundException or DllNotFoundException or ExternalException){Accepted=false;}
-            enabled=allowed;
+            host??=new(window);host.Update(appearance);Accepted=host.IsVisible;
         }
-        Status=!requested?"背景模糊未启用":roundedFallback?"圆角玻璃材质 · 已避免系统模糊溢出":Accepted?"已请求系统背景模糊 · 效果由系统决定":"使用半透明材质 · 系统模糊不可用";
+        catch(Exception ex) when(ex is EntryPointNotFoundException or DllNotFoundException or ExternalException or TypeLoadException or NotSupportedException or InvalidCastException)
+        {host?.Dispose();host=null;Accepted=false;unavailable=true;}
     }
     public void RoundRegion(double radius)
     {
@@ -56,5 +63,5 @@ internal sealed class NativeBackdrop : IDisposable
         try {using var key=Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");return key?.GetValue("EnableTransparency") is not int v || v!=0;}
         catch(System.Security.SecurityException){return false;}
     }
-    public void Dispose(){Apply(new(){SystemBlur=false},true);}
+    public void Dispose(){if(disposed)return;disposed=true;SystemEvents.UserPreferenceChanged-=preferencesChanged;opacityProperty.RemoveValueChanged(window,OpacityChanged);host?.Dispose();host=null;Accepted=false;}
 }

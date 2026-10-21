@@ -11,6 +11,7 @@ internal static class NativeWindow
     [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] static extern nint SetWindowLongPtr(nint h,int i,nint v);
     [DllImport("user32.dll")] static extern bool SetWindowPos(nint h,nint after,int x,int y,int w,int height,uint flags);
     [DllImport("user32.dll")] static extern bool GetWindowRect(nint h,out RectNative rect);
+    [DllImport("user32.dll")] internal static extern bool IsWindowEnabled(nint h);
     [DllImport("user32.dll")] internal static extern bool RegisterHotKey(nint h,int id,uint modifiers,uint key);
     [DllImport("user32.dll")] internal static extern bool UnregisterHotKey(nint h,int id);
     [StructLayout(LayoutKind.Sequential)] internal struct RectNative { public int Left,Top,Right,Bottom; }

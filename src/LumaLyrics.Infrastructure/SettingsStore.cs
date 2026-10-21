@@ -18,6 +18,7 @@ public sealed class AppSettings
     public string OverlayPreset { get; set; } = "柔和卡片";
     public bool OverlayTwoLines { get; set; } = true;
     public bool OverlayShadow { get; set; } = true;
+    public bool OverlayAdaptiveContrast { get; set; }
     public bool OverlayAnimations { get; set; } = true;
     public double OverlayTransitionMs { get; set; } = 220;
     public string OverlayMaterial { get; set; } = "card";

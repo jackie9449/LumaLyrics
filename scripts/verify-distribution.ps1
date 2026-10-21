@@ -11,7 +11,7 @@ $privateFiles=@(Get-ChildItem -LiteralPath $distributionRoot -Recurse -Force -Fi
     $privateName=$_.Name -match '^(settings|data-location|personal-library)\.json$|^(library|artwork)-(prefetch|import).*\.(json|lock|pause)$'
     $privateExtension=$_.Name -match '\.db([-.].*)?$|\.sqlite3?(-(wal|shm|journal))?$|\.(musicdb|backup|bak|lrc|ttml|img|jsonl|zip)$'
     $privateText=$_.Extension -eq '.txt' -and $relative -notmatch '^licenses/' -and $_.Name -notin @('LICENSE.txt','ThirdPartyNotices.txt')
-    $unexpectedImage=$_.Extension -match '^\.(png|jpe?g|webp|avif|bmp)$' -and $relative -notmatch '^docs/screenshots-ui-v(041|050|051|060|061)/[^/]+\.png$'
+    $unexpectedImage=$_.Extension -match '^\.(png|jpe?g|webp|avif|bmp)$' -and $relative -notmatch '^docs/screenshots-ui-v(041|050|051|060|061|070)/[^/]+\.png$'
     $privateDirectory -or $privateName -or $privateExtension -or $privateText -or $unexpectedImage
 })
 if($privateFiles.Count -gt 0){

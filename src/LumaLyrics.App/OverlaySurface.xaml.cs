@@ -12,6 +12,10 @@ public partial class OverlaySurface : UserControl
 {
     double radius;bool reduceMotion;
     OverlayAppearance appearance=new();
+    FrameworkElement? previewScene;
+    VisualBrush? previewBrush;
+    Rect previewViewbox;
+    double? previewBrightness;
     DispatcherOperation? pendingText;
     public static readonly DependencyProperty CurrentTextProperty=DependencyProperty.Register(nameof(CurrentText),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
     public static readonly DependencyProperty NextTextProperty=DependencyProperty.Register(nameof(NextText),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
@@ -67,49 +71,14 @@ public partial class OverlaySurface : UserControl
     internal double CurrentHeight=>CurrentHost.ActualHeight;
     internal static Color ColorOf(string value) => (Color)ColorConverter.ConvertFromString(value);
     static SolidColorBrush Solid(string value,double opacity=1) {var b=new SolidColorBrush(ColorOf(value)){Opacity=opacity};b.Freeze();return b;}
-    static LinearGradientBrush Gradient(params (string Color,double Position)[] stops)
-    {
-        var b=new LinearGradientBrush{StartPoint=new(0,0),EndPoint=new(1,1)};
-        foreach(var s in stops)b.GradientStops.Add(new(ColorOf(s.Color),s.Position));b.Freeze();return b;
-    }
     public void Apply(OverlayAppearance options,bool reduceMotion=false)
     {
         var a=options.Normalize();appearance=a;this.reduceMotion=reduceMotion;radius=a.Radius;StopTransitions();
-        foreach(var border in new[]{Base,Glow,Sheen,Rim})border.CornerRadius=new(radius);
-        InnerRim.CornerRadius=new(Math.Max(0,radius-2));
-        Base.Background=Solid(a.Background,a.Opacity);Glow.Background=null;Sheen.Background=null;
-        Rim.BorderBrush=Solid("#FFFFFF",.16);InnerRim.BorderBrush=Brushes.Transparent;
-        bool clear=a.Transparent || a.Opacity==0;
-        Base.Visibility=Glow.Visibility=Sheen.Visibility=Rim.Visibility=InnerRim.Visibility=clear?Visibility.Hidden:Visibility.Visible;
-        if(!clear)
-        {
-            if(a.Material=="liquid")
-            {
-                Glow.Background=new RadialGradientBrush(ColorOf(a.Accent),Colors.Transparent){Center=new(.1,0),GradientOrigin=new(.1,0),RadiusX=1.1,RadiusY=1.6,Opacity=a.GlassIntensity*.26};
-                Sheen.Background=Gradient(("#50FFFFFF",0),("#08FFFFFF",.26),("#00FFFFFF",.55),("#18BBDEFF",1));Sheen.Opacity=a.GlassIntensity;
-                Rim.BorderBrush=Gradient(("#D5FFFFFF",0),("#28FFFFFF",.34),("#14FFFFFF",.7),("#90D2EEFF",1));Rim.Opacity=.35+.6*a.GlassIntensity;
-                InnerRim.BorderBrush=Solid("#FFFFFF",a.GlassIntensity*.12);
-            }
-            else if(a.Material=="frost")
-            {
-                Sheen.Background=Gradient(("#20FFFFFF",0),("#02FFFFFF",1));Sheen.Opacity=1;
-                Glow.Background=Solid(a.Accent,a.GlassIntensity*.1);Rim.BorderBrush=Solid("#FFFFFF",.22);
-            }
-            else if(a.Material=="aurora")
-            {
-                Glow.Background=Gradient((a.Accent,0),("#778CE1",.42),("#469AAB",1));Glow.Opacity=a.GlassIntensity*.43;
-                Sheen.Background=Gradient(("#10FFFFFF",0),("#00FFFFFF",.7));Sheen.Opacity=1;Rim.BorderBrush=Solid(a.Accent,.28);
-            }
-            else if(a.Material is "material" or "paper")
-            {
-                Glow.Background=new RadialGradientBrush(ColorOf(a.Accent),Colors.Transparent){Center=new(.98,1),GradientOrigin=new(.98,1),RadiusX=.8,RadiusY=1.5,Opacity=a.GlassIntensity*.16};
-                Rim.BorderBrush=Solid(a.Accent,.16);
-            }
-        }
-        // Reset shared layer opacity when switching presets; colors must not inherit the previous material.
-        if(a.Material!="aurora")Glow.Opacity=1;
-        if(a.Material!="liquid")Rim.Opacity=1;
-        if(!a.Border)Rim.Visibility=InnerRim.Visibility=Visibility.Hidden;
+        if(previewBrightness.HasValue)a=OverlayContrast.Paint(a,OverlayContrast.UseDarkText(previewBrightness.Value,false));
+        Material.Apply(a,reduceMotion);
+        PreviewBackdrop.Opacity=a.Material=="frost"?.98:.78;
+        PreviewBackdrop.Effect=new BlurEffect{Radius=a.Material=="frost"?24:12,RenderingBias=RenderingBias.Quality};
+        UpdatePreviewBackdrop();
         Lines.Margin=new(a.Padding,Math.Max(12,a.Padding*.65),a.Padding,Math.Max(12,a.Padding*.65));
         FontFamily font;
         try {font=new FontFamily(a.Font+", Microsoft YaHei UI, Segoe UI");}catch{font=new("Microsoft YaHei UI");}
@@ -126,7 +95,23 @@ public partial class OverlaySurface : UserControl
         NextHost.Visibility=a.TwoLines?Visibility.Visible:Visibility.Collapsed;
         FlushText(false);UpdateClip();
     }
-    void SurfaceSizeChanged(object sender,SizeChangedEventArgs e)=>UpdateClip();
+    internal string RenderedFont=>CurrentLine.FontFamily.Source;
+    internal void SetPreviewBrightness(double value){previewBrightness=value;Apply(appearance,reduceMotion);}
+    internal void SetInteraction(Point point,bool active)=>Material.SetInteraction(point,active);
+    internal void AttachPreviewBackdrop(FrameworkElement scene)
+    {
+        previewScene=scene;previewBrush=new VisualBrush(scene){ViewboxUnits=BrushMappingMode.Absolute,Stretch=Stretch.Fill};
+        PreviewBackdrop.Background=previewBrush;LayoutUpdated+=(_,_)=>UpdatePreviewBackdrop();
+    }
+    void UpdatePreviewBackdrop()
+    {
+        bool visible=previewScene is not null && !appearance.Transparent && appearance.Opacity>0 && appearance.SystemBlur && appearance.Material is "liquid" or "frost";
+        PreviewBackdrop.Visibility=visible?Visibility.Visible:Visibility.Hidden;
+        if(!visible || !IsLoaded || ActualWidth<=0 || ActualHeight<=0)return;
+        var origin=TranslatePoint(new Point(),previewScene!);var rect=new Rect(origin.X,origin.Y,ActualWidth,ActualHeight);
+        if(rect!=previewViewbox){previewViewbox=rect;previewBrush!.Viewbox=rect;}
+    }
+    void SurfaceSizeChanged(object sender,SizeChangedEventArgs e){UpdateClip();UpdatePreviewBackdrop();}
     void UpdateClip()
     {
         if(Surface.ActualWidth<=0 || Surface.ActualHeight<=0)return;

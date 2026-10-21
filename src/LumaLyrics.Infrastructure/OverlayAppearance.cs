@@ -24,6 +24,7 @@ public sealed record OverlayAppearance
     public double GlassIntensity { get; init; } = .55;
     public bool TwoLines { get; init; } = true;
     public bool Shadow { get; init; } = true;
+    public bool AdaptiveContrast { get; init; }
     public bool Transparent { get; init; }
     public bool SystemBlur { get; init; } = true;
     public bool Border { get; init; } = true;
@@ -49,7 +50,7 @@ public sealed record OverlayAppearance
         FontSize=s.OverlayFontSize,Opacity=s.OverlayBackgroundOpacity,Width=s.OverlayWidth,Radius=s.OverlayCornerRadius,Padding=s.OverlayPadding,
         LineGap=s.OverlayLineGap,NextScale=s.OverlayNextScale,NextOpacity=s.OverlayNextOpacity,ShadowStrength=s.OverlayShadowStrength,
         GlassIntensity=s.OverlayGlassIntensity,TwoLines=s.OverlayTwoLines,Shadow=s.OverlayShadow,
-        Transparent=s.OverlayTransparent || s.OverlayPreset=="极简透明",SystemBlur=s.OverlaySystemBlur,Border=s.OverlayBorder,Animations=s.OverlayAnimations,TransitionMs=s.OverlayTransitionMs
+        Transparent=s.OverlayTransparent || s.OverlayPreset=="极简透明",SystemBlur=s.OverlaySystemBlur,Border=s.OverlayBorder,Animations=s.OverlayAnimations,TransitionMs=s.OverlayTransitionMs,AdaptiveContrast=s.OverlayAdaptiveContrast
     }.Normalize();
     public void Apply(AppSettings s)
     {
@@ -59,6 +60,7 @@ public sealed record OverlayAppearance
         s.OverlayLineGap=a.LineGap;s.OverlayNextScale=a.NextScale;s.OverlayNextOpacity=a.NextOpacity;s.OverlayShadowStrength=a.ShadowStrength;
         s.OverlayGlassIntensity=a.GlassIntensity;s.OverlayTwoLines=a.TwoLines;s.OverlayShadow=a.Shadow;s.OverlayTransparent=a.Transparent;
         s.OverlaySystemBlur=a.SystemBlur;s.OverlayBorder=a.Border;s.OverlayAnimations=a.Animations;s.OverlayTransitionMs=a.TransitionMs;
+        s.OverlayAdaptiveContrast=a.AdaptiveContrast;
     }
 }
 
@@ -66,8 +68,8 @@ public sealed record OverlayTheme(string Name,string Caption,string Tag,OverlayA
 public static class OverlayThemes
 {
     public static IReadOnlyList<OverlayTheme> All { get; } = [
-        new("液态玻璃","通透高光 · 冷调折射","GLASS",new(){Preset="液态玻璃",Material="liquid",Background="#202B40",Accent="#B8DFFF",Opacity=.22,Radius=30,GlassIntensity=.7,Padding=28}),
-        new("雾面毛玻璃","柔雾质感 · 安静留白","FROST",new(){Preset="雾面毛玻璃",Material="frost",Background="#252B3B",Accent="#CEC5EF",Opacity=.58,Radius=24,GlassIntensity=.24}),
+        new("液态玻璃","透亮厚边 · 随光轻盈","GLASS",new(){Preset="液态玻璃",Material="liquid",Background="#13202D",Accent="#A9C9DD",Color="#F7F9FC",Opacity=.16,Radius=30,GlassIntensity=.76,Padding=28,ShadowStrength=.9,AdaptiveContrast=true}),
+        new("雾面毛玻璃","细腻柔雾 · 温润留白","FROST",new(){Preset="雾面毛玻璃",Material="frost",Background="#F0F2F5",Accent="#869BAE",Color="#28313B",Opacity=.64,Radius=28,GlassIntensity=.28,Shadow=false}),
         new("Material 云白","Google 风格 · 柔和粉彩","LIGHT",new(){Preset="Material 云白",Material="material",Color="#25332C",Background="#EDF3E9",Accent="#557A55",Opacity=.96,Radius=38,Shadow=false,Padding=28,GlassIntensity=.45}),
         new("Material 夜色","Google 风格 · 莓紫夜间","DARK",new(){Preset="Material 夜色",Material="material",Color="#F0E7FA",Background="#28232E",Accent="#D9B8FA",Opacity=.95,Radius=38,Shadow=false,Padding=28,GlassIntensity=.45}),
         new("极光渐层","紫蓝流光 · 深邃轻盈","AURORA",new(){Preset="极光渐层",Material="aurora",Background="#171C32",Accent="#A8A1FF",Opacity=.85,Radius=28,GlassIntensity=.65}),

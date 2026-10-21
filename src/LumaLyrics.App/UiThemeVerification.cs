@@ -21,6 +21,16 @@ public partial class MainWindow
             await VerifyOverlayCornersAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
+        if(Environment.GetCommandLineArgs().Contains("--verify-appearance-interactions"))
+        {
+            await VerifyAppearanceInteractionsAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--verify-glass-materials"))
+        {
+            await VerifyGlassVisualsAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         var originalTheme=settings.UiTheme;var originalOverlay=OverlayAppearance.From(settings);
         overlay.ApplyStyle();
         var overlayChrome=overlay.FindResource("RaisedBrush").ToString();
@@ -74,7 +84,7 @@ public partial class MainWindow
             checks[theme.Id+".overlayChromeIndependent"]=overlayChrome==overlay.FindResource("RaisedBrush").ToString();
             checks[theme.Id+".overlayToolbarIndependent"]=toolbarChrome==overlay.Toolbar.Background.ToString();
             CaptureMain("main-"+theme.Id+".png");
-            var appearance=new AppearanceWindow(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
+            var appearance=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
             appearance.Show();await Task.Delay(80);
             checks[theme.Id+".editorHasLocalPalette"]=appearance.Resources.Contains("WindowBrush") && appearance.Resources.Contains("TextBrush");
             var editorBackground=appearance.Background;var editorForeground=appearance.Foreground;
@@ -89,7 +99,7 @@ public partial class MainWindow
             checks[theme.Id+".dialogInheritsTheme"]=dialog.Foreground==FindResource("TextBrush");
             VisualVerification.Save(dialog,Path.Combine(directory,"import-"+theme.Id+".png"));dialog.Close();
         }
-        var saveWindow=new AppearanceWindow(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
+        var saveWindow=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
         saveWindow.Show();saveWindow.PreviewTheme(OverlayThemes.All[1]);saveWindow.Save();
         checks["appearanceSavePersists"]=saveWindow.Saved && OverlayAppearance.From(store.Load()).Preset==OverlayThemes.All[1].Name;
         originalOverlay.Apply(settings);overlay.ApplyStyle();coordinator.SaveSettings();
@@ -126,6 +136,8 @@ public partial class MainWindow
         var overlayChecks=await VisualVerification.RunAsync(this,directory);
         checks["overlayRegression"]=overlayChecks;
         await VerifyOverlayCornersAsync(directory,checks);
+        await VerifyAppearanceInteractionsAsync(directory,checks);
+        await VerifyGlassVisualsAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

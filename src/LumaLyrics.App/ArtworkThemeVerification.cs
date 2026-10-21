@@ -56,7 +56,7 @@ public partial class MainWindow
             checks[$"artwork.{id}.windowUsesPalette"]=WindowMatchesTarget();
             await Task.Delay(60);VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"cover-{id}-warm.png"),true);
             var preferences=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();
-            var editor=new AppearanceWindow(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};editor.Show();
+            var editor=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};editor.Show();
             var editorBackground=editor.Background;var editorForeground=editor.Foreground;
             SetArtwork(cool);vm.Title="潮汐微光";
             checks[$"artwork.{id}.coolFromActualCover"]=artworkPalette is not null && artworkPalette.Primary.B>artworkPalette.Primary.R;

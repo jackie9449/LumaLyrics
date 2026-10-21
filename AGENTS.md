@@ -5,6 +5,8 @@
 - Application UI themes are selected in Settings. Keep theme selectors off the playback/lyrics main page.
 - Liquid Glass and Frosted Glass derive readable surfaces, glows and control colors from the current cover. Preserve neutral grayscale and default fallbacks, reduced-motion behavior and interruption continuity. Material keeps its fixed palette.
 - Floating desktop lyrics have independent appearance settings, previews, save/cancel behavior and scoped UI resources. Changing the application theme must not change floating lyrics, their toolbar or their appearance editor.
+- Rounded floating glass uses a clipped compositor substrate beneath sharp WPF text. Keep that substrate non-activating, click-through, synchronized with position/DPI/visibility/opacity, and suppressed for transparent or instrumental states. Verify interior blur and retained scene color as well as clear corners; a successful native call alone is insufficient.
+- Appearance editing stays modeless and temporarily permits dragging while preserving the user's lock/visibility preference and deliberate position changes. Font hover is a transient visual override, never a saved selection; leaving, closing, selecting, saving and cancelling must resolve the override correctly.
 - Preserve existing lyric bindings, library data, playback behavior and compatibility fallbacks.
 - Automatically import only checked timed lyrics. Preserve manual bindings, never fabricate timestamps, and do not label missing lyrics as instrumental.
 - Confirmed instrumentals leave the main lyric area blank and suppress floating text and its empty surface. Restore the UI when vocal lyrics return.

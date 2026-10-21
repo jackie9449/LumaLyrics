@@ -46,13 +46,28 @@ public partial class MainWindow
             }
             // The opaque, topmost checker scene owns this entire bounded capture. No desktop or library imagery is used.
             using var composed=CaptureNative();composed.Save(Path.Combine(directory,"overlay-"+name+"-native.png"));
+            floating.LyricSurface.Opacity=0;await Settle();using var substrate=CaptureNative();floating.LyricSurface.Opacity=1;await Settle();
             floating.Hide();await Settle();using var behind=CaptureNative();behind.Save(Path.Combine(directory,"overlay-"+name+"-background.png"));
+            checks["overlayCorners."+name+".hostHidesWithWindow"]=!floating.GlassHostVisible;
             int Delta(int x,int y){var a=composed.GetPixel(x,y);var b=behind.GetPixel(x,y);return Math.Max(Math.Abs(a.R-b.R),Math.Max(Math.Abs(a.G-b.G),Math.Abs(a.B-b.B)));}
             int w=composed.Width,h=composed.Height;
             int cornerDelta=new[]{(2,2),(w-3,2),(2,h-3),(w-3,h-3)}.Max(p=>Delta(p.Item1,p.Item2));
             checks["overlayCorners."+name+".compositedCornersClear"]=cornerDelta<=3;
             checks["overlayCorners."+name+".cornerColorDelta"]=cornerDelta;
             floating.Show();await Settle();
+            (double[] Mean,double Variance) Interior(System.Drawing.Bitmap image)
+            {
+                var sum=new double[3];var squares=new double[3];int count=0;
+                for(int y=h/3;y<h*2/3;y+=2)for(int x=w/3;x<w*2/3;x+=2)
+                {var color=image.GetPixel(x,y);double[] values=[color.R,color.G,color.B];for(int i=0;i<3;i++){sum[i]+=values[i];squares[i]+=values[i]*values[i];}count++;}
+                var mean=sum.Select(v=>v/count).ToArray();return(mean,Enumerable.Range(0,3).Sum(i=>Math.Max(0,squares[i]/count-mean[i]*mean[i])));
+            }
+            var actual=Interior(substrate);var original=Interior(behind);
+            double ratio=actual.Variance/Math.Max(1,original.Variance),colorDelta=actual.Mean.Zip(original.Mean,(a,b)=>Math.Abs(a-b)).Max();
+            checks["overlayCorners."+name+".interiorActuallyBlurred"]=floating.BlurAccepted && ratio<.35;
+            checks["overlayCorners."+name+".backdropKeepsSceneColor"]=colorDelta<24;
+            checks["overlayCorners."+name+".varianceRatio"]=ratio;
+            checks["overlayCorners."+name+".sceneColorDelta"]=colorDelta;
         }
         floating.Show();
         try
@@ -62,7 +77,7 @@ public partial class MainWindow
                 string material=theme.Appearance.Material;
                 var appearance=theme.Appearance with{Radius=48,Animations=false};
                 appearance.Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".initial");
-                checks["overlayCorners."+material+".roundedBlurFallback"]=!floating.BlurAccepted && floating.MaterialStatus.Contains("圆角");
+                checks["overlayCorners."+material+".roundedCompositedBackdrop"]=floating.BlurAccepted && floating.GlassHostVisible && floating.GlassHostInputTransparent;
                 await CheckComposition(material);
                 VisualVerification.Save(floating.LyricSurface,Path.Combine(directory,"overlay-"+material+"-rounded.png"));
                 var bitmap=VisualVerification.Render(floating.LyricSurface);int stride=bitmap.PixelWidth*4;var pixels=new byte[stride*bitmap.PixelHeight];bitmap.CopyPixels(pixels,stride,0);
@@ -75,12 +90,16 @@ public partial class MainWindow
                 appearance.Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".blurReenabled");
                 (appearance with{Radius=0}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".zeroRadius",false);
                 (appearance with{Radius=24}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".roundedAfterSquare");
-                checks["overlayCorners."+material+".roundedAfterSquareDisablesBlur"]=!floating.BlurAccepted && fixture.OverlaySystemBlur;
+                checks["overlayCorners."+material+".roundedAfterSquareKeepsBlur"]=floating.BlurAccepted && fixture.OverlaySystemBlur;
                 await CheckComposition(material+"-roundtrip");
+                CornerNative.GetLayeredWindowAttributes(floating.GlassHostHandle,out _,out byte fullAlpha,out _);
+                floating.Opacity=.25;await Settle();CornerNative.GetLayeredWindowAttributes(floating.GlassHostHandle,out _,out byte fadedAlpha,out _);
+                checks["overlayCorners."+material+".substrateFollowsWindowFade"]=fullAlpha>0 && fadedAlpha>0 && fadedAlpha<fullAlpha/2;
+                floating.Opacity=1;await Settle();
                 (appearance with{Transparent=true}).Apply(fixture);floating.ApplyStyle();await Settle();
-                checks["overlayCorners."+material+".transparentDisablesBlur"]=!floating.BlurAccepted;
+                checks["overlayCorners."+material+".transparentDisablesBlur"]=!floating.BlurAccepted && !floating.GlassHostVisible;
                 appearance.Apply(fixture);floating.ApplyStyle();floating.SetInstrumental(true);await Settle();
-                checks["overlayCorners."+material+".instrumentalDisablesBlur"]=!floating.BlurAccepted && floating.InstrumentalSuppressed;
+                checks["overlayCorners."+material+".instrumentalDisablesBlur"]=!floating.BlurAccepted && !floating.GlassHostVisible && floating.InstrumentalSuppressed;
                 floating.SetInstrumental(false);await Settle();Check(material+".vocalRestoresRounded");
             }
         }
@@ -91,6 +110,7 @@ public partial class MainWindow
         [StructLayout(LayoutKind.Sequential)] internal struct Rect {internal int Left,Top,Right,Bottom;}
         [DllImport("user32.dll")] internal static extern int GetWindowRgn(nint window,nint region);
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint window,out Rect rect);
+        [DllImport("user32.dll")] internal static extern bool GetLayeredWindowAttributes(nint window,out uint key,out byte alpha,out uint flags);
         [DllImport("gdi32.dll")] internal static extern nint CreateRectRgn(int left,int top,int right,int bottom);
         [DllImport("gdi32.dll")] internal static extern bool PtInRegion(nint region,int x,int y);
         [DllImport("gdi32.dll")] internal static extern bool DeleteObject(nint region);

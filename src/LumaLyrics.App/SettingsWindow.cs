@@ -64,7 +64,8 @@ public sealed class SettingsWindow : Window
         ThemeManager.Bind(overlaySummary,TextBlock.ForegroundProperty,"MutedBrush");overlaySummary.FontSize=12;overlayPanel.Children.Add(overlaySummary);
         var edit=new Button{Content="打开悬浮歌词独立外观…",Margin=new(0,22,0,0),HorizontalAlignment=HorizontalAlignment.Left};
         edit.SetResourceReference(StyleProperty,"PrimaryButton");AutomationProperties.SetName(edit,"悬浮歌词独立外观");
-        edit.Click+=(_,_)=>{if(Owner is MainWindow main){main.ShowAppearance(this);RefreshOverlayPreview();}};
+        edit.Click+=(_,_)=>{if(Owner is MainWindow main){main.ShowAppearance(this);}};
+        Activated+=(_,_)=>RefreshOverlayPreview();
         overlayPanel.Children.Add(edit);RefreshOverlayPreview();tabs.Items.Add(Tab("悬浮歌词",overlayPanel));
 
         var general=new StackPanel();

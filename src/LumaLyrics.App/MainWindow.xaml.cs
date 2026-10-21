@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     readonly PlaybackCoordinator coordinator; readonly AppSettings settings;
     readonly OverlayWindow overlay; readonly DispatcherTimer timer;
     Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceWindow? appearanceWindow;
+    SettingsWindow? settingsWindow;
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
     ArtworkPalette? artworkPalette;
@@ -138,7 +139,7 @@ public partial class MainWindow : Window
         if(!SeekSlider.IsMouseCaptureWithin)vm.Position=p ?? 0;
         vm.Quality=s is null?"尚无播放时间轴":p.HasValue?"GSMTC · 整秒位置插值 · B 级兼容":"同步受限 · 当前无可信播放位置";
         if(s?.Status==PlayState.Paused) { if(pausedSince==DateTime.MinValue)pausedSince=DateTime.UtcNow; }else pausedSince=DateTime.MinValue;
-        overlay.Opacity=settings.FadeOnPause && pausedSince!=DateTime.MinValue && DateTime.UtcNow-pausedSince>TimeSpan.FromSeconds(10)?.25:1;
+        overlay.Opacity=!overlay.AppearanceEditing && settings.FadeOnPause && pausedSince!=DateTime.MinValue && DateTime.UtcNow-pausedSince>TimeSpan.FromSeconds(10)?.25:1;
         int index=displayed?.IsSynced==true && p.HasValue?displayed.FindIndex(p.Value,coordinator.Binding?.OffsetMs ?? 0,settings.GlobalOffsetMs):-1;
         if(index!=currentIndex)
         {
@@ -234,14 +235,24 @@ public partial class MainWindow : Window
     void OnDragOver(object s,DragEventArgs e) {e.Effects=e.Data.GetDataPresent(DataFormats.FileDrop)?DragDropEffects.Copy:DragDropEffects.None;e.Handled=true;}
     void OnDrop(object s,DragEventArgs e) {if(e.Data.GetData(DataFormats.FileDrop) is string[] files && files.Length>0)new ImportWindow(coordinator,files[0]){Owner=this}.ShowDialog();}
     void CandidatesClicked(object s,RoutedEventArgs e)=>new CandidateWindow(coordinator){Owner=this}.ShowDialog();
-    void SettingsClicked(object s,RoutedEventArgs e) {new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this}.ShowDialog();SelectUiTheme(settings.UiTheme,false);overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();}
+    void SettingsClicked(object s,RoutedEventArgs e)
+    {
+        if(settingsWindow is not null){settingsWindow.Activate();return;}
+        var window=settingsWindow=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};
+        window.Closed+=(_,_)=>{settingsWindow=null;if(quitting)return;SelectUiTheme(settings.UiTheme,false);overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();};
+        window.Show();
+    }
     void AppearanceClicked(object s,RoutedEventArgs e)=>ShowAppearance();
     public void ShowAppearance(Window? dialogOwner=null)
     {
         if(appearanceWindow is not null){appearanceWindow.Activate();return;}
-        var originalLeft=settings.OverlayLeft;var originalTop=settings.OverlayTop;
-        appearanceWindow=new(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=dialogOwner??this};
-        try{appearanceWindow.ShowDialog();}finally{if(!appearanceWindow.Saved && overlay.IsLoaded){overlay.RestorePlacement(originalLeft,originalTop);coordinator.SaveSettings();}appearanceWindow=null;}
+        overlay.BeginAppearanceEditing();
+        try
+        {
+            var window=appearanceWindow=new(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=dialogOwner??this};
+            window.Closed+=(_,_)=>{appearanceWindow=null;overlay.EndAppearanceEditing();if(!quitting)coordinator.SaveSettings();};window.Show();
+        }
+        catch{appearanceWindow=null;overlay.EndAppearanceEditing();throw;}
     }
     void DiagnosticsClicked(object s,RoutedEventArgs e)=>new DiagnosticsWindow(coordinator,store,hotkeyError){Owner=this}.ShowDialog();
     void LibraryClicked(object s,RoutedEventArgs e)=>new LibraryWindow(coordinator){Owner=this}.ShowDialog();
@@ -251,7 +262,7 @@ public partial class MainWindow : Window
     public async Task QuitAsync()
     {
         if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();tray?.Dispose();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
-        appearanceWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
+        appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)
     {
@@ -278,7 +289,7 @@ public partial class MainWindow : Window
         Capture(this,Path.Combine(directory,"main-window.png"));
         bool visible=overlay.IsVisible;var original=OverlayAppearance.From(settings);
         if(!visible)overlay.Show();overlay.SetLocked(true,false);
-        var appearance=new AppearanceWindow(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};appearance.Show();
+        var appearance=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};appearance.Show();
         var appearanceChecks=new Dictionary<string,object?>();
         appearanceChecks["controls"]=appearance.VerifyControls();
         foreach(var theme in OverlayThemes.All)
@@ -293,7 +304,7 @@ public partial class MainWindow : Window
         appearance.SelectLayoutTab();await Task.Delay(100);Capture(appearance,Path.Combine(directory,"appearance-layout.png"));
         appearanceChecks["noBlurAfterTransparentTheme"]=!overlay.BlurAccepted;
         appearance.Close();appearanceChecks["cancelRestoredAppearance"]=original==OverlayAppearance.From(settings);
-        var saveWindow=new AppearanceWindow(settings,overlay.ApplyStyle,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};saveWindow.Show();
+        var saveWindow=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};saveWindow.Show();
         var large=OverlayThemes.All[3].Appearance with{FontSize=96,Width=360,TwoLines=false,Animations=false,TransitionMs=340};saveWindow.PreviewOptions(large);await Task.Delay(100);saveWindow.Save();
         appearanceChecks["appearanceSavedAndReloaded"]=OverlayAppearance.From(store.Load())==large.Normalize();
         appearanceChecks["largeFontWindowWithinBounds"]=overlay.ActualWidth==360 && overlay.ActualHeight<=640 && overlay.ActualHeight>=96;
