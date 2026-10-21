@@ -50,7 +50,7 @@ public sealed class SettingsStore
 {
     public string Root { get; }
     readonly string path;
-    public SettingsStore(string? root = null) { Root = root ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LumaLyrics"); Directory.CreateDirectory(Root); path = Path.Combine(Root, "settings.json"); }
+    public SettingsStore(string? root = null) { Root = DataDirectoryConfiguration.Resolve(root); PersonalLibraryArchive.EnsureOutsideSoftware(Root); Directory.CreateDirectory(Root); DataDirectoryConfiguration.ProtectFromGit(Root); path = Path.Combine(Root, "settings.json"); }
     public AppSettings Load()
     {
         try { return File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? new() : new(); }

@@ -19,6 +19,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     public LibraryProgress LibraryStatus {get;private set;}=new(0,0,0,0,false,"等待扫描本机 Apple Music 资料库");
     public ArtworkProgress ArtworkStatus {get;private set;}=new(0,0,0,0,0,false,"等待扫描封面");
     public AppSettings Settings { get; }
+    public string DataRoot=>store.Root;
     public GsmtcPlaybackSource Source { get; }
     public PlaybackSnapshot? Snapshot { get; private set; }
     public Track? ManualTrack { get; private set; }
@@ -240,7 +241,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     public void ClearCache()
     {
         repository.ClearNetworkCache();var dir=Path.Combine(store.Root,"cache","responses");if(Directory.Exists(dir))foreach(var f in Directory.GetFiles(dir))File.Delete(f);
-        if(Binding?.Manual==false){Binding=null;Document=null;LyricsStatus="网络缓存已清理，可以重新搜索";Updated?.Invoke();}
+        LyricsStatus="查词响应缓存已清理，个人歌词与封面已保留";Updated?.Invoke();
     }
     public void SaveSettings() => store.Save(Settings);
     public void SettingsChanged()

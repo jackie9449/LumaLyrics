@@ -1,13 +1,14 @@
 using LumaLyrics.Windows;
+if(LumaLyrics.Probe.PersonalLibraryCommands.TryRun(args))return;
 if(args.ElementAtOrDefault(0)=="--asset-status")
 {
-    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
     using var lyrics=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));using var artwork=new LumaLyrics.Infrastructure.ArtworkCache(root);
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{lyrics=lyrics.GetLibraryProgress(running:LumaLyrics.Infrastructure.LibraryPrefetcher.IsRunning(Path.Combine(root,"lyrics.db"))),artwork=artwork.GetProgress(running:LumaLyrics.Infrastructure.LibraryArtworkImporter.IsRunning(root))}));return;
 }
 if(args.ElementAtOrDefault(0)=="--artwork")
 {
-    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");Directory.CreateDirectory(root);
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));Directory.CreateDirectory(root);
     using var worker=new LumaLyrics.Infrastructure.LibraryArtworkImporter(root);using var cancel=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;cancel.Cancel();};
     worker.Progress+=p=>Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(p));
     if(args.Contains("--retry")){using var cache=new LumaLyrics.Infrastructure.ArtworkCache(root);cache.ResetRetries();}
@@ -17,12 +18,12 @@ if(args.ElementAtOrDefault(0)=="--artwork")
 }
 if(args.ElementAtOrDefault(0)=="--library-status")
 {
-    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
     using var db=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(db.GetLibraryProgress(running:LumaLyrics.Infrastructure.LibraryPrefetcher.IsRunning(Path.Combine(root,"lyrics.db")))));return;
 }
 if(args.ElementAtOrDefault(0)=="--prefetch")
 {
-    var root=args.ElementAtOrDefault(1)??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyrics");Directory.CreateDirectory(root);
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));Directory.CreateDirectory(root);
     using var provider=new LumaLyrics.Infrastructure.LrclibProvider(searchOnly:args.Contains("--batch"),minimumInterval:args.Contains("--batch")?TimeSpan.FromMilliseconds(250):null);
     LumaLyrics.Core.ILyricsProvider lookupProvider=args.Contains("--batch")?new LumaLyrics.Infrastructure.LibraryLyricsProvider(provider):provider;
     var prefetcher=new LumaLyrics.Infrastructure.LibraryPrefetcher(Path.Combine(root,"lyrics.db"),lookupProvider);
@@ -57,7 +58,8 @@ if(args.ElementAtOrDefault(0)=="--lookup")
     var selection=LumaLyrics.Core.AutomaticLyricsMatcher.Select(track,found);
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{count=found.Count,synced=found.Count(c=>c.SyncedLyrics is not null),automatic=selection?.Candidate.Id,assessment=selection?.Assessment,rejected=found.Select(c=>LumaLyrics.Core.AutomaticLyricsMatcher.Assess(c).Reason).Distinct()}));return;
 }
-var path = args.ElementAtOrDefault(0) ?? "probe-redacted.jsonl";
+var path = args.ElementAtOrDefault(0) is null or "--probe"?Path.Combine(LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(),"logs","probe-redacted.jsonl"):args[0];
+Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
 var seconds = int.TryParse(args.ElementAtOrDefault(1), out var n) ? n : 60;
 Console.WriteLine($"Capturing GSMTC for {seconds}s to {Path.GetFullPath(path)}. Metadata redacted unless --metadata is supplied.");
 await MediaProbe.RunAsync(path, seconds, args.Contains("--metadata"));

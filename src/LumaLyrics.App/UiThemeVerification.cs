@@ -116,6 +116,7 @@ public partial class MainWindow
         checks["library.separateArtworkProgress"]=Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("高清")) && Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("动态歌词"));
         VisualVerification.Save(libraryWindow,Path.Combine(directory,"library-assets.png"));libraryWindow.Close();
         await VerifyArtworkThemesAsync(directory,checks);
+        await VerifyPersonalLibraryAsync(directory,checks);
         Width=1220;Height=820;SelectUiTheme(originalTheme);originalOverlay.Apply(settings);coordinator.SaveSettings();
         var overlayChecks=await VisualVerification.RunAsync(this,directory);
         checks["overlayRegression"]=overlayChecks;

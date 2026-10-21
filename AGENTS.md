@@ -9,6 +9,7 @@
 - Automatically import only checked timed lyrics. Preserve manual bindings, never fabricate timestamps, and do not label missing lyrics as instrumental.
 - Confirmed instrumentals leave the main lyric area blank and suppress floating text and its empty surface. Restore the UI when vocal lyrics return.
 - Map covers through Apple Music persistent IDs and confirmed album references. Count high resolution from actual image dimensions, preserve usable fallbacks, and keep personal metadata, images and downloaded lyrics out of Git.
+- Keep personal data outside software directories and archives. Export readable personal lyrics/covers with consistent database snapshots; restore only into a new directory. Never replace existing personal files or silently create an empty profile when a selected location is unavailable. Validate distribution boundaries before creating a software ZIP.
 
 ## Authorized GitHub synchronization
 

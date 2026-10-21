@@ -24,3 +24,12 @@ library-import-report.json
 **/cache/artwork/
 *-prefetch.lock
 *-prefetch.pause
+personal-library.json
+data-location.json
+*.lumalibrary.zip
+*.lrc
+*.ttml
+**/personal-library/
+**/PersonalLibrary/
+**/个人资料/
+**/.luma-personal-*.partial/

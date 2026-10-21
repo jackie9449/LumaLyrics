@@ -9,7 +9,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     readonly SqliteConnection db;
     public LyricsRepository(string path)
     {
-        db = new($"Data Source={path}"); db.Open();
+        db = new(new SqliteConnectionStringBuilder{DataSource=path}.ToString()); db.Open();
         using(var version=db.CreateCommand())
         {
             version.CommandText="PRAGMA user_version";var old=Convert.ToInt32(version.ExecuteScalar());
@@ -98,7 +98,8 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     public void ClearFailure(Track track) => Execute("DELETE FROM LookupFailures WHERE Fingerprint=$f", ("$f", track.Fingerprint));
     public void ClearNetworkCache()
     {
-        Execute("DELETE FROM TrackLyricsBindings WHERE Manual=0; DELETE FROM LyricsDocuments WHERE Source LIKE 'LRCLIB%' AND Id NOT IN (SELECT DocumentId FROM TrackLyricsBindings); DELETE FROM LookupFailures; UPDATE LibraryTracks SET State='Pending',RetryUtc=NULL,LyricsKind='' WHERE State='Cached';");
+        // Imported lyrics and their calibration are personal data, including automatic imports.
+        Execute("DELETE FROM LookupFailures");
     }
     public void SyncLibrary(LibrarySnapshot snapshot)
     {

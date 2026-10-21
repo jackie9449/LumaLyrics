@@ -13,6 +13,7 @@ public sealed class SettingsWindow : Window
     readonly OverlaySurface overlayPreview=new();
     readonly TextBlock overlaySummary=new();
     readonly AppSettings settings;
+    internal PersonalLibraryPanel PersonalLibrary {get;}
 
     public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme)
     {
@@ -78,7 +79,7 @@ public sealed class SettingsWindow : Window
         var unlock=DialogUi.Field(general,"解锁快捷键",settings.UnlockHotkey);
         bool originalStartup=StartupEnabled();
         var startup=DialogUi.Check(general,"登录 Windows 时启动（默认关闭）",originalStartup);
-        DialogUi.Button(general,"清理网络缓存（保留手动绑定）",()=>{coordinator.ClearCache();MessageBox.Show(this,"网络缓存已清理。手动绑定和导入歌词已保留。");});
+        DialogUi.Button(general,"清理查词响应缓存（保留全部个人资料）",()=>{coordinator.ClearCache();MessageBox.Show(this,"查词响应缓存已清理。个人歌词、封面、绑定与校准均已保留。");});
         var save=DialogUi.Button(general,"保存常规设置",()=>{
             if(!double.TryParse(offset.Text,out var off)||!double.IsFinite(off)||Math.Abs(off)>3600000){MessageBox.Show(this,"请检查歌词偏移数值。");return;}
             // Only write the startup preference when the user actually changed it.
@@ -90,6 +91,7 @@ public sealed class SettingsWindow : Window
             coordinator.SettingsChanged();coordinator.SaveSettings();Close();
         });
         save.SetResourceReference(StyleProperty,"PrimaryButton");tabs.Items.Add(Tab("常规",general));
+        PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab("个人资料",PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();
         var done=new Button{Content="完成",MinWidth=88,HorizontalAlignment=HorizontalAlignment.Right,Margin=new(0,20,0,0),IsCancel=true};
         done.Click+=(_,_)=>Close();Grid.SetRow(done,2);root.Children.Add(done);
         Loaded+=(_,_)=>{
@@ -113,6 +115,7 @@ public sealed class SettingsWindow : Window
     }
     internal void SelectApplicationTheme(string id)=>themeChoices[AppThemes.Find(id).Id].IsChecked=true;
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
+    internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
     static bool StartupEnabled(){using var key=Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");return key?.GetValue("LumaLyrics") is not null;}
     static void SetStartup(bool enabled){using var key=Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");if(enabled)key.SetValue("LumaLyrics","\""+System.IO.Path.Combine(AppContext.BaseDirectory,"LumaLyrics.exe")+"\"");else key.DeleteValue("LumaLyrics",false);}
 }
