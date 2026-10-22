@@ -18,6 +18,7 @@ public partial class MainWindow
             MainPageHost.Children.Add(musicLibrary);
         }
         LyricsPage.Visibility=Visibility.Collapsed;musicLibrary.Visibility=Visibility.Visible;SelectNavigation(true);
+        musicLibrary.ObserveArtworkProgress(coordinator.ArtworkStatus);
         await musicLibrary.EnsureLoadedAsync();musicLibrary.SetNowPlaying(coordinator.ActiveTrack,coordinator.Snapshot?.Status==LumaLyrics.Core.PlayState.Playing);
     }
     void ShowLyricsPage()

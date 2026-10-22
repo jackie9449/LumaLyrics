@@ -67,6 +67,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         var back=new Button{Content="回到歌词",Padding=new(12,7,12,7),Margin=new(12,0,0,0)};back.Click+=(_,_)=>returnLyrics();controls.Children.Add(back);
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,12,0)};var title=new TextBlock{FontSize=12,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};title.SetBinding(TextBlock.TextProperty,new Binding("Title"){Source=player});text.Children.Add(title);var artist=new TextBlock{FontSize=10,Margin=new(0,4,0,0),TextTrimming=TextTrimming.CharacterEllipsis};artist.SetBinding(TextBlock.TextProperty,new Binding("Artist"){Source=player});ThemeManager.Bind(artist,TextBlock.ForegroundProperty,"MutedBrush");text.Children.Add(artist);playback.Children.Add(text);
         search.TextChanged+=(_,_)=>{hint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;debounce.Stop();debounce.Start();};debounce.Tick+=(_,_)=>{debounce.Stop();Filter();};sort.SelectionChanged+=(_,_)=>Filter();
+        SetupArtworkRefresh();
     }
     DataTemplate RowTemplate()
     {
@@ -84,19 +85,24 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     {
         while(node is not null && node!=songs){if(node is ListBoxItem{DataContext:MusicRow row})return row;node=VisualTreeHelper.GetParent(node);}return null;
     }
-    internal Task EnsureLoadedAsync()=>loaded?Task.CompletedTask:RefreshAsync();
-    internal async Task RefreshAsync()
+    internal Task EnsureLoadedAsync()=>RefreshAsync(loaded);
+    internal Task RefreshAsync()=>RefreshAsync(false);
+    async Task RefreshAsync(bool preserveContext)
     {
-        loading?.Cancel();loading?.Dispose();loading=new();var token=loading.Token;refresh.IsEnabled=false;status.Text="正在读取本机音乐库…";
+        loading?.Cancel();loading?.Dispose();loading=new();var token=loading.Token;int revision=artworkRevision;bool applied=false;refresh.IsEnabled=false;if(!preserveContext)status.Text="正在读取本机音乐库…";
         try
         {
             var result=await load(token);token.ThrowIfCancellationRequested();if(disposed)return;
+            var context=preserveContext?CaptureArtworkContext():null;
             thumbnails.Clear();albumCovers.Clear();lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
-            status.Text=result.Message.Length>0?result.Message:"双击歌曲或按 Enter 播放 · 歌词与封面随实际播放同步";
+            SetNowPlaying(nowPlayingTrack,nowPlaying);
+            artworkLoadedRevision=revision;applied=true;
+            if(context is not null)await RestoreArtworkContextAsync(context);
+            if(!preserveContext)status.Text=result.Message.Length>0?result.Message:"双击歌曲或按 Enter 播放 · 歌词与封面随实际播放同步";
         }
         catch(OperationCanceledException){}
-        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException){if(!disposed){status.Text="音乐库暂时无法读取，请稍后刷新或检查缓存管理。";empty.Text="暂时无法读取音乐库";empty.Visibility=Visibility.Visible;}}
-        finally{if(!disposed && !token.IsCancellationRequested)refresh.IsEnabled=true;}
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException){if(!disposed && !preserveContext){status.Text="音乐库暂时无法读取，请稍后刷新或检查缓存管理。";empty.Text="暂时无法读取音乐库";empty.Visibility=Visibility.Visible;}}
+        finally{if(!disposed && !token.IsCancellationRequested){refresh.IsEnabled=true;if(applied)ScheduleArtworkRefresh();}}
     }
     void Filter()
     {
@@ -122,11 +128,12 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     }
     internal void SetNowPlaying(Track? track,bool isPlaying=false)
     {
+        nowPlayingTrack=track;nowPlaying=isPlaying;
         toggleButton.Content=isPlaying?"Ⅱ":"▷";
         string key=track?.Fingerprint??"";if(key==lastTrack || view is null)return;lastTrack=key;
         foreach(MusicRow row in view.SourceCollection)row.NowPlaying=track is not null && MusicLibraryPlayback.IsRequestedRecording(row.Song.Track,track);
     }
-    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();thumbnails.Clear();albumCovers.Clear();}
+    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();artworkRefresh.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();thumbnails.Clear();albumCovers.Clear();}
     internal sealed class MusicRow(MusicLibrarySong song,ThumbnailCache cache):INotifyPropertyChanged
     {
         public MusicLibrarySong Song=>song;
@@ -149,7 +156,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         internal ImageSource? Get(string? path)
         {
             if(path is null)return null;if(images.TryGetValue(path,out var cached))return cached;
-            BitmapImage? image=null;try{if(File.Exists(path)){image=new();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.DecodePixelWidth=decodeWidth;image.UriSource=new Uri(path);image.EndInit();image.Freeze();}}catch(Exception ex) when(ex is IOException or FormatException or UnauthorizedAccessException or NotSupportedException or ArgumentException){image=null;}
+            BitmapImage? image=null;try{if(File.Exists(path)){image=new();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.CreateOptions=BitmapCreateOptions.IgnoreImageCache;image.DecodePixelWidth=decodeWidth;image.UriSource=new Uri(path);image.EndInit();image.Freeze();}}catch(Exception ex) when(ex is IOException or FormatException or UnauthorizedAccessException or NotSupportedException or ArgumentException){image=null;}
             while(order.Count>=128)images.Remove(order.Dequeue());images[path]=image;order.Enqueue(path);return image;
         }
         internal void Clear(){images.Clear();order.Clear();}

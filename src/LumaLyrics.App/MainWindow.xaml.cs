@@ -111,6 +111,7 @@ public partial class MainWindow : Window
         vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
+        musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
         if(!ReferenceEquals(displayed,coordinator.Document))BuildLyrics();

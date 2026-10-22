@@ -25,8 +25,8 @@ public partial class MainWindow
                 canvas.DrawLine(new Pen(Brushes.White,2),new Point(60,480),new Point(540,480));
             }
             var image=new RenderTargetBitmap(600,600,96,96,PixelFormats.Pbgra32);image.Render(drawing);
-            var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));
-            string path=Path.Combine(fixtureRoot,id+".png");using(var stream=File.Create(path))encoder.Save(stream);coverPaths.Add(path);
+            BitmapEncoder encoder=id=="sun"?new JpegBitmapEncoder():new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));
+            string path=Path.Combine(fixtureRoot,id+".img");using(var stream=File.Create(path))encoder.Save(stream);coverPaths.Add(path);
         }
         var fixture=new List<MusicLibrarySong>
         {
@@ -35,11 +35,12 @@ public partial class MainWindow
             new("fixture","three",new("静静的海面","浮光","海面",180000),coverPaths[2],"Instrumental")
         };
         fixture.AddRange(Enumerable.Range(1,3000).Select(i=>new MusicLibrarySong("fixture",i.ToString(),new("片段 "+i.ToString("0000"),"工作室 "+(i%8),"创作集 "+(i%12),120000+i*10),coverPaths[i%3])));
-        int mode=0,cancelled=0,manageCount=0,transportCount=0;bool playbackUnavailable=false;var played=new List<string>();
+        int mode=0,cancelled=0,manageCount=0,transportCount=0,loadCount=0;bool playbackUnavailable=false;var played=new List<string>();
         async Task<MusicLibraryResult> Load(CancellationToken token)
         {
+            loadCount++;
             await Task.Delay(10,token);
-            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),3=>new(fixture.Select((song,i)=>song with{Track=song.Track with{Album="专辑 "+i.ToString("0000")},CoverPath=i%17==1?null:song.CoverPath}).ToArray(),""),_=>new(fixture,"")};
+            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),3=>new(fixture.Select((song,i)=>song with{Track=song.Track with{Album="专辑 "+i.ToString("0000")},CoverPath=i%17==1?null:song.CoverPath}).ToArray(),""),4=>new(fixture.Select(song=>song with{CoverPath=null}).ToArray(),""),_=>new(fixture,"")};
         }
         async Task<LibraryPlayResult> Play(MusicLibrarySong song,CancellationToken token)
         {
@@ -103,6 +104,7 @@ public partial class MainWindow
             checks["musicLibrary.thumbnailCacheBounded"]=cache.Count==128;
             string bad=Path.Combine(fixtureRoot,"invalid.png");File.WriteAllText(bad,"invalid fixture");checks["musicLibrary.corruptCoverHandled"]=cache.Get(bad) is null;
             await VerifyAlbumBrowserAsync(browser,directory,checks,async large=>{mode=large?3:0;await browser.RefreshAsync();});
+            await VerifyAlbumArtworkAsync(browser,directory,checks,coverPaths,value=>mode=value,()=>loadCount);
             browser.ShowAllSongs();
             await Search("微光");SelectSong("one");Click(ButtonWith("播放所选"));var pending=browser.ActivePlayback!;browser.Dispose();await pending;
             checks["musicLibrary.disposeCancelsPlayback"]=cancelled==2;

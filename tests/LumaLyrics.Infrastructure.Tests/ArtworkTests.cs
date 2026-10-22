@@ -53,6 +53,17 @@ public class ArtworkTests : IDisposable
         Assert.Null(cache.Find(track with{Album="Different album"}));Assert.Null(cache.Find(track with{DurationMs=240000}));
         Assert.Single(Directory.GetFiles(Path.Combine(root,"cache","artwork"),"*.img"));
     }
+    [Fact] public void BrowserCatalogFindsAnImportedCoverThroughTheRealPersonalCacheFormat()
+    {
+        var snapshot=new LibrarySnapshot("fixture",1,[new("01",track)],"hash");
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.SyncLibrary(snapshot);
+        using var cache=new ArtworkCache(root);cache.Sync(snapshot,new Dictionary<string,AppleArtworkSource>{{"01",new("01","original",null,null)}});
+        var catalog=new MusicLibraryCatalog(root,Path.Combine(root,"missing.musicdb"));
+        Assert.Null(Assert.Single(catalog.Load().Songs).CoverPath);
+        cache.Save(Assert.Single(cache.GetQueue()),Png(1200,1200));
+        var song=Assert.Single(catalog.Load().Songs);Assert.Equal(".img",Path.GetExtension(song.CoverPath));Assert.True(File.Exists(song.CoverPath));
+        Assert.Equal(song.CoverPath,Assert.Single(Assert.Single(MusicLibraryAlbums.Group([song])).CoverPaths));
+    }
     [Fact] public async Task LowResolutionFallbackIsNotReportedAsHighResolution()
     {
         var snapshot=new LibrarySnapshot("fixture",1,[new("01",track)],"hash");var local=Path.Combine(root,"local.png");File.WriteAllBytes(local,Png(600,600));var sources=new Dictionary<string,AppleArtworkSource>{{"01",new("01","album",new("https://is1-ssl.mzstatic.com/test/1200x1200bb.jpg"),local)}};
