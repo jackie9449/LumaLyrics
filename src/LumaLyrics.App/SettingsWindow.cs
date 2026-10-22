@@ -14,6 +14,7 @@ public sealed class SettingsWindow : Window
     readonly TextBlock overlaySummary=new();
     readonly AppSettings settings;
     internal PersonalLibraryPanel PersonalLibrary {get;}
+    internal ChineseTranslationPanel ChineseTranslations {get;}
 
     public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme)
     {
@@ -70,7 +71,7 @@ public sealed class SettingsWindow : Window
 
         var general=new StackPanel();
         general.Children.Add(Text("常规选项修改后，点击下方“保存常规设置”。",12));
-        var online=DialogUi.Check(general,"联网查词（仅向 LRCLIB 发送歌名、歌手、专辑、时长）",settings.OnlineLookup);
+        var online=DialogUi.Check(general,"联网查词（原词：LRCLIB；译文准备：网易云音乐公开接口）",settings.OnlineLookup);
         var prefetch=DialogUi.Check(general,"后台预缓存 Apple Music 全部资料库（自动断点继续）",settings.AutoPrefetchLibrary);
         var close=DialogUi.Check(general,"关闭主窗口后继续在托盘运行",settings.CloseToTray);
         var reduce=DialogUi.Check(general,"减少界面动画（含歌词切换）",settings.ReduceMotion);
@@ -93,6 +94,7 @@ public sealed class SettingsWindow : Window
         });
         save.SetResourceReference(StyleProperty,"PrimaryButton");tabs.Items.Add(Tab("常规",general));
         PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab("个人资料",PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();
+        ChineseTranslations=new(coordinator);tabs.Items.Add(Tab("中文译文",ChineseTranslations));Closed+=(_,_)=>ChineseTranslations.Dispose();
         var done=new Button{Content="完成",MinWidth=88,HorizontalAlignment=HorizontalAlignment.Right,Margin=new(0,20,0,0),IsCancel=true};
         done.Click+=(_,_)=>Close();Grid.SetRow(done,2);root.Children.Add(done);
         Loaded+=(_,_)=>{
@@ -117,6 +119,7 @@ public sealed class SettingsWindow : Window
     internal void SelectApplicationTheme(string id)=>themeChoices[AppThemes.Find(id).Id].IsChecked=true;
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
     internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
+    internal void SelectTranslationTab()=>tabs.SelectedIndex=4;
     static bool StartupEnabled(){using var key=Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");return key?.GetValue("LumaLyrics") is not null;}
     static void SetStartup(bool enabled){using var key=Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");if(enabled)key.SetValue("LumaLyrics","\""+System.IO.Path.Combine(AppContext.BaseDirectory,"LumaLyrics.exe")+"\"");else key.DeleteValue("LumaLyrics",false);}
 }

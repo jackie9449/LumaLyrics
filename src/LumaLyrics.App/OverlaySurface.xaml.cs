@@ -19,11 +19,19 @@ public partial class OverlaySurface : UserControl
     DispatcherOperation? pendingText;
     public static readonly DependencyProperty CurrentTextProperty=DependencyProperty.Register(nameof(CurrentText),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
     public static readonly DependencyProperty NextTextProperty=DependencyProperty.Register(nameof(NextText),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
+    public static readonly DependencyProperty CurrentTranslationProperty=DependencyProperty.Register(nameof(CurrentTranslation),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
+    public static readonly DependencyProperty NextTranslationProperty=DependencyProperty.Register(nameof(NextTranslation),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
+    public static readonly DependencyProperty TranslationNoticeProperty=DependencyProperty.Register(nameof(TranslationNotice),typeof(string),typeof(OverlaySurface),new PropertyMetadata("",TextChanged));
     public string CurrentText {get=>(string)GetValue(CurrentTextProperty);set=>SetValue(CurrentTextProperty,value);}
     public string NextText {get=>(string)GetValue(NextTextProperty);set=>SetValue(NextTextProperty,value);}
+    public string CurrentTranslation {get=>(string)GetValue(CurrentTranslationProperty);set=>SetValue(CurrentTranslationProperty,value);}
+    public string NextTranslation {get=>(string)GetValue(NextTranslationProperty);set=>SetValue(NextTranslationProperty,value);}
+    public string TranslationNotice {get=>(string)GetValue(TranslationNoticeProperty);set=>SetValue(TranslationNoticeProperty,value);}
     public OverlaySurface()
     {
         InitializeComponent();SetBinding(CurrentTextProperty,new Binding("Current"));SetBinding(NextTextProperty,new Binding("Next"));
+        SetBinding(CurrentTranslationProperty,new Binding("CurrentTranslation"));SetBinding(NextTranslationProperty,new Binding("NextTranslation"));
+        SetBinding(TranslationNoticeProperty,new Binding("TranslationNotice"));
         Loaded+=(_,_)=>FlushText(false);Unloaded+=(_,_)=>{pendingText?.Abort();pendingText=null;StopTransitions();};
     }
     static void TextChanged(DependencyObject d,DependencyPropertyChangedEventArgs e)=>((OverlaySurface)d).QueueText();
@@ -39,6 +47,10 @@ public partial class OverlaySurface : UserControl
         bool motion=animate && appearance.Animations && !reduceMotion && SystemParameters.ClientAreaAnimation;
         ReplaceLine(CurrentLine,OutgoingCurrent,CurrentText??"",1,motion);
         ReplaceLine(NextLine,OutgoingNext,NextText??"",appearance.NextOpacity,motion && appearance.TwoLines);
+        CurrentChinese.Text=CurrentTranslation??"";NextChinese.Text=NextTranslation??"";
+        CurrentChinese.Visibility=CurrentChinese.Text.Length>0 && !string.IsNullOrEmpty(CurrentText)?Visibility.Visible:Visibility.Collapsed;
+        NextChinese.Visibility=appearance.TwoLines && NextChinese.Text.Length>0 && !string.IsNullOrEmpty(NextText)?Visibility.Visible:Visibility.Collapsed;
+        DraftNotice.Text=TranslationNotice??"";DraftNotice.Visibility=DraftNotice.Text.Length>0 && (CurrentChinese.Visibility==Visibility.Visible || NextChinese.Visibility==Visibility.Visible)?Visibility.Visible:Visibility.Collapsed;
     }
     void ReplaceLine(TextBlock incoming,TextBlock outgoing,string text,double opacity,bool animate)
     {
@@ -83,7 +95,7 @@ public partial class OverlaySurface : UserControl
         FontFamily font;
         try {font=new FontFamily(a.Font+", Microsoft YaHei UI, Segoe UI");}catch{font=new("Microsoft YaHei UI");}
         var weight=a.Weight switch{"Normal"=>FontWeights.Normal,"Medium"=>FontWeights.Medium,"Bold"=>FontWeights.Bold,_=>FontWeights.SemiBold};
-        foreach(var line in new[]{CurrentLine,NextLine,OutgoingCurrent,OutgoingNext})
+        foreach(var line in new[]{CurrentLine,NextLine,OutgoingCurrent,OutgoingNext,CurrentChinese,NextChinese,DraftNotice})
         {
             line.FontFamily=font;line.Foreground=Solid(a.Color);line.FontWeight=weight;
             line.TextAlignment=Enum.Parse<TextAlignment>(a.Alignment);
@@ -92,6 +104,9 @@ public partial class OverlaySurface : UserControl
         CurrentLine.FontSize=OutgoingCurrent.FontSize=a.FontSize;CurrentLine.LineHeight=OutgoingCurrent.LineHeight=a.FontSize*1.4;
         NextLine.FontSize=OutgoingNext.FontSize=a.FontSize*a.NextScale;NextLine.LineHeight=OutgoingNext.LineHeight=NextLine.FontSize*1.45;
         NextLine.Opacity=a.NextOpacity;NextLine.FontWeight=OutgoingNext.FontWeight=FontWeights.Normal;NextHost.Margin=new(0,a.LineGap,0,0);
+        CurrentChinese.FontSize=Math.Max(12,a.FontSize*.56);CurrentChinese.LineHeight=CurrentChinese.FontSize*1.5;CurrentChinese.Opacity=.83;CurrentChinese.FontWeight=FontWeights.Normal;
+        NextChinese.FontSize=Math.Max(11,a.FontSize*a.NextScale*.68);NextChinese.LineHeight=NextChinese.FontSize*1.5;NextChinese.Opacity=a.NextOpacity*.85;NextChinese.FontWeight=FontWeights.Normal;
+        DraftNotice.Opacity=.65;DraftNotice.FontWeight=FontWeights.Normal;
         NextHost.Visibility=a.TwoLines?Visibility.Visible:Visibility.Collapsed;
         FlushText(false);UpdateClip();
     }

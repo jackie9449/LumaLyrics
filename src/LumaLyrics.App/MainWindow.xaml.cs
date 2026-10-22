@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     SettingsWindow? settingsWindow;
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
+    readonly List<TextBlock> translationBlocks=[];ChineseTranslation? displayedTranslation;bool displayedTranslationEnabled;
     ArtworkPalette? artworkPalette;
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
@@ -108,18 +109,19 @@ public partial class MainWindow : Window
         vm.Status=s is null?"等待 Apple Music":$"已连接 · {(s.Status==PlayState.Playing?"正在播放":s.Status==PlayState.Paused?"已暂停":"已停止")}";
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=s?.CanSeek==true;
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
-        vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
+        vm.LyricStatus=coordinator.LyricsStatus+(settings.ShowChineseTranslation && coordinator.Translation?.Draft==true?" · AI 译稿（待校对）":"");vm.Duration=s?.Track.DurationMs ?? 1;
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
-        if(!ReferenceEquals(displayed,coordinator.Document))BuildLyrics();
+        if(!ReferenceEquals(displayed,coordinator.Document) || !ReferenceEquals(displayedTranslation,coordinator.Translation) || displayedTranslationEnabled!=settings.ShowChineseTranslation)BuildLyrics();
         Tick();
     }
     void BuildLyrics()
     {
-        displayed=coordinator.Document; currentIndex=-2;lyricBlocks.Clear();LyricLines.Children.Clear();
+        bool sameDocument=ReferenceEquals(displayed,coordinator.Document);double previousScroll=LyricsScroll.VerticalOffset;var browsingUntil=manualUntil;
+        displayed=coordinator.Document;displayedTranslation=coordinator.Translation;displayedTranslationEnabled=settings.ShowChineseTranslation;currentIndex=-2;lyricBlocks.Clear();translationBlocks.Clear();LyricLines.Children.Clear();
         bool empty=displayed is null || displayed.Instrumental || string.IsNullOrWhiteSpace(displayed.Raw);
         bool instrumental=displayed?.Instrumental==true;
         overlay.SetInstrumental(instrumental);
@@ -130,9 +132,14 @@ public partial class MainWindow : Window
         foreach(var text in displayed!.IsSynced?displayed.Groups.Select(g=>g.Text):displayed.Raw.Split('\n'))
         {
             var line=new TextBlock{Text=string.IsNullOrWhiteSpace(text)?" ":text,TextWrapping=TextWrapping.Wrap,FontSize=24,LineHeight=36,Margin=new(0,0,0,24),Foreground=(Brush)FindResource("MutedBrush")};
-            LyricLines.Children.Add(line);lyricBlocks.Add(line);
+            string translation=displayedTranslationEnabled && displayed.IsSynced?displayedTranslation?.TextAt(lyricBlocks.Count)??"":"";
+            var translated=new TextBlock{Text=translation,TextWrapping=TextWrapping.Wrap,FontSize=16,LineHeight=26,Margin=new(0,5,0,24),Visibility=translation.Length>0?Visibility.Visible:Visibility.Collapsed};
+            translated.SetResourceReference(TextBlock.ForegroundProperty,"MutedBrush");
+            if(translation.Length>0){line.Margin=new(0);var pair=new StackPanel();pair.Children.Add(line);pair.Children.Add(translated);LyricLines.Children.Add(pair);}else LyricLines.Children.Add(line);
+            lyricBlocks.Add(line);translationBlocks.Add(translated);
         }
-        LyricsScroll.ScrollToTop(); manualUntil=DateTime.MinValue;
+        if(sameDocument){manualUntil=browsingUntil;scrollProgrammatically=true;LyricsScroll.ScrollToVerticalOffset(previousScroll);scrollProgrammatically=false;}
+        else{LyricsScroll.ScrollToTop();manualUntil=DateTime.MinValue;}
     }
     void Tick()
     {
@@ -154,6 +161,10 @@ public partial class MainWindow : Window
         if(displayed?.Instrumental==true) {vm.Current="";vm.Next="";}
         else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayed.Groups[index].Text:"前奏";vm.Next=index+1<displayed.Groups.Count?displayed.Groups[index+1].Text:"";}
         else {vm.Current=s?.Track.Title ?? "浮光歌词";vm.Next=displayed is null?"等待歌词":displayed.IsSynced?"同步受限 · 请在主窗口浏览":"静态歌词 · 请在主窗口浏览";}
+        bool translate=settings.OverlayShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
+        vm.CurrentTranslation=translate && index>=0?coordinator.Translation?.TextAt(index)??"":"";
+        vm.NextTranslation=translate && index+1<displayed!.Groups.Count?coordinator.Translation?.TextAt(index+1)??"":"";
+        vm.TranslationNotice=translate && coordinator.Translation?.Draft==true && (vm.CurrentTranslation.Length>0 || vm.NextTranslation.Length>0)?"AI 译稿 · 待校对":"";
         if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=coordinator.LyricsStatus;
         var desired=s?.Status==PlayState.Playing && (IsVisible||overlay.IsVisible)?33:500;
         if(timer.Interval.TotalMilliseconds!=desired)timer.Interval=TimeSpan.FromMilliseconds(desired);
@@ -166,6 +177,7 @@ public partial class MainWindow : Window
         for(int i=0;i<lyricBlocks.Count;i++)
         {
             var line=lyricBlocks[i];bool active=i==newIndex;
+            if(i<translationBlocks.Count){translationBlocks[i].FontSize=active?19:16;translationBlocks[i].Opacity=active?.95:.72;}
             double oldSize=line.FontSize*(line.RenderTransform is ScaleTransform prior?prior.ScaleX:1),oldOpacity=line.Opacity;
             var color=((SolidColorBrush)FindResource(active?"TextBrush":"MutedBrush")).Color;
             var priorColor=line.Foreground is SolidColorBrush previous?previous.Color:color;

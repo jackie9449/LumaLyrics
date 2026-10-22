@@ -1,5 +1,22 @@
 using LumaLyrics.Windows;
 if(LumaLyrics.Probe.PersonalLibraryCommands.TryRun(args))return;
+if(args.ElementAtOrDefault(0) is "--export-translation-drafts" or "--import-translation-drafts")
+{
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
+    var file=args.ElementAtOrDefault(2)??throw new ArgumentException("Specify a personal draft JSON file");
+    int count=args[0]=="--export-translation-drafts"?LumaLyrics.Infrastructure.TranslationDraftExchange.Export(root,file):LumaLyrics.Infrastructure.TranslationDraftExchange.Import(root,file);
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{tracks=count,action=args[0]}));return;
+}
+if(args.ElementAtOrDefault(0)=="--translations")
+{
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));Directory.CreateDirectory(root);
+    using var provider=new LumaLyrics.Infrastructure.NetEaseTranslationProvider();var worker=new LumaLyrics.Infrastructure.TranslationPreparation(root,provider);
+    using var cancel=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;cancel.Cancel();};
+    worker.Progress+=p=>Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(p));
+    int? limit=int.TryParse(args.ElementAtOrDefault(2),out var maximum)?maximum:null;
+    File.Delete(LumaLyrics.Infrastructure.TranslationPreparation.PausePath(root));
+    await worker.RunAsync(LumaLyrics.Infrastructure.AppleMusicLibraryReader.Discover()??throw new FileNotFoundException("No Apple Music library"),cancel.Token,limit,args.Contains("--retry"));return;
+}
 if(args.ElementAtOrDefault(0)=="--asset-status")
 {
     var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));

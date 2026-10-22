@@ -107,5 +107,19 @@ internal static class PersonalLibrarySnapshot
         var audit=Path.Combine(dataRoot,"cache","apple-reference-audit.json");if(File.Exists(audit)){File.Copy(audit,Path.Combine(state,"apple-reference-audit.json"));PersonalLibraryArchive.AddFile(staging,"state/apple-reference-audit.json","state",manifest);}
         PersonalLibraryArchive.AddFile(staging,"state/lyrics.db","state",manifest);
         if(File.Exists(artDb))PersonalLibraryArchive.AddFile(staging,"state/artwork.db","state",manifest);
+        if(File.Exists(Path.Combine(dataRoot,"translations.db")))
+        {
+            string target=Path.Combine(state,"translations.db");Backup(Path.Combine(dataRoot,"translations.db"),target);TranslationRepository.CheckDatabase(target);
+            using var translations=new TranslationRepository(state,true);
+            var json=new System.Text.Json.JsonSerializerOptions{WriteIndented=true,PropertyNamingPolicy=System.Text.Json.JsonNamingPolicy.CamelCase};
+            foreach(var record in translations.ReadAll())
+            {
+                token.ThrowIfCancellationRequested();string id=TranslationAlignment.Hash(record.Track.Fingerprint+"\0"+record.Translation.SourceHash);
+                string relative="translations/"+id+".json";Directory.CreateDirectory(Path.Combine(staging,"translations"));
+                File.WriteAllText(PersonalLibraryArchive.AssetPath(staging,relative),System.Text.Json.JsonSerializer.Serialize(record,json),new UTF8Encoding(false));
+                PersonalLibraryArchive.AddFile(staging,relative,"translation",manifest);
+            }
+            PersonalLibraryArchive.AddFile(staging,"state/translations.db","state",manifest);
+        }
     }
 }

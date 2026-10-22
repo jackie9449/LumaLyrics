@@ -7,10 +7,13 @@
     <Canvas IsHitTestVisible="False"><TextBlock x:Name="OutgoingCurrent" Width="{Binding ActualWidth,ElementName=CurrentHost}" TextWrapping="Wrap" Opacity="0"/></Canvas>
     <TextBlock x:Name="CurrentLine" TextWrapping="Wrap" TextAlignment="Center"/>
    </Grid>
+   <TextBlock x:Name="CurrentChinese" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,3,0,0"/>
    <Grid x:Name="NextHost">
     <Canvas IsHitTestVisible="False"><TextBlock x:Name="OutgoingNext" Width="{Binding ActualWidth,ElementName=NextHost}" TextWrapping="Wrap" Opacity="0"/></Canvas>
     <TextBlock x:Name="NextLine" TextWrapping="Wrap" TextAlignment="Center"/>
    </Grid>
+   <TextBlock x:Name="NextChinese" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,2,0,0"/>
+   <TextBlock x:Name="DraftNotice" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,6,0,0" FontSize="10"/>
   </StackPanel>
  </Grid>
 </UserControl>

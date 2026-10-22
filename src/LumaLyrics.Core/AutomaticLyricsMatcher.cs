@@ -23,6 +23,7 @@ public static partial class AutomaticLyricsMatcher
         if(candidate.Instrumental)return string.IsNullOrWhiteSpace(candidate.SyncedLyrics) && string.IsNullOrWhiteSpace(candidate.PlainLyrics)
             ?new(true,false,1,"匹配来源明确标记为纯音乐")
             :new(false,false,0,"纯音乐标记与歌词内容矛盾，需确认");
+        if(Regex.IsMatch(candidate.Track.Title,@"\binstrumental\b|伴奏",RegexOptions.IgnoreCase))return new(false,false,0,"伴奏录音标记与人声原词矛盾，需确认");
         if(string.IsNullOrWhiteSpace(candidate.Content)||Placeholder().IsMatch(candidate.Content))return new(false,false,0,"空内容或占位歌词");
         LyricsDocument document;
         try{document=new LrcParser().Parse(candidate.Content);}catch(InvalidDataException){return new(false,false,0,"歌词大小异常");}

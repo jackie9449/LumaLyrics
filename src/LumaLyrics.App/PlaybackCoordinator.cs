@@ -5,7 +5,7 @@ using LumaLyrics.Infrastructure;
 using LumaLyrics.Windows;
 namespace LumaLyrics.App;
 
-public sealed class PlaybackCoordinator : IAsyncDisposable
+public sealed partial class PlaybackCoordinator : IAsyncDisposable
 {
     readonly Dispatcher dispatcher; readonly SettingsStore store;
     readonly LrclibProvider provider = new(); readonly LrcParser parser = new();
@@ -34,6 +34,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     {
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
+        translations=new(store.Root);TranslationProgress=translations.Progress();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
         using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();
         Source.Changed += s => dispatcher.BeginInvoke(() => Receive(s));
@@ -95,6 +96,9 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
         {
             var path=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(libraryTask is not {IsCompleted:false} && File.Exists(path))LibraryStatus=(System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(path))??LibraryStatus) with{Running=LibraryPrefetcher.IsRunning(Path.Combine(store.Root,"lyrics.db"))};
             path=LibraryArtworkImporter.ProgressPath(store.Root);if(artworkTask is not {IsCompleted:false} && File.Exists(path))ArtworkStatus=(System.Text.Json.JsonSerializer.Deserialize<ArtworkProgress>(File.ReadAllText(path))??ArtworkStatus) with{Running=LibraryArtworkImporter.IsRunning(store.Root)};
+            RefreshTranslationProgress();
+            if(ActiveTrack is { } active && Binding is null && repository.Find(active) is { } imported && (imported.Manual || LibraryPrefetcher.QualityOf(imported,active)))Apply(imported);
+            RefreshTranslation();
             Updated?.Invoke();
         }
         catch(IOException){}catch(System.Text.Json.JsonException){}
@@ -120,7 +124,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
         if (changed)
         {
             foregroundLookupActive=false;
-            lookup?.Cancel(); requests.Next(); Document = null; Binding = null; Candidates = [];
+            lookup?.Cancel(); requests.Next(); Document = null; Binding = null; Candidates = [];Translation=null;
             LyricsStatus = s is null ? "等待 Apple Music；也可以手动查找和导入" : "正在查找歌词…";
             ArtworkChanged?.Invoke(null);
             Interlocked.Increment(ref artworkRequestVersion);
@@ -208,6 +212,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     void Apply(LyricsBinding binding)
     {
         Binding = binding; Document = parser.Parse(binding.Raw,binding.Plain) with { Instrumental = binding.Instrumental };
+        RefreshTranslation();
         LyricsStatus = binding.Instrumental ? "纯音乐" : $"{(Document.IsSynced ? "逐行歌词" : "静态歌词")} · {binding.Source}{(binding.Manual ? " · 已锁定绑定" : "")}";
         Updated?.Invoke();
     }
@@ -247,6 +252,7 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     public void SettingsChanged()
     {
         if(!Settings.OnlineLookup){lookup?.Cancel();requests.Next();foregroundLookupActive=false;if(Binding is null)LyricsStatus="联网查词已关闭，可导入本地歌词";}
+        if(!Settings.OnlineLookup)PauseTranslationPreparation();
         if(!Settings.OnlineLookup||!Settings.AutoPrefetchLibrary)PauseLibraryPrefetch();else _=ResumeLibraryPrefetchAsync();
         Updated?.Invoke();
     }
@@ -259,10 +265,12 @@ public sealed class PlaybackCoordinator : IAsyncDisposable
     public void Resume() => _ = ReconnectAsync();
     public async ValueTask DisposeAsync()
     {
-        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();lifetime.Cancel();await Source.DisposeAsync();
+        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();translationCancellation?.Cancel();lifetime.Cancel();await Source.DisposeAsync();
         if(libraryTask is not null){try{await libraryTask;}catch(OperationCanceledException){}}
         if(artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
         if(libraryMonitor is not null){try{await libraryMonitor;}catch(OperationCanceledException){}}
+        if(translationTask is not null){try{await translationTask;}catch(OperationCanceledException){}}
+        translations.Dispose();translationCancellation?.Dispose();
         // Let a canceled HTTP continuation finish before disposing its semaphore.
         provider.Dispose();repository.Dispose();libraryCancellation?.Dispose();artworkCancellation?.Dispose();lifetime.Dispose();store.Save(Settings);
     }

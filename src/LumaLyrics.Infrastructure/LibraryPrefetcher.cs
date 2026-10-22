@@ -88,6 +88,12 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
             try
             {
                 using var json=System.Text.Json.JsonDocument.Parse(binding.ProviderJson);var original=LrclibProvider.Parse(json.RootElement);
+                if(json.RootElement.TryGetProperty("Provider",out var source) && source.GetString()=="NetEase")
+                {
+                    var saved=System.Text.Json.JsonSerializer.Deserialize<NetEaseOriginal>(binding.ProviderJson);
+                    if(saved is null || saved.Track is null || saved.Original!=binding.Raw || binding.Instrumental || binding.Plain)return false;
+                    return NetEaseTranslationProvider.RecordingMatches(track,saved.Track) && AutomaticLyricsMatcher.Assess(new(saved.Id,saved.Track,saved.Original,null,false)).Accepted;
+                }
                 if(original.Instrumental!=binding.Instrumental)return false;
                 if(!AutomaticLyricsMatcher.Assess(original).Accepted)return false;
                 var candidate=original with{SyncedLyrics=binding.Plain?null:binding.Raw};

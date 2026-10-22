@@ -24,7 +24,7 @@ internal sealed class PersonalLibraryPanel : StackPanel
     {
         this.dataRoot=dataRoot;
         Children.Add(new TextBlock{Text="个人资料",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,10)});
-        var hint=Copy("歌词、封面与校准记录独立保存。更新软件会继续使用这些资料；分发时只分享软件安装包。");ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(hint);
+        var hint=Copy("歌词、中文译文、封面与校准记录独立保存。更新软件会继续使用这些资料；分发时只分享软件安装包。");ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(hint);
         var location=new StackPanel();location.Children.Add(Copy("当前个人数据目录",11));
         var path=new TextBox{Text=dataRoot,IsReadOnly=true,TextWrapping=TextWrapping.Wrap,BorderThickness=new(0),Background=System.Windows.Media.Brushes.Transparent,Padding=new(0),FontSize=12};
         AutomationProperties.SetName(path,"当前个人数据目录");location.Children.Add(path);
@@ -77,7 +77,7 @@ internal sealed class PersonalLibraryPanel : StackPanel
         try
         {
             var result=await Task.Run(()=>operation(token,report),token);var count=result.Summary;
-            status.Text=$"{complete}。\n{path}\n{count.Tracks} 首曲目 · {count.LyricFiles} 个歌词文件 · {count.CoverTracks} 首有封面 · {count.HighResolutionCoverTracks} 首高清";
+            status.Text=$"{complete}。\n{path}\n{count.Tracks} 首曲目 · {count.LyricFiles} 个歌词文件 · {result.Files.Count(f=>f.Kind=="translation")} 个中文译文 · {count.CoverTracks} 首有封面 · {count.HighResolutionCoverTracks} 首高清";
             if(result.Warnings.Count>0)status.Text+=$"\n有 {result.Warnings.Count} 项待补齐，详见个人资料清单。";
             return result;
         }

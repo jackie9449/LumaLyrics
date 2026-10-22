@@ -7,6 +7,8 @@ public sealed class AppSettings
     public string UiTheme { get; set; } = AppThemes.Default;
     public bool OnlineLookup { get; set; } = true;
     public bool AutoPrefetchLibrary { get; set; } = true;
+    public bool ShowChineseTranslation { get; set; }
+    public bool OverlayShowChineseTranslation { get; set; }
     public string? LibraryPath { get; set; }
     public bool CloseToTray { get; set; } = true;
     public bool ReduceMotion { get; set; }
