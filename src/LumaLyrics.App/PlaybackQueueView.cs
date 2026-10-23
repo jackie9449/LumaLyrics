@@ -16,6 +16,7 @@ internal sealed class PlaybackQueueView:Grid
     readonly Image currentCover=new(){Width=52,Height=52,Stretch=Stretch.UniformToFill,Margin=new(0,0,15,0)};
     readonly TextBlock currentTitle=new(){FontSize=16,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis},currentArtist=new(){FontSize=12,Margin=new(0,6,0,0),TextTrimming=TextTrimming.CharacterEllipsis};
     readonly MusicLibraryView.ThumbnailCache covers=new();
+    readonly bool compact;
     Dictionary<string,MusicLibrarySong[]> library=new(StringComparer.Ordinal);
     bool rowsNeedRefresh=true;
     internal MusicQueueSnapshot? Snapshot {get;private set;}
@@ -23,13 +24,14 @@ internal sealed class PlaybackQueueView:Grid
     internal Button RefreshButton {get;}=new(){Content="刷新列表",Padding=new(14,8,14,8),Margin=new(8,0,0,0)};
     internal Button BackButton {get;}=new(){Content="‹ 返回音乐库",Padding=new(14,8,14,8),Margin=new(0)};
     internal string Message=>message.Text;
-    internal PlaybackQueueView(Action back,Action refresh)
+    internal PlaybackQueueView(Action back,Action refresh,bool compact=false)
     {
+        this.compact=compact;
         Visibility=Visibility.Collapsed;
         RowDefinitions.Add(new(){Height=GridLength.Auto});RowDefinitions.Add(new(){Height=GridLength.Auto});RowDefinitions.Add(new(){Height=GridLength.Auto});RowDefinitions.Add(new(){Height=GridLength.Auto});RowDefinitions.Add(new());
-        var heading=new DockPanel{Margin=new(0,0,0,20)};Children.Add(heading);var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Top};DockPanel.SetDock(actions,Dock.Right);heading.Children.Add(actions);actions.Children.Add(BackButton);actions.Children.Add(RefreshButton);
+        var heading=new DockPanel{Margin=new(0,0,0,compact?12:20)};Children.Add(heading);var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Top};DockPanel.SetDock(actions,Dock.Right);heading.Children.Add(actions);actions.Children.Add(BackButton);actions.Children.Add(RefreshButton);
         BackButton.Click+=(_,_)=>back();RefreshButton.Click+=(_,_)=>refresh();AutomationProperties.SetName(RefreshButton,"刷新当前播放列表");AutomationProperties.SetName(BackButton,"返回上次浏览的音乐库");
-        var copy=new StackPanel();heading.Children.Add(copy);copy.Children.Add(new TextBlock{Text="当前播放列表",FontSize=23,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,8)});copy.Children.Add(detail);
+        var copy=new StackPanel();heading.Children.Add(copy);copy.Children.Add(new TextBlock{Text=compact?"播放列表":"当前播放列表",FontSize=compact?16:23,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,compact?6:8)});copy.Children.Add(detail);
         ThemeManager.Bind(detail,TextBlock.ForegroundProperty,"MutedBrush");ThemeManager.Bind(message,TextBlock.ForegroundProperty,"MutedBrush");ThemeManager.Bind(empty,TextBlock.ForegroundProperty,"MutedBrush");ThemeManager.Bind(currentArtist,TextBlock.ForegroundProperty,"MutedBrush");
         Grid.SetRow(message,1);Children.Add(message);Grid.SetRow(currentCard,2);Children.Add(currentCard);ThemeManager.Bind(currentCard,Border.BackgroundProperty,"AccentSoftBrush");ThemeManager.Bind(currentCard,Border.BorderBrushProperty,"BorderBrush");
         var current=new DockPanel();currentCard.Child=current;DockPanel.SetDock(currentCover,Dock.Left);current.Children.Add(currentCover);currentCover.Clip=new RectangleGeometry(new Rect(0,0,52,52),9,9);var currentCopy=new StackPanel{VerticalAlignment=VerticalAlignment.Center};current.Children.Add(currentCopy);
@@ -38,27 +40,38 @@ internal sealed class PlaybackQueueView:Grid
         Grid.SetRow(upcoming,4);Children.Add(upcoming);Grid.SetRow(empty,4);Children.Add(empty);AutomationProperties.SetName(upcoming,"接下来播放的歌曲，按实际播放顺序");
         VirtualizingPanel.SetIsVirtualizing(upcoming,true);VirtualizingPanel.SetVirtualizationMode(upcoming,VirtualizationMode.Recycling);VirtualizingPanel.SetScrollUnit(upcoming,ScrollUnit.Pixel);ScrollViewer.SetCanContentScroll(upcoming,true);ScrollViewer.SetHorizontalScrollBarVisibility(upcoming,ScrollBarVisibility.Disabled);
         upcoming.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));upcoming.ItemTemplate=QueueRowTemplate();
+        if(compact)
+        {
+            BackButton.Content="＋";BackButton.ToolTip="打开音乐库选歌";AutomationProperties.SetName(BackButton,"打开音乐库选歌");RefreshButton.Content="\uE72C";RefreshButton.FontFamily=new("Segoe MDL2 Assets");RefreshButton.ToolTip="刷新播放列表";
+            foreach(var button in new[]{BackButton,RefreshButton}){button.Width=button.Height=28;button.MinWidth=0;button.Padding=new(0);button.Margin=new(button==RefreshButton?4:0,0,0,0);button.FontSize=12;}
+            detail.FontSize=message.FontSize=10;message.Margin=new(0,0,0,10);empty.FontSize=12;empty.MaxWidth=180;
+            currentCard.Padding=new(10);currentCard.CornerRadius=new(12);currentCard.Margin=new(0,0,0,14);currentCover.Width=currentCover.Height=34;currentCover.Margin=new(0,0,10,0);currentCover.Clip=new RectangleGeometry(new Rect(0,0,34,34),7,7);currentTitle.FontSize=13;currentArtist.FontSize=10;
+            now.FontSize=9;now.Margin=new(0,0,0,5);nextHeading.FontSize=11;nextHeading.Margin=new(0,0,0,8);
+            var itemStyle=new Style(typeof(ListBoxItem),System.Windows.Application.Current.TryFindResource(typeof(ListBoxItem)) as Style);itemStyle.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(6,4,6,4)));itemStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty,new Thickness(0,0,0,4)));itemStyle.Setters.Add(new Setter(FrameworkElement.WidthProperty,new Binding("ActualWidth"){RelativeSource=new(RelativeSourceMode.FindAncestor,typeof(ScrollContentPresenter),1)}));upcoming.ItemContainerStyle=itemStyle;
+            upcoming.ItemTemplate=QueueRowTemplate(true);
+        }
     }
-    static DataTemplate QueueRowTemplate()
+    static DataTemplate QueueRowTemplate(bool compact=false)
     {
-        var row=new FrameworkElementFactory(typeof(DockPanel));row.SetValue(HeightProperty,64d);row.SetValue(MarginProperty,new Thickness(0,0,6,0));
+        var row=new FrameworkElementFactory(typeof(DockPanel));row.SetValue(HeightProperty,compact?48d:64d);row.SetValue(MarginProperty,new Thickness(0,0,compact?0:6,0));row.SetBinding(ToolTipProperty,new Binding("FullDescription"));
         FrameworkElementFactory Label(string name,double size,string brush){var text=new FrameworkElementFactory(typeof(TextBlock));text.SetBinding(TextBlock.TextProperty,new Binding(name));text.SetValue(TextBlock.FontSizeProperty,size);text.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.CharacterEllipsis);text.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);text.SetResourceReference(TextBlock.ForegroundProperty,brush);return text;}
-        var number=Label("Number",11,"MutedBrush");number.SetValue(WidthProperty,32d);number.SetValue(DockPanel.DockProperty,Dock.Left);row.AppendChild(number);
-        var duration=Label("Duration",11,"MutedBrush");duration.SetValue(WidthProperty,52d);duration.SetValue(DockPanel.DockProperty,Dock.Right);duration.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Right);row.AppendChild(duration);
-        var cover=new FrameworkElementFactory(typeof(Border));cover.SetValue(WidthProperty,44d);cover.SetValue(HeightProperty,44d);cover.SetValue(MarginProperty,new Thickness(0,0,14,0));cover.SetValue(DockPanel.DockProperty,Dock.Left);cover.SetResourceReference(Border.BackgroundProperty,"ArtworkBrush");cover.SetValue(Border.CornerRadiusProperty,new CornerRadius(8));
-        var image=new FrameworkElementFactory(typeof(Image));image.SetBinding(Image.SourceProperty,new Binding("Cover"));image.SetValue(Image.StretchProperty,Stretch.UniformToFill);image.SetValue(ClipProperty,new RectangleGeometry(new Rect(0,0,44,44),8,8));cover.AppendChild(image);row.AppendChild(cover);
-        var copy=new FrameworkElementFactory(typeof(StackPanel));copy.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);copy.AppendChild(Label("Title",14,"TextBrush"));var artist=Label("Subtitle",11,"MutedBrush");artist.SetValue(MarginProperty,new Thickness(0,6,0,0));copy.AppendChild(artist);row.AppendChild(copy);return new(){VisualTree=row};
+        var number=Label("Number",compact?10:11,"MutedBrush");number.SetValue(WidthProperty,compact?21d:32d);number.SetValue(DockPanel.DockProperty,Dock.Left);row.AppendChild(number);
+        var duration=Label("Duration",compact?10:11,"MutedBrush");duration.SetValue(WidthProperty,compact?37d:52d);duration.SetValue(DockPanel.DockProperty,Dock.Right);duration.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Right);row.AppendChild(duration);
+        double size=compact?32:44;var cover=new FrameworkElementFactory(typeof(Border));cover.SetValue(WidthProperty,size);cover.SetValue(HeightProperty,size);cover.SetValue(MarginProperty,new Thickness(0,0,compact?9:14,0));cover.SetValue(DockPanel.DockProperty,Dock.Left);cover.SetResourceReference(Border.BackgroundProperty,"ArtworkBrush");cover.SetValue(Border.CornerRadiusProperty,new CornerRadius(8));
+        var image=new FrameworkElementFactory(typeof(Image));image.SetBinding(Image.SourceProperty,new Binding("Cover"));image.SetValue(Image.StretchProperty,Stretch.UniformToFill);image.SetValue(ClipProperty,new RectangleGeometry(new Rect(0,0,size,size),7,7));cover.AppendChild(image);row.AppendChild(cover);
+        var copy=new FrameworkElementFactory(typeof(StackPanel));copy.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);copy.AppendChild(Label("Title",compact?12:14,"TextBrush"));var artist=Label("Subtitle",compact?10:11,"MutedBrush");artist.SetValue(MarginProperty,new Thickness(0,compact?5:6,0,0));copy.AppendChild(artist);row.AppendChild(copy);return new(){VisualTree=row};
     }
     internal void SetLibrary(IReadOnlyList<MusicLibrarySong> songs){library=songs.GroupBy(s=>s.Track.Fingerprint,StringComparer.Ordinal).ToDictionary(g=>g.Key,g=>g.ToArray(),StringComparer.Ordinal);covers.Clear();rowsNeedRefresh=true;if(Snapshot is not null)Apply(Snapshot);}
     ImageSource? Cover(Track track)=>library.TryGetValue(track.Fingerprint,out var candidates)?covers.Get(MusicPlaybackQueue.MatchLibrarySong(track,candidates)?.CoverPath):null;
     internal void Loading(){RefreshButton.IsEnabled=false;message.Text="正在读取 Apple Music 播放列表…";}
+    internal void WaitingForSelection(){RefreshButton.IsEnabled=false;message.Text="正在切换歌曲，播放列表稍后更新…";}
     internal void Apply(MusicQueueSnapshot snapshot)
     {
         bool sameRows=!rowsNeedRefresh && Snapshot is { } previous && previous.Upcoming.SequenceEqual(snapshot.Upcoming);
-        Snapshot=snapshot;RefreshButton.IsEnabled=true;message.Text=snapshot.Message;
-        detail.Text=snapshot.Available?$"接下来 {snapshot.Upcoming.Count:N0} 首 · {snapshot.CapturedUtc.ToLocalTime():HH:mm:ss} 更新"+(snapshot.IsComplete?"":" · 部分列表"):"连接 Apple Music，查看实际播放顺序";
+        Snapshot=snapshot;RefreshButton.IsEnabled=true;message.Text=compact && snapshot.Available && snapshot.IsComplete?"与 Apple Music 同步":snapshot.Message;
+        detail.Text=snapshot.Available?$"接下来 {snapshot.Upcoming.Count:N0} 首"+(compact?"":$" · {snapshot.CapturedUtc.ToLocalTime():HH:mm:ss} 更新")+(snapshot.IsComplete?"":" · 部分列表"):compact?"当前与接下来播放":"连接 Apple Music，查看实际播放顺序";
         currentCard.Visibility=snapshot.Available && snapshot.Current is not null?Visibility.Visible:Visibility.Collapsed;
-        if(snapshot.Current is { } track){currentTitle.Text=track.Title;currentArtist.Text=Subtitle(track);currentCover.Source=Cover(track);}
+        if(snapshot.Current is { } track){currentTitle.Text=track.Title;currentArtist.Text=Subtitle(track);currentTitle.ToolTip=track.Title;currentArtist.ToolTip=Subtitle(track);currentCover.Source=Cover(track);}
         if(!sameRows){upcoming.ItemsSource=snapshot.Upcoming.Select((entry,index)=>new QueueRow(index+1,entry,Cover)).ToArray();rowsNeedRefresh=false;}
         empty.Visibility=snapshot.Upcoming.Count==0?Visibility.Visible:Visibility.Collapsed;empty.Text=!snapshot.Available?"暂时无法读取播放列表\n可打开 Apple Music 后刷新":snapshot.IsComplete?"接下来还没有歌曲\n在歌曲旁点‘插播’，把喜欢的歌放到下一首":"Apple Music 尚未提供后续歌曲\n请稍后刷新";
     }
@@ -71,5 +84,6 @@ internal sealed class PlaybackQueueView:Grid
         public string Title=>Entry.Track.Title.Length>0?Entry.Track.Title:"歌曲信息暂不可读";
         public string Subtitle=>Entry.MetadataComplete?(Entry.Inserted?"插播 · ":"")+PlaybackQueueView.Subtitle(Entry.Track):"Apple Music 暂未提供完整信息";
         public string Duration=>Entry.Track.DurationMs is >0?$"{(int)(Entry.Track.DurationMs.Value/60000)}:{(int)(Entry.Track.DurationMs.Value/1000)%60:00}":"—";
+        public string FullDescription=>Title+"\n"+Subtitle+" · "+Duration;
     }
 }

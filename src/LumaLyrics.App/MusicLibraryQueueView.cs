@@ -85,7 +85,7 @@ internal sealed partial class MusicLibraryView
         try
         {
             await previous;token.ThrowIfCancellationRequested();var result=await insertNext!(song,token);
-            if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();}
+            if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;if(result.Confirmed && result.ActivateWindow)activate();}
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException)

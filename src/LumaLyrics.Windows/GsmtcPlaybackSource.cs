@@ -10,6 +10,9 @@ public sealed class GsmtcPlaybackSource : IPlaybackSource
     readonly SemaphoreSlim gate = new(1);
     readonly CancellationTokenSource lifetime = new();
     Task? poll; long generation, revision; string? fingerprint;
+    PlaybackSnapshot? latest;
+    public PlaybackSnapshot? Latest=>Volatile.Read(ref latest);
+    void Publish(PlaybackSnapshot? snapshot){Volatile.Write(ref latest,snapshot);Changed?.Invoke(snapshot);}
     string? preferredId; DateTimeOffset? minimumTimeline;
     public event Action<PlaybackSnapshot?>? Changed;
     public event Action<string>? Error;
@@ -60,7 +63,7 @@ public sealed class GsmtcPlaybackSource : IPlaybackSource
                 if (selected is not null) { generation++; selected.MediaPropertiesChanged += OnMedia; selected.PlaybackInfoChanged += OnPlayback; selected.TimelinePropertiesChanged += OnTimeline; }
                 SessionsUpdated?.Invoke();
             }
-            if (selected is null) { Changed?.Invoke(null); return; }
+            if (selected is null) { Publish(null); return; }
             var session = selected; var gen = generation;
             var m = await session.TryGetMediaPropertiesAsync();
             if (session != selected || gen != generation || lifetime.IsCancellationRequested) return;
@@ -74,12 +77,12 @@ public sealed class GsmtcPlaybackSource : IPlaybackSource
             var state = p.PlaybackStatus switch { GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing => PlayState.Playing, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused => PlayState.Paused, GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed => PlayState.Closed, _ => PlayState.Stopped };
             var quality = !staleForTrack && t.LastUpdatedTime.Year > 2000 && duration > 0 ? PositionQuality.Estimated : PositionQuality.Unavailable;
             var c = p.Controls;
-            Changed?.Invoke(new(session.SourceAppUserModelId, generation, revision, track, state, p.PlaybackRate,
+            Publish(new(session.SourceAppUserModelId, generation, revision, track, state, p.PlaybackRate,
                 quality != PositionQuality.Unavailable ? (t.Position - t.StartTime).TotalMilliseconds : null,
                 t.LastUpdatedTime.Year > 2000 ? t.LastUpdatedTime : null, DateTimeOffset.UtcNow, Stopwatch.GetTimestamp(), quality,
                 c.IsPlayEnabled, c.IsPauseEnabled, c.IsNextEnabled, c.IsPreviousEnabled, c.IsPlaybackPositionEnabled));
         }
-        catch (Exception e) { Error?.Invoke($"媒体会话读取失败：{e.Message}"); Detach(); Changed?.Invoke(null); }
+        catch (Exception e) { Error?.Invoke($"媒体会话读取失败：{e.Message}"); Detach(); Publish(null); }
         finally { gate.Release(); }
     }
     public async Task<bool> ControlAsync(string action, double? ms = null)

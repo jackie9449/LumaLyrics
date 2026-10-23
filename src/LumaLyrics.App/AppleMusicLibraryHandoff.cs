@@ -16,22 +16,31 @@ internal static partial class AppleMusicLibraryHandoff
     [DllImport("user32.dll")] static extern bool ShowWindow(nint handle,int command);
     internal sealed record AlbumSelection(string? Failure,Track? FirstTrack);
     sealed class AlbumRequest(MusicAlbum album){internal MusicAlbum Album=>album;internal Track? FirstTrack {get;set;}}
-    internal static Task<string?> SelectAsync(MusicLibrarySong song,CancellationToken token,Action<string,object?>? trace=null)=>RunAsync(song,null,token,trace);
-    internal static Task<string?> InsertNextAsync(MusicLibrarySong song,CancellationToken token,Action<string,object?>? trace=null)=>RunAsync(song,null,token,trace,true);
-    internal static async Task<AlbumSelection> SelectAlbumAsync(MusicAlbum album,CancellationToken token,Action<string,object?>? trace=null)
+    internal static Task<string?> SelectAsync(MusicLibrarySong song,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null)=>RunAsync(song,null,token,trace,context);
+    internal static Task<string?> InsertNextAsync(MusicLibrarySong song,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null)=>RunAsync(song,null,token,trace,context,true);
+    internal static async Task<AlbumSelection> SelectAlbumAsync(MusicAlbum album,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null)
     {
         if(MusicLibraryPlayback.AlbumAnchor(album) is not { } anchor)return new("这张专辑的录音信息不完整，暂时无法准确播放。",null);
-        var request=new AlbumRequest(album);string? failure=await RunAsync(anchor,request,token,trace);return new(failure,request.FirstTrack);
+        var request=new AlbumRequest(album);string? failure=await RunAsync(anchor,request,token,trace,context);return new(failure,request.FirstTrack);
     }
-    static async Task<string?> RunAsync(MusicLibrarySong song,AlbumRequest? album,CancellationToken token,Action<string,object?>? trace,bool insertNext=false)
+    static async Task<string?> RunAsync(MusicLibrarySong song,AlbumRequest? album,CancellationToken token,Action<string,object?>? trace,HandoffContext context,bool insertNext=false)
     {
-        int seconds=album is null?15:25;
+        int seconds=album is null?60:75;
         var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(seconds));
-        var worker=Task.Run(()=>Select(song,album,bounded.Token,trace,insertNext),bounded.Token);
+        var worker=Task.Run(()=>
+        {
+            while(true)
+            {
+                bounded.Token.ThrowIfCancellationRequested();
+                try{return Select(song,album,bounded.Token,trace,insertNext,context);}
+                catch(Exception ex) when(!context.CommandAttempted && ex is (InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException))
+                {trace?.Invoke("nativeReadinessRetry",new{error=ex.GetType().Name});bounded.Token.WaitHandle.WaitOne(200);}
+            }
+        },bounded.Token);
         try{return await worker.WaitAsync(TimeSpan.FromSeconds(seconds+1),token);}
-        catch(OperationCanceledException) when(!token.IsCancellationRequested){return "Apple Music 的选歌界面暂未响应，请稍后重试。";}
-        catch(TimeoutException){bounded.Cancel();return "Apple Music 的选歌界面暂未响应，请稍后重试。";}
-        catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException){return "Apple Music 的音乐库界面暂不可用，请打开客户端后重试。";}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){return context.CommandAttempted?null:"Apple Music 的选歌界面等待超时，请稍后重试。";}
+        catch(TimeoutException){bounded.Cancel();return context.CommandAttempted?null:"Apple Music 的选歌界面等待超时，请稍后重试。";}
+        catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException){return context.CommandAttempted?null:"Apple Music 的音乐库界面暂不可用，请打开客户端后重试。";}
         finally
         {
             bounded.Cancel();
@@ -42,16 +51,16 @@ internal static partial class AppleMusicLibraryHandoff
         }
     }
     static string Name(AutomationElement element)=>element.Properties.Name.ValueOrDefault??"";
-    static string? Select(MusicLibrarySong song,AlbumRequest? album,CancellationToken token,Action<string,object?>? trace,bool insertNext)
+    static string? Select(MusicLibrarySong song,AlbumRequest? album,CancellationToken token,Action<string,object?>? trace,bool insertNext,HandoffContext context)
     {
         gate.Wait(token);
         try
         {
             using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
             if(process is null)return "请先打开并登录 Apple Music，浮光即可从音乐库选歌。";
-            nint handle=process.MainWindowHandle;bool minimized=IsIconic(handle);if(minimized)ShowWindow(handle,4);
+            context.Capture(process);nint handle=process.MainWindowHandle;bool minimized=context.Window?.WasMinimized==true;
             trace?.Invoke("window",new{process.Id,minimized});
-            try
+            if(WaitForNative(()=>!IsIconic(handle)?context:null,TimeSpan.FromSeconds(15),token) is null)return "Apple Music 的窗口尚未响应，请稍后重试。";
             {
                 using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
                 token.ThrowIfCancellationRequested();var navigation=FindSongsNavigation(root);
@@ -59,15 +68,14 @@ internal static partial class AppleMusicLibraryHandoff
                 {
                     var hamburger=root.FindFirstDescendant(cf=>cf.ByAutomationId("Hamburger_Button"));
                     if(hamburger?.Patterns.Invoke.IsSupported==true)hamburger.Patterns.Invoke.Pattern.Invoke();
-                    token.WaitHandle.WaitOne(150);token.ThrowIfCancellationRequested();navigation=FindSongsNavigation(root);
+                    navigation=WaitForNative(()=>FindSongsNavigation(root),TimeSpan.FromSeconds(15),token);
                 }
                 if(navigation is null)return "当前 Apple Music 版本没有提供可用的歌曲列表，请打开资料库后重试。";
                 trace?.Invoke("navigation",new{name=Name(navigation),type=navigation.ControlType.ToString()});
                 if(navigation.Patterns.SelectionItem.IsSupported)navigation.Patterns.SelectionItem.Pattern.Select();
                 else if(navigation.Patterns.Invoke.IsSupported)navigation.Patterns.Invoke.Pattern.Invoke();
                 else return "Apple Music 暂不接受音乐库选歌。";
-                AutomationElement? filter=null;
-                for(int i=0;i<8 && filter is null;i++){filter=root.FindFirstDescendant(cf=>cf.ByAutomationId("FilterButton"));if(filter is null && token.WaitHandle.WaitOne(100))token.ThrowIfCancellationRequested();}
+                var filter=WaitForNative(()=>root.FindFirstDescendant(cf=>cf.ByAutomationId("FilterButton")),TimeSpan.FromSeconds(15),token);
                 if(filter is null)return "Apple Music 没有提供本地歌曲筛选，请打开歌曲列表后重试。";
                 trace?.Invoke("filterButton",new{name=Name(filter),toggle=filter.Patterns.Toggle.IsSupported,invoke=filter.Patterns.Invoke.IsSupported});
                 var filterText=FindFilterText(automation,filter);
@@ -76,7 +84,7 @@ internal static partial class AppleMusicLibraryHandoff
                     token.ThrowIfCancellationRequested();
                     if(filter.Patterns.Toggle.IsSupported)filter.Patterns.Toggle.Pattern.Toggle();
                     else if(filter.Patterns.Invoke.IsSupported)filter.Patterns.Invoke.Pattern.Invoke();
-                    for(int i=0;i<8 && filterText is null;i++){token.WaitHandle.WaitOne(100);token.ThrowIfCancellationRequested();filterText=FindFilterText(automation,filter);}
+                    filterText=WaitForNative(()=>FindFilterText(automation,filter),TimeSpan.FromSeconds(12),token);
                     if(trace is not null)trace("filterOpenedState",Inspect());
                 }
                 if(filterText?.Patterns.Value.IsSupported!=true)return "Apple Music 的本地歌曲筛选暂不可用。";
@@ -86,7 +94,8 @@ internal static partial class AppleMusicLibraryHandoff
                 try
                 {
                 token.WaitHandle.WaitOne(300);token.ThrowIfCancellationRequested();
-                for(int attempt=0;attempt<12;attempt++)
+                var rowsWait=Stopwatch.StartNew();
+                for(int attempt=0;rowsWait.Elapsed<TimeSpan.FromSeconds(35);attempt++)
                 {
                     token.ThrowIfCancellationRequested();var grid=root.FindFirstDescendant(cf=>cf.ByAutomationId("DataGridListView"));
                     if(grid is not null)
@@ -102,7 +111,7 @@ internal static partial class AppleMusicLibraryHandoff
                             trace?.Invoke("rowMetadata",names);
                             if(MusicLibraryPlayback.NamesMatch(song.Track,names))candidates.Add(row);
                         }
-                        if(candidates.Count==1)return InvokePlay(automation,root,candidates[0],song.Title,process.Id,token,trace,album,insertNext);
+                        if(candidates.Count==1 && FindReadySongAction(candidates[0]) is not null)return InvokePlay(automation,root,candidates[0],song.Title,process.Id,token,trace,album,insertNext,context);
                         if(candidates.Count>1)return "找到多个相同录音信息的结果，未自动切换；请在 Apple Music 确认版本。";
                     }
                     if(token.WaitHandle.WaitOne(250))token.ThrowIfCancellationRequested();
@@ -114,11 +123,14 @@ internal static partial class AppleMusicLibraryHandoff
                     RestoreFilter(automation,root,filterText,song.Title,previousFilter,album is not null,trace);
                 }
             }
-            finally{if(minimized)ShowWindow(handle,6);}
         }
         finally{gate.Release();}
     }
     static AutomationElement? FindSongsNavigation(AutomationElement root)=>root.FindFirstDescendant(cf=>cf.ByControlType(ControlType.ListItem).And(cf.ByName("歌曲").Or(cf.ByName("Songs")).Or(cf.ByName("曲"))));
+    internal static AutomationElement? FindReadySongAction(AutomationElement row)
+    {
+        var button=row.FindFirstDescendant(cf=>cf.ByAutomationId("MoreButton"));return button?.Patterns.Invoke.IsSupported==true && button.Properties.IsEnabled.ValueOrDefault?button:null;
+    }
     static string[] RawNames(UIA3Automation automation,AutomationElement row,CancellationToken token)
     {
         var names=new List<string>();var walker=automation.TreeWalkerFactory.GetRawViewWalker();int remaining=256;
@@ -142,16 +154,16 @@ internal static partial class AppleMusicLibraryHandoff
         }
         return null;
     }
-    static string? InvokePlay(UIA3Automation automation,AutomationElement root,AutomationElement row,string title,int processId,CancellationToken token,Action<string,object?>? trace,AlbumRequest? album,bool insertNext)
+    static string? InvokePlay(UIA3Automation automation,AutomationElement root,AutomationElement row,string title,int processId,CancellationToken token,Action<string,object?>? trace,AlbumRequest? album,bool insertNext,HandoffContext context)
     {
         token.ThrowIfCancellationRequested();if(row.Patterns.ScrollItem.IsSupported)row.Patterns.ScrollItem.Pattern.ScrollIntoView();
-        var more=row.FindFirstDescendant(cf=>cf.ByAutomationId("MoreButton"));
-        if(more?.Patterns.Invoke.IsSupported!=true)return "Apple Music 没有提供这首歌的播放操作。";
+        var more=FindReadySongAction(row)??throw new InvalidOperationException("The native song action changed before it was ready.");
         token.ThrowIfCancellationRequested();more.Patterns.Invoke.Pattern.Invoke();
         bool invoked=false;
         try
         {
-        for(int i=0;i<12;i++)
+        var menuWait=Stopwatch.StartNew();
+        while(menuWait.Elapsed<TimeSpan.FromSeconds(15))
         {
             token.ThrowIfCancellationRequested();
             var windows=automation.GetDesktop().FindAllChildren(cf=>cf.ByProcessId(processId));
@@ -161,7 +173,7 @@ internal static partial class AppleMusicLibraryHandoff
             {
                 bool requested=insertNext?MusicPlaybackQueue.IsPlayNextCommand(Name(command)):album is null?MusicLibraryPlayback.IsPlayCommand(Name(command),title):Name(command) is "在资料库中显示专辑" or "Show Album in Library";
                 if(requested && command.Patterns.Invoke.IsSupported)
-                {token.ThrowIfCancellationRequested();command.Patterns.Invoke.Pattern.Invoke();invoked=true;return album is null?null:InvokeAlbumPlay(automation,root,album,token,trace);}
+                {token.ThrowIfCancellationRequested();if(album is null)context.CommandAttempted=true;command.Patterns.Invoke.Pattern.Invoke();invoked=true;return album is null?null:InvokeAlbumPlay(automation,root,album,token,trace,context);}
             }
             if(token.WaitHandle.WaitOne(120))token.ThrowIfCancellationRequested();
         }

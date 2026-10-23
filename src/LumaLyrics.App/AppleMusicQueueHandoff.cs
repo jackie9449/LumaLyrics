@@ -6,6 +6,12 @@ namespace LumaLyrics.App;
 
 internal static partial class AppleMusicLibraryHandoff
 {
+    internal static Task<bool> PrepareVisibleVerificationAsync(CancellationToken token)=>Task.Run(()=>
+    {
+        using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);if(process is null)return false;
+        var context=new HandoffContext();context.Capture(process);
+        return WaitForNative(()=>!IsIconic(process.MainWindowHandle)?context:null,TimeSpan.FromSeconds(10),token) is not null;
+    },token);
     internal static Task<object> VerifyQueueStateAsync(CancellationToken token)=>Task.Run<object>(async()=>
     {
         using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0)??throw new InvalidOperationException("Open Apple Music for native queue verification.");

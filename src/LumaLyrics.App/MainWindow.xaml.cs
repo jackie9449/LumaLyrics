@@ -17,6 +17,8 @@ public partial class MainWindow : Window
 {
     readonly PlayerViewModel vm = new(); readonly SettingsStore store;
     readonly PlaybackCoordinator coordinator; readonly AppSettings settings;
+    readonly AppleMusicPlaybackBridge playbackBridge;
+    readonly PlaybackQueueSidebar playbackSidebar;
     readonly OverlayWindow overlay; readonly DispatcherTimer timer;
     Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceWindow? appearanceWindow;
     SettingsWindow? settingsWindow;
@@ -29,6 +31,7 @@ public partial class MainWindow : Window
     {
         store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        playbackBridge=new(coordinator);playbackSidebar=new(this,LyricsPage,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
         SelectUiTheme(settings.UiTheme,false);
@@ -83,6 +86,7 @@ public partial class MainWindow : Window
         SetupTray(); hotkeys=new(this,id=>{if(id==1)ToggleOverlay();else {if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);}});
         RegisterHotkeys(); if(settings.OverlayVisible)overlay.Show();
         try { await coordinator.StartAsync(); } catch(Exception ex) { vm.Status="连接失败，可在诊断页重新连接";store.Log("Start: "+ex.Message); }
+        playbackSidebar.Enable();
         store.Log("Main window loaded; tray="+CanRecoverOverlay+"; hotkeys="+(string.IsNullOrEmpty(hotkeyError)?"OK":hotkeyError));
         var args=Environment.GetCommandLineArgs();int captureArg=Array.IndexOf(args,"--capture-dir");
         if(captureArg>=0 && captureArg+1<args.Length)
@@ -122,6 +126,7 @@ public partial class MainWindow : Window
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
+        playbackSidebar.ObserveTrack(coordinator.ActiveTrack);playbackSidebar.ObserveArtwork(coordinator.ArtworkStatus);
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
         if(!ReferenceEquals(displayed,coordinator.Document) || !ReferenceEquals(displayedTranslation,coordinator.Translation) || displayedTranslationEnabled!=settings.ShowChineseTranslation)BuildLyrics();
@@ -232,9 +237,10 @@ public partial class MainWindow : Window
     }
     void OnSize(object s,SizeChangedEventArgs e)
     {
-        if(InfoPanel is null)return;bool narrow=ActualWidth<930;
+        if(InfoPanel is null)return;bool narrow=ActualWidth<1180;
         Grid.SetColumn(InfoPanel,0);Grid.SetRow(InfoPanel,0);Grid.SetColumn(LyricsPanel,narrow?0:1);Grid.SetRow(LyricsPanel,narrow?1:0);Grid.SetColumnSpan(InfoPanel,narrow?2:1);Grid.SetColumnSpan(LyricsPanel,narrow?2:1);
-        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1100?260:310);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1360?248:280);PlaybackQueueColumn.Width=new GridLength(ActualWidth<930?244:ActualWidth<1180?270:296);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        InfoPanel.RowDefinitions[0].Height=GridLength.Auto;ArtworkBorder.Height=narrow?double.NaN:InfoColumn.Width.Value-28;ArtworkBorder.VerticalAlignment=VerticalAlignment.Top;
         ArtworkBorder.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;InfoPanel.Margin=narrow?new Thickness(0,0,0,12):new Thickness(0,0,28,0);
         TrackTitle.FontSize=narrow?18:25;TrackTitle.MaxHeight=narrow?26:70;TrackTitle.Margin=narrow?new Thickness(0,0,0,4):new Thickness(0,20,0,7);TrackArtist.MaxHeight=narrow?18:36;TrackTime.Margin=narrow?new Thickness(0,5,0,0):new Thickness(0,18,0,2);
         PlaybackControls.Margin=narrow?new Thickness(0,2,0,0):new Thickness(0,8,0,12);
@@ -286,7 +292,7 @@ public partial class MainWindow : Window
     public async Task QuitAsync()
     {
         if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();tray?.Dispose();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
-        musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
+        playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)
     {

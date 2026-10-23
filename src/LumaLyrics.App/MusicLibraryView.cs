@@ -141,7 +141,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     async Task RequestPlaybackAsync(string message,Func<CancellationToken,Task<LibraryPlayResult>> action)
     {
         playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text=message;
-        try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();RefreshVisibleQueue();}}
+        try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;if(result.Confirmed && result.ActivateWindow)activate();RefreshVisibleQueue();}}
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException){if(!disposed && requests.IsCurrent(request))status.Text="播放切换失败，请确认 Apple Music 可用后重试。";}
     }

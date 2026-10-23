@@ -11,7 +11,7 @@ public partial class MainWindow
     {
         if(musicLibrary is null)
         {
-            var bridge=new AppleMusicPlaybackBridge(coordinator);
+            var bridge=playbackBridge;
             musicLibrary=new(token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),bridge.PlayAsync,
                 ()=>LibraryClicked(this,new()),ShowLyricsPage,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},vm,
                 ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync);

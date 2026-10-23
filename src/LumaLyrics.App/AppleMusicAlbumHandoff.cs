@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
 using FlaUI.UIA3;
@@ -7,10 +8,11 @@ namespace LumaLyrics.App;
 
 internal static partial class AppleMusicLibraryHandoff
 {
-    static string? InvokeAlbumPlay(UIA3Automation automation,AutomationElement root,AlbumRequest request,CancellationToken token,Action<string,object?>? trace)
+    static string? InvokeAlbumPlay(UIA3Automation automation,AutomationElement root,AlbumRequest request,CancellationToken token,Action<string,object?>? trace,HandoffContext context)
     {
         var album=request.Album;
-        for(int attempt=0;attempt<15;attempt++)
+        var readiness=Stopwatch.StartNew();
+        while(readiness.Elapsed<TimeSpan.FromSeconds(30))
         {
             token.WaitHandle.WaitOne(150);token.ThrowIfCancellationRequested();
             var play=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayButton").And(cf.ByControlType(ControlType.Button)));
@@ -23,12 +25,12 @@ internal static partial class AppleMusicLibraryHandoff
             var trackRows=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.ListItem)).Where(r=>string.IsNullOrEmpty(r.Properties.AutomationId.ValueOrDefault) && (Name(r).StartsWith("音轨 ",StringComparison.Ordinal) || Name(r).StartsWith("Track ",StringComparison.OrdinalIgnoreCase))).Select(r=>new{Name=Name(r),Names=(IReadOnlyList<string>)RawNames(automation,r,token)}).ToArray();
             var rows=trackRows.Select(r=>r.Names).ToArray();
             trace?.Invoke("albumContext",new{title,header=names.Take(3).ToArray(),rows});
-            if(!MusicLibraryPlayback.AlbumContextMatches(album,title,names,rows))return "Apple Music 的专辑与资料库录音信息未完整对应，未开始播放。";
+            if(!MusicLibraryPlayback.AlbumContextMatches(album,title,names,rows))continue;
             var first=trackRows.FirstOrDefault(r=>r.Name.StartsWith("音轨 1 ",StringComparison.Ordinal) || r.Name.StartsWith("Track 1 ",StringComparison.OrdinalIgnoreCase));
             var firstMatches=first is null?[]:album.Songs.Where(s=>MusicLibraryPlayback.NamesMatch(s.Track,first.Names.Concat(new[]{s.Artist,s.Album}).ToArray())).ToArray();
-            if(firstMatches.Length!=1)return "Apple Music 的专辑首曲尚无法明确对应，未开始播放。";
+            if(firstMatches.Length!=1)continue;
             request.FirstTrack=firstMatches[0].Track;
-            token.ThrowIfCancellationRequested();play.Patterns.Invoke.Pattern.Invoke();trace?.Invoke("albumPlayInvoked",new{album.Title,album.Artist});return null;
+            token.ThrowIfCancellationRequested();context.CommandAttempted=true;play.Patterns.Invoke.Pattern.Invoke();trace?.Invoke("albumPlayInvoked",new{album.Title,album.Artist});return null;
         }
         return "Apple Music 暂未提供这张专辑的播放按钮，请稍后重试。";
     }
