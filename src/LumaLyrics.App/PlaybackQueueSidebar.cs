@@ -24,10 +24,10 @@ internal sealed class PlaybackQueueSidebar:IDisposable
     internal bool IsPolling=>timer.IsEnabled;
     bool Active=>enabled && !disposed && scope.IsVisible && owner.IsVisible && owner.WindowState!=WindowState.Minimized;
 
-    internal PlaybackQueueSidebar(Window owner,FrameworkElement scope,Func<CancellationToken,Task<MusicQueueSnapshot>> read,Func<CancellationToken,Task<MusicLibraryResult>> library,Action openLibrary,Func<bool>? busy=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? play=null,Action? activate=null)
+    internal PlaybackQueueSidebar(Window owner,FrameworkElement scope,Func<CancellationToken,Task<MusicQueueSnapshot>> read,Func<CancellationToken,Task<MusicLibraryResult>> library,Action openLibrary,Func<bool>? busy=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? play=null,Action? activate=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorder=null)
     {
         this.owner=owner;this.scope=scope;this.read=read;this.library=library;this.busy=busy??(()=>false);
-        View=new(openLibrary,()=>_=RefreshAsync(),true,play,activate){Visibility=Visibility.Visible};View.Apply(MusicQueueSnapshot.Unavailable("连接 Apple Music 后显示播放列表"));View.PlaybackCompleted+=RequestRefresh;
+        View=new(openLibrary,()=>_=RefreshAsync(),true,play,activate,reorder){Visibility=Visibility.Visible};View.Apply(MusicQueueSnapshot.Unavailable("连接 Apple Music 后显示播放列表"));View.PlaybackCompleted+=RequestRefresh;
         View.PlaybackStarting+=()=>{timer.Stop();reading?.Cancel();versions.Next();ActiveRefresh=null;};
         scope.IsVisibleChanged+=VisibilityChanged;owner.StateChanged+=WindowStateChanged;timer.Tick+=Poll;
     }

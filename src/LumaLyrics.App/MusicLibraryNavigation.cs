@@ -5,6 +5,11 @@ namespace LumaLyrics.App;
 
 public partial class MainWindow
 {
+    LyricsReviewWindow? lyricsReview;
+    internal void ShowLyricsReview(Window owner)
+    {
+        if(lyricsReview is null){lyricsReview=new(coordinator,playbackBridge.CaptureLyricsReviewAsync){Owner=owner};lyricsReview.Closed+=(_,_)=>lyricsReview=null;lyricsReview.Show();}else lyricsReview.Activate();
+    }
     MusicLibraryView? musicLibrary;
     async void MusicLibraryClicked(object sender,RoutedEventArgs e)=>await ShowMusicLibraryAsync();
     internal async Task ShowMusicLibraryAsync()
@@ -14,7 +19,7 @@ public partial class MainWindow
             var bridge=playbackBridge;
             musicLibrary=new(token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),bridge.PlayAsync,
                 ()=>LibraryClicked(this,new()),ShowLyricsPage,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},vm,
-                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync,bridge.PlayQueueAsync);
+                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync,bridge.PlayQueueAsync,bridge.ReorderQueueAsync);
             MainPageHost.Children.Add(musicLibrary);
         }
         LyricsPage.Visibility=Visibility.Collapsed;musicLibrary.Visibility=Visibility.Visible;SelectNavigation(true);

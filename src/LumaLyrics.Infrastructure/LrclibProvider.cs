@@ -9,20 +9,23 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
     readonly HttpClient client;
     readonly SemaphoreSlim gate = new(1);
     readonly bool searchOnly;readonly TimeSpan minimumInterval;
-    readonly Dictionary<string,IReadOnlyList<LyricsCandidate>?> artistCache=new();
+    long searchRetryTicks,rateRetryTicks;
     DateTimeOffset nextRequest;
     public LrclibProvider(HttpMessageHandler? handler = null,bool searchOnly=false,TimeSpan? minimumInterval=null)
     {
         this.searchOnly=searchOnly;this.minimumInterval=minimumInterval??TimeSpan.FromSeconds(1);
         client = handler is null ? new() : new(handler);
         client.BaseAddress = new("https://lrclib.net/api/"); client.Timeout = TimeSpan.FromSeconds(15);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.5.0 (https://github.com/jackie9449/LumaLyrics)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.15.0 (https://github.com/jackie9449/LumaLyrics)");
     }
     async Task<string?> GetAsync(string url, CancellationToken token)
     {
         await gate.WaitAsync(token);
         try
         {
+            bool search=url.StartsWith("search?",StringComparison.Ordinal);
+            if(DateTimeOffset.UtcNow.UtcTicks<Interlocked.Read(ref rateRetryTicks))throw new LyricsProviderException("LRCLIB 仍处于来源要求的限流等待期，继续查询其他来源。",429);
+            if(search && DateTimeOffset.UtcNow.UtcTicks<Interlocked.Read(ref searchRetryTicks))throw new LyricsProviderException("LRCLIB 搜索暂时繁忙，精确匹配和其他来源仍会继续查询。",503);
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 var delay = nextRequest - DateTimeOffset.UtcNow; if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
@@ -35,12 +38,13 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
                     {
                         var retry = response.Headers.RetryAfter;
                         nextRequest = (retry?.Date ?? DateTimeOffset.UtcNow + (retry?.Delta ?? TimeSpan.FromSeconds(30))).AddMilliseconds(Random.Shared.Next(20,250));
-                        if (attempt == 0) continue;
+                        Interlocked.Exchange(ref rateRetryTicks,nextRequest.UtcTicks);token.ThrowIfCancellationRequested();
                         throw new LyricsProviderException("歌词服务暂时限流，请稍后重试。",429);
                     }
                     if ((int)response.StatusCode >= 500)
                     {
                         var retry=response.Headers.RetryAfter;nextRequest=retry?.Date??DateTimeOffset.UtcNow+(retry?.Delta??TimeSpan.FromSeconds(2));
+                        if(search){Interlocked.Exchange(ref searchRetryTicks,DateTimeOffset.UtcNow.AddSeconds(Math.Max(30,(nextRequest-DateTimeOffset.UtcNow).TotalSeconds)).UtcTicks);throw new LyricsProviderException("LRCLIB 搜索暂时繁忙，精确匹配和其他来源仍会继续查询。",(int)response.StatusCode);}
                         if(attempt==0)continue;
                     }
                     if (!response.IsSuccessStatusCode) throw new LyricsProviderException($"歌词服务错误（{(int)response.StatusCode}）。",(int)response.StatusCode);
@@ -66,41 +70,27 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
         bool instrumental = e.TryGetProperty("instrumental", out var b) && b.ValueKind == JsonValueKind.True;
         return new(id, new(S("trackName") ?? "", S("artistName") ?? "", S("albumName") ?? "", d), S("syncedLyrics"), S("plainLyrics"), instrumental, e.GetRawText());
     }
-    public async Task<IReadOnlyList<LyricsCandidate>> LookupLibraryAsync(Track input,CancellationToken token)
-    {
-        var track=TrackMetadata.FromAppleSession(input);var key=MatchRules.Normalize(track.Artist);
-        if(key.Length==0)return await LookupAsync(track,token);
-        if(!artistCache.TryGetValue(key,out var candidates))
-        {
-            try
-            {
-                var raw=await GetAsync("search?q="+Uri.EscapeDataString(track.Artist),token);
-                using var json=JsonDocument.Parse(raw??"[]");var all=json.RootElement.EnumerateArray().Select(Parse).ToArray();
-                // Official search is capped at 20 and has no pagination. A full page
-                // is never evidence that an absent song has no lyrics: use its signature.
-                candidates=all.Length<20?all:null;artistCache[key]=candidates;
-            }
-            catch(LyricsProviderException e) when(e.StatusCode>=500){artistCache[key]=null;candidates=null;}
-            catch(JsonException){throw new LyricsProviderException("歌词服务返回了无法解析的内容。");}
-        }
-        return candidates is null?await LookupAsync(track,token):candidates.Where(c=>MatchRules.Score(track,c).Eligible).ToArray();
-    }
+    // An artist search is a ranked page, never proof that another recording is absent.
+    // Batch and foreground lookup therefore use the same exact recording signature.
+    public Task<IReadOnlyList<LyricsCandidate>> LookupLibraryAsync(Track input,CancellationToken token)=>LookupAsync(input,token);
     public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track, CancellationToken token)
     {
         track=TrackMetadata.FromAppleSession(track);
         static string E(string s) => Uri.EscapeDataString(s);
         try
         {
-            var all = new List<LyricsCandidate>();
+            var all = new List<LyricsCandidate>();var unavailable=new List<string>();
             if (!searchOnly && track.DurationMs.HasValue)
             {
                 string? raw=null;
                 try{raw = await GetAsync($"get?track_name={E(track.Title)}&artist_name={E(track.Artist)}&album_name={E(track.Album)}&duration={(track.DurationMs.Value / 1000).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}", token);}
-                catch(LyricsProviderException e) when(e.StatusCode>=500){} // Search can remain available when exact lookup fails.
+                catch(LyricsProviderException e) when(e.StatusCode>=500){unavailable.Add($"LRCLIB 精确匹配（{e.StatusCode}）");} // Search can remain available when exact lookup fails.
                 if (raw is not null) { using var doc = JsonDocument.Parse(raw); all.Add(Parse(doc.RootElement)); }
                 if (AutomaticLyricsMatcher.Select(track, all) is {Candidate.Instrumental:false}) return all;
             }
-            var search = await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist)}", token);
+            string? search;
+            try{search=await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist)}", token);}
+            catch(LyricsProviderException ex) when(ex.StatusCode>=500 && all.Count>0){return new LyricsLookupResult(all,unavailable.Append($"LRCLIB 搜索（{ex.StatusCode}）"));}
             if (search is not null) { using var doc = JsonDocument.Parse(search); foreach (var e in doc.RootElement.EnumerateArray()) all.Add(Parse(e)); }
             // Observed Apple Music 1.1538: Artist="artist — album", AlbumTitle="".
             // Supplement search only. Scoring keeps the original metadata, requiring
@@ -111,7 +101,8 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
                 var supplement=await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist[..separator])}",token);
                 if(supplement is not null){using var doc=JsonDocument.Parse(supplement);foreach(var e in doc.RootElement.EnumerateArray())all.Add(Parse(e));}
             }
-            return all.Where(x => x.Instrumental || !string.IsNullOrWhiteSpace(x.Content)).DistinctBy(x => x.Id).Take(100).ToArray();
+            var filtered=all.Where(x => x.Instrumental || !string.IsNullOrWhiteSpace(x.Content)).DistinctBy(x => x.Id).Take(100).ToArray();
+            return unavailable.Count>0?new LyricsLookupResult(filtered,unavailable):filtered;
         }
         catch (JsonException) { throw new LyricsProviderException("歌词服务返回了无法解析的内容。"); }
         catch (InvalidOperationException) { throw new LyricsProviderException("歌词服务返回的数据格式无效。"); }
@@ -119,6 +110,6 @@ public sealed class LrclibProvider : ILyricsProvider, IDisposable
     public void Dispose() { client.Dispose(); } // In-flight cancellation may still release the gate.
 }
 
-/// <summary>Shares the foreground HTTP limiter and caches complete, small artist result sets.</summary>
+/// <summary>Compatibility adapter sharing the foreground limiter and exact recording lookup.</summary>
 public sealed class LibraryLyricsProvider(LrclibProvider provider):ILyricsProvider
 {public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>provider.LookupLibraryAsync(track,token);}

@@ -11,7 +11,43 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
     CancellationTokenSource? selecting;
     internal bool IsBusy=>Volatile.Read(ref pending)>0;
     internal event Action? HandoffCompleted;
+    internal async Task<(LumaLyrics.Core.LyricsOcrObservation Observation,NativeLyricsCapture Capture)> CaptureLyricsReviewAsync(Track track,LyricsDocument original,bool image,CancellationToken token)
+    {
+        Interlocked.Increment(ref pending);
+        try
+        {
+            await coordinator.Source.RefreshAsync().WaitAsync(token);var before=coordinator.Source.Latest;
+            if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || !MusicLibraryPlayback.IsRequestedRecording(track,before.Track))throw new InvalidOperationException("尚未确认 Apple Music 当前录音，请重新连接后重试。");
+            string language=LumaLyrics.Windows.LocalLyricsOcr.PreferredLanguage(original);
+            if(image && !LumaLyrics.Windows.LocalLyricsOcr.Supports(language))throw new InvalidOperationException($"本机尚未安装 {language} 的 Windows OCR。可使用“原生文字参考”；也可在 Windows 语言选项中安装该语言的光学字符识别组件后重试。");
+            var capture=await AppleMusicLibraryHandoff.CaptureLyricsAsync(track,image,token,trace);
+            var recognized=image?await LumaLyrics.Windows.LocalLyricsOcr.RecognizeAsync(capture.Image!,language,token):new LumaLyrics.Windows.LocalOcrResult("native-accessibility",capture.NativeLines);
+            await coordinator.Source.RefreshAsync().WaitAsync(token);var after=coordinator.Source.Latest;
+            if(after is null || !MusicLibraryPlayback.IsRequestedRecording(track,after.Track) || coordinator.Document is not { } current || TranslationAlignment.Hash(current.Raw)!=TranslationAlignment.Hash(original.Raw))throw new InvalidOperationException("采集期间录音或原词已变化，本次校对未保存。");
+            if(recognized.Lines.Count==0)throw new InvalidOperationException("没有识别出可比较的文字，未保存空白记录。");
+            return (new(track,TranslationAlignment.Hash(original.Raw),capture.CapturedUtc,before.PositionMs,recognized.Language,capture.Bounds,recognized.Lines),capture);
+        }
+        finally{Interlocked.Decrement(ref pending);HandoffCompleted?.Invoke();}
+    }
     internal Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token)=>AppleMusicLibraryHandoff.ReadQueueAsync(token,trace);
+    internal Task<LibraryPlayResult> ReorderQueueAsync(MusicQueueMove move,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
+    {
+        await coordinator.Source.RefreshAsync().WaitAsync(requestToken);var before=coordinator.Source.Latest;
+        if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || move.Snapshot.Current is null || !MusicLibraryPlayback.IsRequestedRecording(move.Snapshot.Current,before.Track))return new(false,"尚未确认 Apple Music 当前播放状态，请重新连接后重试。");
+        var failure=await AppleMusicLibraryHandoff.ReorderQueueAsync(move,requestToken,context,trace);if(failure is not null)return new(false,failure);
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(requestToken);timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            while(true)
+            {
+                var queue=await ReadQueueAsync(timeout.Token);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);var current=coordinator.Source.Latest;
+                if(MusicPlaybackQueue.ConfirmsMove(move,queue) && current is not null && current.Status==before.Status && MusicLibraryPlayback.IsRequestedRecording(before.Track,current.Track))return new(true,"已调整播放顺序，当前歌曲继续播放");
+                await Task.Delay(250,timeout.Token);
+            }
+        }
+        catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
+        return new(false,"已发送排序操作，尚未确认新顺序，请刷新播放列表查看。");
+    },token);
     async Task<LibraryPlayResult> RunSelectionAsync(Func<AppleMusicLibraryHandoff.HandoffContext,CancellationToken,Task<LibraryPlayResult>> action,CancellationToken token)
     {
         using var current=CancellationTokenSource.CreateLinkedTokenSource(token);

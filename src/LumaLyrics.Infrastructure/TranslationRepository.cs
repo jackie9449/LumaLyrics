@@ -56,6 +56,13 @@ public sealed class TranslationRepository : IDisposable
             ON CONFLICT(Fingerprint,SourceHash) DO UPDATE SET Content=excluded.Content,Manual=excluded.Manual,Duration=excluded.Duration WHERE Translations.Manual=0 OR excluded.Manual=1
             """,("$f",track.Fingerprint),("$h",translation.SourceHash),("$d",track.DurationMs),("$t",track.Title),("$a",track.Artist),("$al",track.Album),("$c",JsonSerializer.Serialize(translation)),("$m",manual));
     }
+    public bool SaveMissing(Track input,ChineseTranslation translation)
+    {
+        Validate(translation);var track=TrackMetadata.FromAppleSession(input);
+        using var command=Command("INSERT INTO Translations(Fingerprint,SourceHash,Duration,Title,Artist,Album,Content,Manual) VALUES($f,$h,$d,$t,$a,$al,$c,0) ON CONFLICT(Fingerprint,SourceHash) DO NOTHING",("$f",track.Fingerprint),("$h",translation.SourceHash),("$d",track.DurationMs),("$t",track.Title),("$a",track.Artist),("$al",track.Album),("$c",JsonSerializer.Serialize(translation)));
+        return command.ExecuteNonQuery()==1;
+    }
+    public void MarkPrepared(Track track,ChineseTranslation translation)=>Execute("UPDATE PreparationQueue SET State='Prepared',Detail=$review,OriginalHash=$h,RetryUtc=NULL WHERE Active=1 AND Fingerprint=$f AND ($d IS NULL OR Duration IS NULL OR ABS(Duration-$d)<=5000)",("$review",translation.Review),("$f",track.Fingerprint),("$h",translation.SourceHash),("$d",track.DurationMs));
     public IReadOnlyList<StoredTranslation> ReadAll()
     {
         using var c=Command("SELECT Title,Artist,Album,Duration,Content,Manual FROM Translations ORDER BY Fingerprint,SourceHash");using var r=c.ExecuteReader();var records=new List<StoredTranslation>();

@@ -1,5 +1,22 @@
 using LumaLyrics.Windows;
 if(LumaLyrics.Probe.PersonalLibraryCommands.TryRun(args))return;
+if(args.ElementAtOrDefault(0)=="--reuse-translation-drafts")
+{
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(LumaLyrics.Infrastructure.TranslationDraftReuse.Run(root)));return;
+}
+if(args.ElementAtOrDefault(0)=="--reconcile-translations")
+{
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(LumaLyrics.Infrastructure.TranslationCacheReconciliation.Run(root)));return;
+}
+if(args.ElementAtOrDefault(0)=="--audit-lyrics")
+{
+    var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));string output=args.ElementAtOrDefault(2)??throw new ArgumentException("Specify a private coverage report file");
+    var snapshot=new LumaLyrics.Infrastructure.AppleMusicLibraryReader().Read(LumaLyrics.Infrastructure.AppleMusicLibraryReader.Discover()??throw new FileNotFoundException("No native library"));
+    var report=LumaLyrics.Infrastructure.LibraryCoverageAudit.Create(root,snapshot);LumaLyrics.Infrastructure.LibraryCoverageAudit.Write(report,output);
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{report.Total,report.Timed,report.Instrumental,report.MissingOrUnconfirmed,report.ForeignTimed,report.CompleteTranslations,report.AiDrafts,report.MissingOrPartialTranslations}));return;
+}
 if(args.ElementAtOrDefault(0) is "--export-translation-drafts" or "--import-translation-drafts")
 {
     var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));
@@ -41,8 +58,8 @@ if(args.ElementAtOrDefault(0)=="--library-status")
 if(args.ElementAtOrDefault(0)=="--prefetch")
 {
     var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.ElementAtOrDefault(1));Directory.CreateDirectory(root);
-    using var provider=new LumaLyrics.Infrastructure.LrclibProvider(searchOnly:args.Contains("--batch"),minimumInterval:args.Contains("--batch")?TimeSpan.FromMilliseconds(250):null);
-    LumaLyrics.Core.ILyricsProvider lookupProvider=args.Contains("--batch")?new LumaLyrics.Infrastructure.LibraryLyricsProvider(provider):provider;
+    using var provider=new LumaLyrics.Infrastructure.ResilientLyricsProvider();
+    LumaLyrics.Core.ILyricsProvider lookupProvider=provider;
     var prefetcher=new LumaLyrics.Infrastructure.LibraryPrefetcher(Path.Combine(root,"lyrics.db"),lookupProvider);
     prefetcher.Progress+=p=>Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(p));
     using var cancel=new CancellationTokenSource();Console.CancelKeyPress+=(_,e)=>{e.Cancel=true;cancel.Cancel();};
@@ -69,10 +86,17 @@ if(args.ElementAtOrDefault(0)=="--library")
 }
 if(args.ElementAtOrDefault(0)=="--lookup")
 {
-    using var provider=new LumaLyrics.Infrastructure.LrclibProvider();
+    using var provider=new LumaLyrics.Infrastructure.ResilientLyricsProvider();
     var track=new LumaLyrics.Core.Track(args.ElementAtOrDefault(1)??"",args.ElementAtOrDefault(2)??"",args.ElementAtOrDefault(3)??"",double.TryParse(args.ElementAtOrDefault(4),out var duration)?duration*1000:null);
     var found=await provider.LookupAsync(track,default);
     var selection=LumaLyrics.Core.AutomaticLyricsMatcher.Select(track,found);
+    int save=Array.IndexOf(args,"--save-root");
+    if(save>=0)
+    {
+        if(save+1>=args.Length)throw new ArgumentException("Specify a private profile directory");
+        var root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args[save+1]);LumaLyrics.Infrastructure.PersonalLibraryArchive.EnsureOutsideSoftware(root);
+        if(selection is not null){using var repository=new LumaLyrics.Infrastructure.LyricsRepository(Path.Combine(root,"lyrics.db"));repository.Save(track,selection.Candidate.Content,selection.Candidate.SourceLabel+" · 自动检查",false,selection.Candidate.Instrumental,providerJson:selection.Candidate.RawJson);}
+    }
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{count=found.Count,synced=found.Count(c=>c.SyncedLyrics is not null),automatic=selection?.Candidate.Id,assessment=selection?.Assessment,rejected=found.Select(c=>LumaLyrics.Core.AutomaticLyricsMatcher.Assess(c).Reason).Distinct()}));return;
 }
 var path = args.ElementAtOrDefault(0) is null or "--probe"?Path.Combine(LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(),"logs","probe-redacted.jsonl"):args[0];

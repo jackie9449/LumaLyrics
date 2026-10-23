@@ -43,11 +43,10 @@ public static partial class TranslationAlignment
         var a=local.Groups.Select((g,i)=>(Group:g,Index:i)).Where(x=>IsLyricText(x.Group.Text)).ToArray();
         var b=original.Groups.Where(g=>IsLyricText(g.Text)).ToArray();
         var t=translated.Groups.Where(g=>IsLyricText(g.Text)).ToArray();
-        if(a.Length<3 || a.Length!=b.Length || t.Length!=b.Length || !ContainsHan(string.Join("\n",t.Select(g=>g.Text))))return null;
-        var lines=new List<TranslationLine>();var used=new HashSet<int>();
-        for(int i=0;i<a.Length;i++)
+        if(a.Length<1 || b.Length<3 || t.Length!=b.Length || !ContainsHan(string.Join("\n",t.Select(g=>g.Text))))return null;
+        var paired=new List<string>();var used=new HashSet<int>();
+        for(int i=0;i<b.Length;i++)
         {
-            if(MatchRules.Normalize(a[i].Group.Text)!=MatchRules.Normalize(b[i].Text))return null;
             // The provider pair must agree on time before its translation can be mapped
             // onto the local original. Never borrow the other recording's timestamps.
             double time=b[i].TimeMs+original.FileOffsetMs;
@@ -55,8 +54,23 @@ public static partial class TranslationAlignment
             if(matches.Length!=1 || !used.Add(matches[0].j))return null;
             var text=matches[0].g.Text.Trim();
             if(text.Length>4000 || !ContainsHan(text) && MatchRules.Normalize(text)!=MatchRules.Normalize(b[i].Text))return null;
-            lines.Add(new(a[i].Index,text));
+            paired.Add(text);
         }
+        // Providers may break one local multiline group into several timed lines.
+        // Only merge complete source groups after every original character agrees;
+        // never split a Chinese sentence or transfer the provider's timestamps.
+        var lines=new List<TranslationLine>();int position=0;
+        foreach(var item in a)
+        {
+            string expected=MatchRules.Normalize(item.Group.Text),actual="";var translatedLines=new List<string>();
+            while(position<b.Length && actual.Length<expected.Length)
+            {
+                actual+=MatchRules.Normalize(b[position].Text);translatedLines.Add(paired[position]);position++;
+            }
+            if(actual!=expected || translatedLines.Count==0)return null;
+            lines.Add(new(item.Index,string.Join(Environment.NewLine,translatedLines)));
+        }
+        if(position!=b.Length)return null;
         return new(Hash(local.Raw),lines,source,url,"社区译文 · 原文及逐行对应已检查 · 语义未人工逐首校对",DateTimeOffset.UtcNow);
     }
 }

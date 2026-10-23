@@ -52,9 +52,16 @@ public partial class MainWindow
             checks["albums.responsiveCards."+width]=browser.AlbumShelf.Columns<=previousColumns && cover.ActualWidth>100 && Math.Abs(cover.ActualWidth-cover.ActualHeight)<1;
             previousColumns=browser.AlbumShelf.Columns;
         }
-        Width=1220;Height=820;await Task.Delay(60);UpdateLayout();browser.AlbumShelf.RestoreOffset(900);await Task.Delay(90);UpdateLayout();double offset=browser.AlbumShelf.ScrollOffset;
-        var selected=Descendants<Button>(browser.AlbumShelf).First(b=>b.DataContext is MusicAlbum);Click(selected);await Task.Delay(60);browser.ShowAlbums();await Task.Delay(100);UpdateLayout();
-        checks["albums.backRestoresShelfPosition"]=offset>0 && Math.Abs(browser.AlbumShelf.ScrollOffset-offset)<2;
+        async Task<double> WaitForOffset(double expected)
+        {
+            double actual=0;
+            for(int attempt=0;attempt<20;attempt++){await Task.Delay(50);UpdateLayout();actual=browser.AlbumShelf.ScrollOffset;if(Math.Abs(actual-expected)<2)break;}
+            return actual;
+        }
+        Width=1220;Height=820;await Task.Delay(60);UpdateLayout();browser.AlbumShelf.RestoreOffset(900);double offset=await WaitForOffset(900);
+        var selected=Descendants<Button>(browser.AlbumShelf).First(b=>b.DataContext is MusicAlbum);Click(selected);await Task.Delay(60);browser.ShowAlbums();double restoredOffset=await WaitForOffset(offset);
+        checks["albums.shelfOffsetBeforeNavigation"]=offset;checks["albums.shelfOffsetAfterNavigation"]=restoredOffset;
+        checks["albums.backRestoresShelfPosition"]=offset>0 && Math.Abs(restoredOffset-offset)<2;
         var focusCard=Card();focusCard.Focus();checks["albums.cardsAcceptKeyboardFocus"]=focusCard.IsKeyboardFocused;
         await loadLarge(false);browser.ShowAllSongs();await Search("微光 浮光");checks["albums.allSongsViewStillAvailable"]=browser.SongList.Items.Count==1 && browser.SelectedAlbum is null;
         browser.ShowAllSongs();checks["albums.activeSongsTabPreservesQuery"]=browser.SearchBox.Text=="微光 浮光" && browser.SongList.Items.Count==1;

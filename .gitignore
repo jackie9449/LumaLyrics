@@ -33,3 +33,6 @@ data-location.json
 **/PersonalLibrary/
 **/个人资料/
 **/.luma-personal-*.partial/
+**/lyrics-review/
+**/ocr-models/
+translation-*.json

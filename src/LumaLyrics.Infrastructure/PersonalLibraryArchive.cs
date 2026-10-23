@@ -85,6 +85,7 @@ public static class PersonalLibraryArchive
                 "state"=>StateFiles.Contains(file.Path),
                 "lyric"=>file.Path.StartsWith("lyrics/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".lrc" or ".txt",
                 "translation"=>file.Path.StartsWith("translations/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
+                "review"=>file.Path.Split('/') is ["lyrics-review",{Length:>0},"review.json" or "capture.png"],
                 "cover"=>file.Path.StartsWith("covers/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".png" or ".jpg",
                 "readme"=>file.Path=="README.md","metadata"=>file.Path==".gitignore",_=>false
             };
@@ -121,6 +122,13 @@ public static class PersonalLibraryArchive
             string path=AssetPath(root,translation.Path);if(translation.Bytes>4*1024*1024)throw new InvalidDataException("中文译文文件过大。");
             var record=JsonSerializer.Deserialize<StoredTranslation>(File.ReadAllText(path),Json)??throw new InvalidDataException("中文译文文件为空。");
             if(record.Track is null || record.Translation is null)throw new InvalidDataException("中文译文文件记录无效。");TranslationRepository.Validate(record.Translation);
+        }
+        foreach(var group in manifest.Files.Where(f=>f.Kind=="review").GroupBy(f=>Path.GetDirectoryName(f.Path)!.Replace('\\','/')))
+        {
+            string relative=group.Key+"/review.json";
+            if(!group.Any(f=>f.Path==relative))throw new InvalidDataException("校对图像没有对应的文字记录。");
+            var review=LyricsReviewStore.Validate(AssetPath(root,relative));
+            if(review.Id!=Path.GetFileName(group.Key) || group.Count()!=(review.ImageSha256 is null?1:2))throw new InvalidDataException("校对记录文件对应不一致。");
         }
         if(files.ContainsKey("state/settings.json")){using var settings=File.OpenRead(AssetPath(root,"state/settings.json"));if(JsonSerializer.Deserialize<AppSettings>(settings) is null)throw new InvalidDataException("个人设置为空。");}
         var keys=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -196,6 +204,11 @@ public static class PersonalLibraryArchive
                 token.ThrowIfCancellationRequested();string name=Path.GetFileName(file.Path);
                 string target=name=="apple-reference-audit.json"?Path.Combine(staging,"cache",name):Path.Combine(staging,name);Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.Copy(AssetPath(root,file.Path),target);if(Hash(target)!=file.Sha256.ToLowerInvariant())throw new InvalidDataException("恢复时文件校验失败。");
+            }
+            foreach(var file in manifest.Files.Where(f=>f.Kind=="review"))
+            {
+                token.ThrowIfCancellationRequested();string target=AssetPath(staging,file.Path);Directory.CreateDirectory(Path.GetDirectoryName(target)!);File.Copy(AssetPath(root,file.Path),target);
+                if(Hash(target)!=file.Sha256.ToLowerInvariant())throw new InvalidDataException("恢复时校对记录校验失败。");
             }
             var covers=Path.Combine(staging,"cache","artwork");Directory.CreateDirectory(covers);
             foreach(var image in manifest.Images)

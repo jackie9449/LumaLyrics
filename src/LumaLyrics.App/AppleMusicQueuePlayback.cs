@@ -50,6 +50,7 @@ internal static partial class AppleMusicLibraryHandoff
             var root=automation.FromHandle(process.MainWindowHandle);var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayQueueToggleButton"));
             if(toggle?.Patterns.Toggle.IsSupported!=true)return "当前 Apple Music 版本暂未提供可操作的播放列表。";
             bool opened=toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;AutomationElement? history=null;bool restoreHistory=false;
+            var lyrics=root.FindFirstDescendant(cf=>cf.ByAutomationId("LyricsToggleButton"));bool lyricsOn=lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
             try
             {
                 token.ThrowIfCancellationRequested();if(!opened)toggle.Patterns.Toggle.Pattern.Toggle();
@@ -72,6 +73,7 @@ internal static partial class AppleMusicLibraryHandoff
                 {
                     if(restoreHistory && history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value!=ToggleState.On)history.Patterns.Toggle.Pattern.Toggle();
                     if(!opened && toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On)toggle.Patterns.Toggle.Pattern.Toggle();
+                    if(lyricsOn && lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value!=ToggleState.On)lyrics.Patterns.Toggle.Pattern.Toggle();
                 }
                 catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException){}
             }

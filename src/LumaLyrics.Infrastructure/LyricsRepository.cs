@@ -134,6 +134,11 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     {
         Execute("UPDATE LibraryTracks SET State=$state,Detail=$detail,LyricsKind=$kind,RetryUtc=$retry WHERE Source=$s AND PersistentId=$id",("$state",state),("$detail",detail),("$kind",kind),("$retry",state is "Cached" or "Manual" or "Pending"?null:DateTimeOffset.UtcNow.Add(state=="Error"?TimeSpan.FromMinutes(15):TimeSpan.FromDays(1)).ToString("O")),("$s",item.Source),("$id",item.PersistentId));
     }
-    public void ResetLibraryRetries()=>Execute("UPDATE LibraryTracks SET RetryUtc=NULL WHERE State<>'Cached'");
+    public void ResetLibraryRetries()
+    {
+        using var transaction=db.BeginTransaction();
+        Execute("UPDATE LibraryTracks SET RetryUtc=NULL,State='Pending' WHERE Active=1 AND State NOT IN ('Cached','Manual')");
+        Execute("DELETE FROM LookupFailures WHERE Fingerprint IN (SELECT Fingerprint FROM LibraryTracks WHERE Active=1 AND State='Pending')");transaction.Commit();
+    }
     public void Dispose() => db.Dispose();
 }

@@ -13,6 +13,7 @@ internal sealed partial class MusicLibraryView
     readonly Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue;
     readonly Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext;
     readonly Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue;
+    readonly Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorderQueue;
     readonly Button queueTab=new(){Content="播放列表",Padding=new(14,8,14,8),Margin=new(0,0,6,0)};
     readonly DispatcherTimer queuePoll=new(){Interval=TimeSpan.FromSeconds(15)};
     readonly CancellationTokenSource queueLifetime=new();
@@ -28,7 +29,7 @@ internal sealed partial class MusicLibraryView
     void SetupQueueNavigation(Grid root,Grid heading,Grid filters,Grid body)
     {
         browseBody=body;browseFilters=filters;
-        queuePanel=new(HideQueue,()=>ActiveQueueRefresh=RefreshQueueAsync(),play:playQueue,activate:activate);Grid.SetRow(queuePanel,2);root.Children.Add(queuePanel);
+        queuePanel=new(HideQueue,()=>ActiveQueueRefresh=RefreshQueueAsync(),play:playQueue,activate:activate,reorder:reorderQueue);Grid.SetRow(queuePanel,2);root.Children.Add(queuePanel);
         queuePanel.PlaybackStarting+=()=>{playing?.Cancel();requests.Next();queueReading?.Cancel();queueVersions.Next();ActiveQueueRefresh=null;queuePanel.CancelLoading();};queuePanel.PlaybackStarted+=task=>ActivePlayback=task;queuePanel.PlaybackCompleted+=RefreshVisibleQueue;
         if(readQueue is not null)
         {

@@ -16,6 +16,11 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-queue-reordering"))
+        {
+            await VerifyQueueReorderingAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-sidebar"))
         {
             await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
@@ -181,6 +186,7 @@ public partial class MainWindow
         await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
         await VerifyTranslationsAsync(directory,checks);
         await VerifyOverlayAdjustmentsAsync(directory,checks);
+        await VerifyQueueReorderingAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

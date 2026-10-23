@@ -28,8 +28,10 @@ public sealed record LyricsDocument(string Raw, IReadOnlyList<TimedLineGroup> Gr
 }
 public sealed record LyricsCandidate(long Id, Track Track, string? SyncedLyrics, string? PlainLyrics, bool Instrumental, string RawJson = "")
 {
+    public string ProviderName {get;init;}="LRCLIB";
+    public string SourceLabel=>$"{ProviderName} #{Id}";
     public string Content => !string.IsNullOrWhiteSpace(SyncedLyrics)?SyncedLyrics:PlainLyrics??"";
-    public override string ToString() => $"{Track.Title} · {Track.Artist}\n{Track.Album} · {Track.DurationMs / 1000:0}s · {(Instrumental ? "纯音乐" : SyncedLyrics is not null ? "同步歌词" : "静态歌词")} · LRCLIB #{Id}";
+    public override string ToString() => $"{Track.Title} · {Track.Artist}\n{Track.Album} · {Track.DurationMs / 1000:0}s · {(Instrumental ? "纯音乐" : SyncedLyrics is not null ? "同步歌词" : "静态歌词")} · {SourceLabel}";
 }
 public sealed record ScoredCandidate(LyricsCandidate Candidate, double Score, bool Eligible, string Reason);
 public interface IPlaybackSource : IAsyncDisposable

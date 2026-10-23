@@ -5,6 +5,7 @@ namespace LumaLyrics.App;
 
 public partial class MainWindow
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll",EntryPoint="GetForegroundWindow")] static extern nint QueueForegroundForVerification();
     sealed record QueueRestoreVerification(MusicQueueSnapshot Baseline,MusicQueueSnapshot Expected);
     sealed record QueueBaselineVerification(MusicQueueSnapshot Queue,LumaLyrics.Core.PlayState State);
     // Explicit integration mode only. Reports contain private library metadata and must
@@ -12,7 +13,21 @@ public partial class MainWindow
     async Task VerifyNativeLibraryPlaybackAsync(string directory,string[] args)
     {
         Directory.CreateDirectory(directory);string traceFile=Path.Combine(directory,"native-playback.jsonl");var traceGate=new object();
-        void Trace(string stage,object? value){lock(traceGate)File.AppendAllText(traceFile,JsonSerializer.Serialize(new{utc=DateTimeOffset.UtcNow,stage,value})+Environment.NewLine);}
+        void Trace(string stage,object? value)
+        {
+            if(stage=="lyricCaptureImage" && value is byte[] png){File.WriteAllBytes(Path.Combine(directory,"native-capture.png"),png);return;}
+            lock(traceGate)File.AppendAllText(traceFile,JsonSerializer.Serialize(new{utc=DateTimeOffset.UtcNow,stage,value})+Environment.NewLine);
+            if(args.Contains("--native-drag-screenshots") && stage.StartsWith("queueDrag",StringComparison.Ordinal))
+            {
+                using var process=System.Diagnostics.Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
+                if(process is not null && QueueForegroundForVerification()==process.MainWindowHandle)
+                {
+                    using var automation=new FlaUI.UIA3.UIA3Automation();var bounds=automation.FromHandle(process.MainWindowHandle).BoundingRectangle;
+                    using var bitmap=new System.Drawing.Bitmap(bounds.Width,bounds.Height);using var graphics=System.Drawing.Graphics.FromImage(bitmap);
+                    graphics.CopyFromScreen(bounds.Location,System.Drawing.Point.Empty,bounds.Size);bitmap.Save(Path.Combine(directory,stage+".png"));
+                }
+            }
+        }
         string? Argument(string name){int index=Array.IndexOf(args,name);return index>=0 && index+1<args.Length?args[index+1]:null;}
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(150));
         if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
@@ -31,6 +46,35 @@ public partial class MainWindow
             Trace("queueRestored",new{restored=await AppleMusicLibraryHandoff.RestoreQueueVerificationAsync(request.Baseline,request.Expected,timeout.Token)});return;
         }
         if(args.Contains("--native-inspect-only"))return;
+        if(args.Contains("--native-verify-lyrics"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.RefreshAsync();var before=coordinator.Source.Latest??throw new InvalidOperationException("No current native recording");
+            var track=LumaLyrics.Core.TrackMetadata.FromAppleSession(before.Track);string profile=Argument("--native-original-profile")??throw new ArgumentException("Specify an existing private original profile");
+            using var personal=new LyricsRepository(Path.Combine(profile,"lyrics.db"));var binding=personal.Find(track)??throw new InvalidOperationException("No current original for comparison");
+            if(!binding.Manual && !LibraryPrefetcher.QualityOf(binding,track))throw new InvalidDataException("Current original has not passed checks");
+            coordinator.Import(track,binding.Raw,"Private native comparison fixture",binding.Plain);var document=coordinator.Document!;var reviewBridge=new AppleMusicPlaybackBridge(coordinator,Trace);
+            foreach(bool image in new[]{true,false})
+            {
+                var reviewResult=await reviewBridge.CaptureLyricsReviewAsync(track,document,image,timeout.Token);var report=LumaLyrics.Core.LyricsOcrComparison.Compare(track,document,reviewResult.Observation);
+                string record=new LyricsReviewStore(store.Root).Save(track,document,reviewResult.Observation,image?"windows-ocr":"native-text",image?reviewResult.Capture.Image:null);
+                Trace("nativeLyricsReview",new{image,report.Accepted,report.ObservedGroups,report.TotalGroups,lines=reviewResult.Observation.Lines.Count,method=reviewResult.Observation.Language,recordingRetained=coordinator.Source.Latest is { } after && MusicLibraryPlayback.IsRequestedRecording(track,after.Track),playStateRetained=coordinator.Source.Latest?.Status==before.Status,stored=File.Exists(record)});
+            }
+            return;
+        }
+        if(args.Contains("--native-reorder-queue"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);var moveBridge=new AppleMusicPlaybackBridge(coordinator,Trace);var baseline=await moveBridge.ReadQueueAsync(timeout.Token);var before=coordinator.Source.Latest;
+            int source=int.TryParse(Argument("--native-move-source"),out int from)?from:1;int insertion=int.TryParse(Argument("--native-move-insertion"),out int to)?to:0;
+            var move=new MusicQueueMove(baseline,source,insertion);Trace("queueMoveBefore",new{baseline,before});var moved=await moveBridge.ReorderQueueAsync(move,timeout.Token);var after=await moveBridge.ReadQueueAsync(timeout.Token);
+            Trace("queueMoveResult",new{moved,confirmed=MusicPlaybackQueue.ConfirmsMove(move,after),after,actual=coordinator.Source.Latest});
+            if(moved.Confirmed && args.Contains("--native-restore-after"))
+            {
+                int destination=insertion>source?insertion-1:insertion;int reverseInsertion=destination<source?source+1:source;
+                var restored=await moveBridge.ReorderQueueAsync(new(after,destination,reverseInsertion),timeout.Token);var final=await moveBridge.ReadQueueAsync(timeout.Token);
+                Trace("queueMoveRestored",new{restored,originalOrderRestored=baseline.Upcoming.Select(e=>e.Track).SequenceEqual(final.Upcoming.Select(e=>e.Track)),currentRecordingRetained=baseline.Current==final.Current,playStateRetained=before?.Status==coordinator.Source.Latest?.Status});
+            }
+            return;
+        }
         if(args.Contains("--native-play-queue"))
         {
             await coordinator.Source.StartAsync(timeout.Token);await Task.Delay(200,timeout.Token);

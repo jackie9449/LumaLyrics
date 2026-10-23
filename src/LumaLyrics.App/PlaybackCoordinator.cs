@@ -8,7 +8,7 @@ namespace LumaLyrics.App;
 public sealed partial class PlaybackCoordinator : IAsyncDisposable
 {
     readonly Dispatcher dispatcher; readonly SettingsStore store;
-    readonly LrclibProvider provider = new(); readonly LrcParser parser = new();
+    readonly ResilientLyricsProvider provider = new(); readonly LrcParser parser = new();
     readonly LyricsRepository repository; readonly PlaybackClock clock = new();
     CancellationTokenSource? lookup; readonly RequestVersion requests=new(); bool disposed;
     readonly CancellationTokenSource lifetime=new();CancellationTokenSource? libraryCancellation;Task? libraryTask,libraryMonitor;
@@ -68,7 +68,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     void StartLyricsPrefetch(string path)
     {
         libraryCancellation?.Dispose();libraryCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=libraryCancellation.Token;
-        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),new LibraryLyricsProvider(provider),()=>foregroundLookupActive);
+        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),provider,()=>foregroundLookupActive);
         prefetcher.Progress+=progress=>{if(!disposed)dispatcher.BeginInvoke(()=>{LibraryStatus=progress;Updated?.Invoke();});};
         prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;if(Snapshot is { } s && TrackMetadata.FromAppleSession(s.Track).Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(s.Track);if(b is not null)Apply(b);}});};
         libraryTask=Task.Run(async()=>{try{await prefetcher.RunAsync(path,token);}catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{LibraryStatus=LibraryStatus with{Running=false,Message="资料库扫描失败："+e.Message};Updated?.Invoke();});}},token);
@@ -200,10 +200,10 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
                 var best=selection.Candidate;
                 // Preserve the complete provider response locally, separately from parsed lyrics.
                 var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir);
-                File.WriteAllText(Path.Combine(dir,best.Id + ".json"),best.RawJson);
-                Apply(repository.Save(s.Track,best.Content,$"LRCLIB #{best.Id} · 自动检查",false,best.Instrumental,providerJson:best.RawJson));
+                File.WriteAllText(Path.Combine(dir,(best.ProviderName=="NetEase"?"netease-":"lrclib-")+best.Id+".json"),best.RawJson);
+                Apply(repository.Save(s.Track,best.Content,best.SourceLabel+" · 自动检查",false,best.Instrumental,providerJson:best.RawJson));
             }
-            else { LyricsStatus = results.Count > 0 ? "候选未通过版本或完整性检查，稍后自动重试" : "暂未找到可靠歌词，稍后自动重试"; repository.RememberFailure(s.Track);Updated?.Invoke(); }
+            else { bool partial=results is LyricsLookupResult{UnavailableSources.Count:>0};LyricsStatus = partial?"部分歌词来源暂不可用，已查询可用来源，稍后自动重试":results.Count > 0 ? "候选未通过版本或完整性检查，稍后自动重试" : "暂未找到可靠歌词，稍后自动重试";if(!partial)repository.RememberFailure(s.Track);Updated?.Invoke(); }
         }
         catch (OperationCanceledException) { }
         catch (Exception e) { if (Current()) { LyricsStatus = e is LyricsProviderException ? e.Message : "歌词加载失败，可重试或导入"; store.Log("Lookup: " + e.GetType().Name+" "+e.Message); Updated?.Invoke(); } }
@@ -226,8 +226,8 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public void SelectCandidate(Track target,LyricsCandidate candidate)
     {
         lookup?.Cancel(); requests.Next();foregroundLookupActive=false;
-        var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir); File.WriteAllText(Path.Combine(dir,candidate.Id + ".json"),candidate.RawJson);
-        var b = repository.Save(target,candidate.Content,$"LRCLIB #{candidate.Id}",true,candidate.Instrumental,providerJson:candidate.RawJson);
+        var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir); File.WriteAllText(Path.Combine(dir,(candidate.ProviderName=="NetEase"?"netease-":"lrclib-")+candidate.Id+".json"),candidate.RawJson);
+        var b = repository.Save(target,candidate.Content,candidate.SourceLabel,true,candidate.Instrumental,providerJson:candidate.RawJson);
         if (Snapshot is null) SetManualTrack(target);
         if (ActiveTrack?.Fingerprint == target.Fingerprint) Apply(b);
     }

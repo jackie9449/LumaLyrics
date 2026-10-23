@@ -34,4 +34,15 @@ public class TranslationTests
         var japanese=Parse("[00:01]君の声\n[00:03]世界");Assert.True(TranslationAlignment.NeedsChineseTranslation(japanese,"世界"));
     }
     [Fact] public void InstrumentalRecordingCannotAutomaticallyAcquireVocalWords()=>Assert.False(AutomaticLyricsMatcher.Assess(new(42,new("Own song (Instrumental)","Own artist","Own album",10000),Original,null,false)).Accepted);
+    [Fact] public void MergesCompleteSourceLinesIntoAnExistingLocalGroupWithoutRetiming()
+    {
+        string local="[00:10]We sail home\n[00:10]Across the quiet bay\n[00:50]The stars will guide us";
+        var result=Align(local)!;Assert.NotNull(result);Assert.Equal(2,result.Lines.Count);Assert.Equal("我们驶向家乡\n穿过宁静海湾",result.TextAt(0).Replace("\r\n","\n"));Assert.Equal(TranslationAlignment.Hash(local),result.SourceHash);
+    }
+    [Fact] public void NeverSplitsASourceTranslationByGuessingChineseWordBoundaries()
+    {
+        string source="[00:01]We sail home Across the quiet bay\n[00:05]The stars will guide us\n[00:08]Here we belong";
+        string translated="[00:01]我们穿过宁静的海湾驶向家乡\n[00:05]星光为我们引路\n[00:08]这里是我们的归处";
+        string local=Original+"\n[00:08]Here we belong";Assert.Null(Align(local,source,translated));
+    }
 }

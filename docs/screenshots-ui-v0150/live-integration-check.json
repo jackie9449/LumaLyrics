@@ -1,0 +1,72 @@
+{
+  "moveToBeginning": {
+    "actualOrderConfirmed": true,
+    "originalOrderRestored": true,
+    "currentRecordingRetained": true,
+    "playStateRetained": true
+  },
+  "moveToEnd": {
+    "actualOrderConfirmed": true,
+    "originalOrderRestored": true,
+    "currentRecordingRetained": true,
+    "playStateRetained": true
+  },
+  "proofreading": [
+    {
+      "image": true,
+      "Accepted": true,
+      "ObservedGroups": 8,
+      "TotalGroups": 20,
+      "lines": 19,
+      "method": "en-US",
+      "recordingRetained": true,
+      "playStateRetained": true,
+      "stored": true
+    },
+    {
+      "image": false,
+      "Accepted": true,
+      "ObservedGroups": 10,
+      "TotalGroups": 20,
+      "lines": 16,
+      "method": "native-accessibility",
+      "recordingRetained": true,
+      "playStateRetained": true,
+      "stored": true
+    }
+  ],
+  "personalBackup": {
+    "reviewFiles": 3,
+    "allHashesEqualAfterRestore": true
+  },
+  "packagedMove": {
+    "actualOrderConfirmed": true,
+    "originalOrderRestored": true,
+    "currentRecordingRetained": true,
+    "playStateRetained": true
+  },
+  "packagedProofreading": [
+    {
+      "image": true,
+      "Accepted": true,
+      "ObservedGroups": 8,
+      "TotalGroups": 20,
+      "lines": 19,
+      "method": "en-US",
+      "recordingRetained": true,
+      "playStateRetained": true,
+      "stored": true
+    },
+    {
+      "image": false,
+      "Accepted": true,
+      "ObservedGroups": 10,
+      "TotalGroups": 20,
+      "lines": 16,
+      "method": "native-accessibility",
+      "recordingRetained": true,
+      "playStateRetained": true,
+      "stored": true
+    }
+  ]
+}

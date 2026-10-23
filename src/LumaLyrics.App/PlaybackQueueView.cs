@@ -8,7 +8,7 @@ using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 namespace LumaLyrics.App;
 
-internal sealed class PlaybackQueueView:Grid
+internal sealed partial class PlaybackQueueView:Grid
 {
     readonly TextBlock detail=new(){FontSize=12,TextWrapping=TextWrapping.Wrap},message=new(){FontSize=12,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,14)};
     readonly TextBlock empty=new(){FontSize=15,TextWrapping=TextWrapping.Wrap,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
@@ -29,14 +29,15 @@ internal sealed class PlaybackQueueView:Grid
     internal MusicQueueSnapshot? Snapshot {get;private set;}
     internal ListBox UpcomingList=>upcoming;
     internal Task? ActivePlayback {get;private set;}
-    internal bool IsSelecting {get;private set;}
+    bool selecting;
+    internal bool IsSelecting=>selecting || IsDragging;
     internal event Action? PlaybackStarting;
     internal event Action<Task>? PlaybackStarted;
     internal event Action? PlaybackCompleted;
     internal Button RefreshButton {get;}=new(){Content="刷新列表",Padding=new(14,8,14,8),Margin=new(8,0,0,0)};
     internal Button BackButton {get;}=new(){Content="‹ 返回音乐库",Padding=new(14,8,14,8),Margin=new(0)};
     internal string Message=>message.Text;
-    internal PlaybackQueueView(Action back,Action refresh,bool compact=false,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? play=null,Action? activate=null)
+    internal PlaybackQueueView(Action back,Action refresh,bool compact=false,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? play=null,Action? activate=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorder=null)
     {
         this.compact=compact;this.play=play;this.activate=activate;
         Visibility=Visibility.Collapsed;
@@ -60,6 +61,7 @@ internal sealed class PlaybackQueueView:Grid
         };
         upcoming.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Enter && upcoming.SelectedItem is QueueRow row){e.Handled=true;BeginPlayback(row);}};
         upcoming.ToolTip=play is null?null:"双击曲目，或选中后按 Enter，跳到队列中的这首歌";
+        SetupReordering(reorder);
         if(compact)
         {
             BackButton.Content="＋";BackButton.ToolTip="打开音乐库选歌";AutomationProperties.SetName(BackButton,"打开音乐库选歌");RefreshButton.Content="\uE72C";RefreshButton.FontFamily=new("Segoe MDL2 Assets");RefreshButton.ToolTip="刷新播放列表";
@@ -107,7 +109,7 @@ internal sealed class PlaybackQueueView:Grid
     }
     async Task PlayAsync(MusicQueueSelection selection)
     {
-        playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;long version=playVersions.Next();IsSelecting=true;
+        playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;long version=playVersions.Next();selecting=true;
         message.Text=playMessage="正在跳到 · "+selection.Snapshot.Upcoming[selection.Index].Track.Title;
         try
         {
@@ -118,10 +120,10 @@ internal sealed class PlaybackQueueView:Grid
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or System.IO.IOException or TimeoutException)
         {if(!disposed && playVersions.IsCurrent(version))message.Text=playMessage="队列跳转失败，请刷新播放列表后重试。";}
-        finally{if(!disposed && playVersions.IsCurrent(version)){IsSelecting=false;PlaybackCompleted?.Invoke();}}
+        finally{if(!disposed && playVersions.IsCurrent(version)){selecting=false;PlaybackCompleted?.Invoke();}}
     }
-    internal void CancelPlayback(){playing?.Cancel();playVersions.Next();IsSelecting=false;playMessage=null;}
-    internal void Dispose(){if(disposed)return;disposed=true;CancelPlayback();playing?.Dispose();covers.Clear();upcoming.ItemsSource=null;currentCover.Source=null;}
+    internal void CancelPlayback(){playing?.Cancel();playVersions.Next();selecting=false;playMessage=null;}
+    internal void Dispose(){if(disposed)return;disposed=true;CancelPlayback();ClearDropHint();playing?.Dispose();covers.Clear();upcoming.ItemsSource=null;currentCover.Source=null;}
     static string Subtitle(Track track)=>track.Artist+(track.Album.Length>0?" · "+track.Album:"");
     internal sealed record QueueRow(int Number,MusicQueueEntry Entry,Func<Track,ImageSource?> LoadCover)
     {

@@ -4,6 +4,11 @@ namespace LumaLyrics.Infrastructure.Tests;
 
 public sealed class MusicPlaybackQueueTests
 {
+    [Fact] public void SwappingIndistinguishableAdjacentOccurrencesCannotBeReportedAsAConfirmedChange()
+    {
+        var track=new Track("Own repeated song","Own artist","Own album",10000);var snapshot=new MusicQueueSnapshot(track,[new(track,true,true),new(track)],true,true,DateTimeOffset.UtcNow,"own");
+        var move=new MusicQueueMove(snapshot,0,2);Assert.False(MusicPlaybackQueue.CanMove(move));Assert.False(MusicPlaybackQueue.ConfirmsMove(move,snapshot));
+    }
     [Theory]
     [InlineData("插播",true)] [InlineData("Play Next",true)] [InlineData("  play next  ",true)] [InlineData("次に再生",true)]
     [InlineData("最后播放",false)] [InlineData("Play Last",false)] [InlineData("Play Next 微光",false)] [InlineData("播放微光",false)]
@@ -106,5 +111,28 @@ public sealed class MusicPlaybackQueueTests
         Assert.True(MusicPlaybackQueue.MatchesSelection(new(queue,0),queue));
         Assert.True(MusicPlaybackQueue.ConfirmsJump(new(queue,0),after));
         Assert.False(MusicPlaybackQueue.ConfirmsJump(new(queue,2),after with{Current=queue.Upcoming[2].Track,Upcoming=[]}));
+    }
+    [Theory]
+    [InlineData(0,3,"海面,夜航,夜航")]
+    [InlineData(2,0,"夜航,夜航,海面")]
+    [InlineData(1,0,"海面,夜航,夜航")]
+    public void MoveUsesOriginalInsertionBoundariesAndRetainsAllOccurrences(int source,int insertion,string titles)
+    {
+        var move=new MusicQueueMove(JumpFixture(),source,insertion);Assert.True(MusicPlaybackQueue.CanMove(move));
+        Assert.Equal(titles,string.Join(',',MusicPlaybackQueue.MovedEntries(move).Select(e=>e.Track.Title)));
+    }
+    [Theory] [InlineData(0,0)] [InlineData(0,1)] [InlineData(-1,2)] [InlineData(3,0)] [InlineData(1,-1)] [InlineData(1,4)]
+    public void MoveRejectsNoOpAndInvalidBoundaries(int source,int insertion)=>Assert.False(MusicPlaybackQueue.CanMove(new(JumpFixture(),source,insertion)));
+    [Fact] public void MoveRejectsPartialOrStaleSnapshotsAndConfirmsActualOrder()
+    {
+        var queue=JumpFixture();var move=new MusicQueueMove(queue,1,0);
+        Assert.False(MusicPlaybackQueue.CanMove(move with{Snapshot=queue with{IsComplete=false}}));
+        Assert.True(MusicPlaybackQueue.MatchesMove(move,queue));
+        Assert.False(MusicPlaybackQueue.MatchesMove(move,queue with{Current=queue.Upcoming[0].Track}));
+        var reordered=queue with{Upcoming=MusicPlaybackQueue.MovedEntries(move)};
+        Assert.True(MusicPlaybackQueue.ConfirmsMove(move,reordered));Assert.False(MusicPlaybackQueue.ConfirmsMove(move,queue));
+        Assert.True(MusicPlaybackQueue.ConfirmsMove(move,reordered with{Upcoming=reordered.Upcoming.Select(e=>e with{Inserted=false}).ToArray()}));
+        Assert.False(MusicPlaybackQueue.ConfirmsMove(move,reordered with{Upcoming=reordered.Upcoming.Skip(1).ToArray()}));
+        Assert.False(MusicPlaybackQueue.ConfirmsMove(move,reordered with{Current=queue.Upcoming[1].Track}));
     }
 }

@@ -35,6 +35,10 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         AddText("来源译文与 AI 译文分别统计，可在当前歌曲查看来源。所有译文保存在个人资料中，可单独导出。",11);
         AddText("当前歌曲",15);source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=21;ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(source);
         import=DialogUi.Button(this,"导入当前歌曲的中文 LRC…",Import);
+        var review=DialogUi.Button(this,"以 Apple Music 原词校对…",()=>
+        {
+            if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);
+        });AutomationProperties.SetName(review,"打开 Apple Music 原词校对");
         coordinator.Updated+=Refresh;Refresh();
     }
     void AddText(string text,double size)

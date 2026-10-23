@@ -5,6 +5,7 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed record MusicQueueEntry(Track Track,bool MetadataComplete=true,bool Inserted=false);
 public sealed record MusicQueueSelection(MusicQueueSnapshot Snapshot,int Index);
+public sealed record MusicQueueMove(MusicQueueSnapshot Snapshot,int SourceIndex,int InsertionIndex);
 public sealed record MusicQueueSnapshot(Track? Current,IReadOnlyList<MusicQueueEntry> Upcoming,bool Available,bool IsComplete,DateTimeOffset CapturedUtc,string Message)
 {
     public static MusicQueueSnapshot Unavailable(string message)=>new(null,[],false,false,DateTimeOffset.UtcNow,message);
@@ -12,6 +13,26 @@ public sealed record MusicQueueSnapshot(Track? Current,IReadOnlyList<MusicQueueE
 
 public static class MusicPlaybackQueue
 {
+    public static bool CanMove(MusicQueueMove move)
+    {
+        if(move.Snapshot is not {Available:true,IsComplete:true,Current:not null} snapshot
+            || move.SourceIndex<0 || move.SourceIndex>=snapshot.Upcoming.Count || move.InsertionIndex<0 || move.InsertionIndex>snapshot.Upcoming.Count
+            || move.InsertionIndex==move.SourceIndex || move.InsertionIndex==move.SourceIndex+1
+            || snapshot.Upcoming.Any(entry=>!entry.MetadataComplete || string.IsNullOrWhiteSpace(entry.Track.Title) || string.IsNullOrWhiteSpace(entry.Track.Artist)))return false;
+        int destination=move.InsertionIndex>move.SourceIndex?move.InsertionIndex-1:move.InsertionIndex;
+        int first=Math.Min(move.SourceIndex,destination),last=Math.Max(move.SourceIndex,destination);
+        return snapshot.Upcoming.Skip(first).Take(last-first+1).Any(entry=>entry.Track!=snapshot.Upcoming[move.SourceIndex].Track);
+    }
+    public static IReadOnlyList<MusicQueueEntry> MovedEntries(MusicQueueMove move)
+    {
+        if(!CanMove(move))throw new ArgumentException("Invalid or incomplete queue move.",nameof(move));
+        var entries=move.Snapshot.Upcoming.ToList();var source=entries[move.SourceIndex];entries.RemoveAt(move.SourceIndex);entries.Insert(move.InsertionIndex>move.SourceIndex?move.InsertionIndex-1:move.InsertionIndex,source);return entries;
+    }
+    public static bool MatchesMove(MusicQueueMove move,MusicQueueSnapshot actual)=>CanMove(move) && MatchesSelection(new(move.Snapshot,move.SourceIndex),actual);
+    public static bool ConfirmsMove(MusicQueueMove move,MusicQueueSnapshot after)=>CanMove(move) && after is {Available:true,IsComplete:true}
+        && move.Snapshot.Current==after.Current && after.Upcoming.All(e=>e.MetadataComplete)
+        && MovedEntries(move).Select(e=>e.Track).SequenceEqual(after.Upcoming.Select(e=>e.Track));
+
     public static bool CanSelect(MusicQueueSelection selection)=>selection.Snapshot is {Available:true,Current:not null} snapshot
         && selection.Index>=0 && selection.Index<snapshot.Upcoming.Count && snapshot.Upcoming[selection.Index] is {MetadataComplete:true} entry
         && !string.IsNullOrWhiteSpace(entry.Track.Title) && !string.IsNullOrWhiteSpace(entry.Track.Artist);

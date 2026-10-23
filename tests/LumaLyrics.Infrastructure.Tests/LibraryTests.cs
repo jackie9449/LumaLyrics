@@ -103,4 +103,11 @@ public class LibraryTests : IDisposable
         var progress=System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(LibraryPrefetcher.ProgressPath(db)));Assert.False(progress!.Running);
     }
     public void Dispose(){Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();Directory.Delete(dir,true);}
+    [Fact] public void ExplicitRetryClearsFailedLookupAndRequeuesOnlyUnfinishedActiveTracks()
+    {
+        using var repository=new LyricsRepository(Path.Combine(dir,"lyrics.db"));var tracks=Enumerable.Range(1,3).Select(i=>new LibraryTrack(i.ToString(),new("Own "+i,"Own artist","Own album",10000))).ToArray();
+        repository.SyncLibrary(new("own",3,tracks,"own"));repository.Save(tracks[1].Track,"own manual","own",true,plain:true);repository.Save(tracks[2].Track,"","own",false,true);
+        var missing=new LibraryQueueItem("own","1",tracks[0].Track);repository.SetLibraryState(missing,"Missing","own source unavailable");repository.RememberFailure(tracks[0].Track);
+        repository.ResetLibraryRetries();Assert.False(repository.HasFailure(tracks[0].Track));Assert.Equal(1,repository.GetLibraryProgress().Pending);Assert.Equal(1,repository.GetLibraryProgress().Manual);Assert.Equal(1,repository.GetLibraryProgress().Instrumental);Assert.Single(repository.GetLibraryQueue());
+    }
 }

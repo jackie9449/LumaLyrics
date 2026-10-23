@@ -6,9 +6,12 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed record TranslationCandidate(long Id,Track Track,string Original,string Translated,string SourceUrl)
 {
-    public LyricsCandidate OriginalCandidate=>new(Id,Track,Original,null,false,JsonSerializer.Serialize(new NetEaseOriginal("NetEase",Id,Track,Original,SourceUrl)));
+    public bool Instrumental {get;init;}
+    public string? InstrumentalEvidence {get;init;}
+    public LyricsCandidate OriginalCandidate=>new(Id,Track,Instrumental?null:Original,null,Instrumental,JsonSerializer.Serialize(new NetEaseOriginal("NetEase",Id,Track,Original,SourceUrl,Instrumental,InstrumentalEvidence))){ProviderName="NetEase"};
+    public LyricsCandidate OriginalCandidateFor(Track local)=>OriginalCandidate with{Track=Track with{Artist=local.Artist}};
 }
-public sealed record NetEaseOriginal(string Provider,long Id,Track Track,string Original,string SourceUrl);
+public sealed record NetEaseOriginal(string Provider,long Id,Track Track,string Original,string SourceUrl,bool Instrumental=false,string? InstrumentalEvidence=null);
 public interface ITranslationProvider
 {
     Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track track,CancellationToken token);
@@ -21,7 +24,7 @@ public sealed class NetEaseTranslationProvider : ITranslationProvider,IDisposabl
     {
         interval=minimumInterval??TimeSpan.FromSeconds(1);
         client=handler is null?new():new(handler);client.BaseAddress=new("https://music.163.com/");client.Timeout=TimeSpan.FromSeconds(20);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.10.0 (https://github.com/jackie9449/LumaLyrics)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.15.0 (https://github.com/jackie9449/LumaLyrics)");
         client.DefaultRequestHeaders.Referrer=client.BaseAddress;
     }
     async Task<string> GetAsync(string uri,CancellationToken token)
@@ -48,14 +51,14 @@ public sealed class NetEaseTranslationProvider : ITranslationProvider,IDisposabl
     {
         local=TrackMetadata.FromAppleSession(local);
         var score=MatchRules.Score(local,new(0,candidate,null,null,false));
-        return score.Eligible && score.Score>=.89 && local.DurationMs is >0 && candidate.DurationMs is >0;
+        return local.DurationMs is >0 && candidate.DurationMs is >0 && (score.Eligible && score.Score>=.89 || NetEaseRecording.AdditionalCreditsMatch(local,candidate));
     }
     public async Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track input,CancellationToken token)
     {
         var track=TrackMetadata.FromAppleSession(input);if(track.DurationMs is null || string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))return [];
         try
         {
-            var search=await GetAsync("api/search/get/web?s="+Uri.EscapeDataString(track.Title+" "+track.Artist)+"&type=1&limit=30",token);
+            var search=await GetAsync("api/search/get?s="+Uri.EscapeDataString(track.Title+" "+track.Artist)+"&type=1&limit=30",token);
             using var json=JsonDocument.Parse(search);CheckCode(json.RootElement);
             if(!json.RootElement.TryGetProperty("result",out var result)||result.ValueKind!=JsonValueKind.Object||!result.TryGetProperty("songs",out var songs)||songs.ValueKind!=JsonValueKind.Array)return [];
             var candidates=new List<(long Id,Track Track)>();
@@ -74,7 +77,8 @@ public sealed class NetEaseTranslationProvider : ITranslationProvider,IDisposabl
                 var raw=await GetAsync($"api/song/lyric?id={item.Id}&lv=-1&kv=-1&tv=-1",token);using var lyrics=JsonDocument.Parse(raw);CheckCode(lyrics.RootElement);
                 string original=Nested(lyrics.RootElement,"lrc"),translation=Nested(lyrics.RootElement,"tlyric");
                 // No lyric/instrumental inference is made from an absent response.
-                if(original.Length>0)found.Add(new(item.Id,item.Track,original,translation,$"https://music.163.com/#/song?id={item.Id}"));
+                bool instrumental=NetEaseRecording.IsExplicitInstrumental(original);
+                if(original.Length>0)found.Add(new(item.Id,item.Track,instrumental?"":original,translation,$"https://music.163.com/#/song?id={item.Id}"){Instrumental=instrumental,InstrumentalEvidence=instrumental?original:null});
             }
             return found;
         }
@@ -82,10 +86,10 @@ public sealed class NetEaseTranslationProvider : ITranslationProvider,IDisposabl
     }
     static string Text(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object && e.TryGetProperty(name,out var v)&&v.ValueKind==JsonValueKind.String?v.GetString()??"":"";
     static string Nested(JsonElement e,string name)=>e.TryGetProperty(name,out var child)?Text(child,"lyric"):"";
-    static void CheckCode(JsonElement e)
+    void CheckCode(JsonElement e)
     {
         if(e.ValueKind!=JsonValueKind.Object || !e.TryGetProperty("code",out var code)||code.ValueKind!=JsonValueKind.Number||!code.TryGetInt32(out var n))throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");
-        if(n!=200)throw new LyricsProviderException($"中文译文来源未返回成功结果（{n}），未保存内容。",n);
+        if(n!=200){if(n is 405 or 429)next=DateTimeOffset.UtcNow.AddMinutes(1);throw new LyricsProviderException($"歌词与译文来源未返回成功结果（{n}），未保存内容。",n);}
     }
-    public void Dispose(){client.Dispose();gate.Dispose();}
+    public void Dispose(){client.Dispose();} // A cancelled request can still release its gate.
 }

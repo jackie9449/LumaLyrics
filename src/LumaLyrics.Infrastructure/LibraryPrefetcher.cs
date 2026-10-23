@@ -65,9 +65,10 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                     if(File.Exists(PausePath(databasePath))){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
                     if(selected is not null)
                     {
-                        repository.Save(item.Track,selected.Candidate.Content,$"LRCLIB #{selected.Candidate.Id} · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson);
+                        repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson);
                         repository.SetLibraryState(item,"Cached",selected.Assessment.Reason,selected.Candidate.Instrumental?"Instrumental":"Synced");Cached?.Invoke(item.Track);
                     }
+                    else if(candidates is LyricsLookupResult{UnavailableSources.Count:>0} partial)repository.SetLibraryState(item,"Error","部分来源暂不可用："+string.Join("、",partial.UnavailableSources)+"；可用来源没有提供通过检查的动态歌词。");
                     else repository.SetLibraryState(item,candidates.Count==0?"Missing":"Incomplete",candidates.Count==0?"来源无结果":"没有同时通过录音版本、动态时间轴及全文检查的候选");
                 }
                 catch(OperationCanceledException){throw;}
@@ -91,8 +92,9 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                 if(json.RootElement.TryGetProperty("Provider",out var source) && source.GetString()=="NetEase")
                 {
                     var saved=System.Text.Json.JsonSerializer.Deserialize<NetEaseOriginal>(binding.ProviderJson);
-                    if(saved is null || saved.Track is null || saved.Original!=binding.Raw || binding.Instrumental || binding.Plain)return false;
-                    return NetEaseTranslationProvider.RecordingMatches(track,saved.Track) && AutomaticLyricsMatcher.Assess(new(saved.Id,saved.Track,saved.Original,null,false)).Accepted;
+                    if(saved is null || saved.Track is null || saved.Original!=binding.Raw || saved.Instrumental!=binding.Instrumental || binding.Plain)return false;
+                    if(saved.Instrumental && !NetEaseRecording.IsExplicitInstrumental(saved.InstrumentalEvidence??""))return false;
+                    return NetEaseTranslationProvider.RecordingMatches(track,saved.Track) && AutomaticLyricsMatcher.Assess(new(saved.Id,saved.Track,saved.Instrumental?null:saved.Original,null,saved.Instrumental)).Accepted;
                 }
                 if(original.Instrumental!=binding.Instrumental)return false;
                 if(!AutomaticLyricsMatcher.Assess(original).Accepted)return false;

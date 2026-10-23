@@ -121,5 +121,21 @@ internal static class PersonalLibrarySnapshot
             }
             PersonalLibraryArchive.AddFile(staging,"state/translations.db","state",manifest);
         }
+        string reviews=Path.Combine(dataRoot,"lyrics-review");
+        if(Directory.Exists(reviews))
+        {
+            foreach(string folder in Directory.EnumerateDirectories(reviews))
+            {
+                token.ThrowIfCancellationRequested();string source=PersonalLibraryArchive.AssetPath(dataRoot,"lyrics-review/"+Path.GetFileName(folder)+"/review.json");
+                if(!File.Exists(source))continue;var review=LyricsReviewStore.Validate(source);
+                if(review.Id!=Path.GetFileName(folder))throw new InvalidDataException("校对记录目录与身份不一致。");
+                foreach(string name in review.ImageSha256 is null?new[]{"review.json"}:new[]{"review.json","capture.png"})
+                {
+                    string relative="lyrics-review/"+review.Id+"/"+name;
+                    string target=PersonalLibraryArchive.AssetPath(staging,relative);Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(PersonalLibraryArchive.AssetPath(dataRoot,relative),target);PersonalLibraryArchive.AddFile(staging,relative,"review",manifest);
+                }
+            }
+        }
     }
 }
