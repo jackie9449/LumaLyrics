@@ -20,9 +20,11 @@ internal sealed class GlassMaterialSurface : FrameworkElement
     protected override void OnRender(DrawingContext dc)
     {
         var a=appearance;if(a.Transparent || a.Opacity<=0 || ActualWidth<=0 || ActualHeight<=0)return;
-        var bounds=new Rect(0,0,ActualWidth,ActualHeight);double radius=Math.Min(a.Radius,Math.Min(bounds.Width,bounds.Height)/2);
+        var bounds=new Rect(0,0,ActualWidth,ActualHeight);double radius=a.ResolveCornerRadius(bounds.Width,bounds.Height);
         var shape=new RectangleGeometry(bounds,radius,radius);dc.PushClip(shape);
         dc.DrawRoundedRectangle(Solid(a.Background,a.Opacity),null,bounds,radius,radius);
+        // Every optical layer must also disappear continuously as the background reaches zero.
+        dc.PushOpacity(a.BackgroundEffectOpacity());
         bool liquid=a.Material=="liquid",frost=a.Material=="frost";
         if(liquid)
         {
@@ -52,7 +54,7 @@ internal sealed class GlassMaterialSurface : FrameworkElement
                 dc.DrawRectangle(new RadialGradientBrush(OverlaySurface.ColorOf(a.Accent),Colors.Transparent){Center=new(.98,1),GradientOrigin=new(.98,1),RadiusX=.8,RadiusY=1.5,Opacity=a.GlassIntensity*.16},null,bounds);
             if(a.Border)dc.DrawRoundedRectangle(null,new Pen(Solid("#FFFFFF",.16),1),Inset(bounds,.5),Math.Max(0,radius-.5),Math.Max(0,radius-.5));
         }
-        dc.Pop();
+        dc.Pop();dc.Pop();
     }
     static Rect Inset(Rect r,double value)=>new(value,value,Math.Max(0,r.Width-value*2),Math.Max(0,r.Height-value*2));
     static SolidColorBrush Solid(string value,double opacity){var brush=new SolidColorBrush(OverlaySurface.ColorOf(value)){Opacity=opacity};brush.Freeze();return brush;}

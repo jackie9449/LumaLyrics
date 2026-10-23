@@ -32,6 +32,7 @@ public sealed class AppSettings
     public bool OverlaySystemBlur { get; set; } = true;
     public bool OverlayBorder { get; set; } = true;
     public double OverlayCornerRadius { get; set; } = 24;
+    public double? OverlayCornerRatio { get; set; }
     public double OverlayPadding { get; set; } = 24;
     public double OverlayLineGap { get; set; } = 8;
     public double OverlayNextScale { get; set; } = .65;

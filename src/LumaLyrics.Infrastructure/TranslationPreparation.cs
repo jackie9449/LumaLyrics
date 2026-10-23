@@ -48,7 +48,7 @@ public sealed class TranslationPreparation(string root,ITranslationProvider prov
                 string hash=document is null?"":TranslationAlignment.Hash(document.Raw);
                 if(document?.Instrumental==true)translations.SetState(item,"Instrumental","已有明确纯音乐标记，无需译文。",hash);
                 else if(document is not null && TranslationAlignment.IsChinese(string.Join("\n",document.Groups.Where(g=>TranslationAlignment.IsLyricText(g.Text)).Select(g=>g.Text))))translations.SetState(item,"Chinese","原词以中文为主，无需中文翻译。",hash);
-                else if(document is not null && translations.Find(item.Track,document) is { } cached)translations.SetState(item,cached.Draft?"Draft":"Prepared",cached.Draft?"已有 AI 译稿，待校对。":"已有与当前原词一致的中文译文。",hash);
+                else if(document is not null && translations.Find(item.Track,document) is { } cached)translations.SetState(item,cached.Draft?"Draft":"Prepared",cached.Draft?"已有 AI 译文。":"已有与当前原词一致的中文译文。",hash);
                 else
                 {
                     try

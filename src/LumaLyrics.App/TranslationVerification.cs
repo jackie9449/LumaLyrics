@@ -66,10 +66,30 @@ public partial class MainWindow
                 var cached=coordinator.Translation!;translations.Save(track,cached with{Draft=true,Source="AI verification fixture",Review="AI 译稿 · 待校对",PreparedUtc=DateTimeOffset.UtcNow},true);
             }
             coordinator.RefreshTranslation();coordinator.SetTranslationVisibility(true,true);coordinator.SetTranslationVerificationSnapshot(track,48000);Tick();await Task.Delay(40);
-            checks["translation.aiDraftMarkedInMain"]=vm.LyricStatus.Contains("AI 译稿（待校对）") && translationBlocks[4].IsVisible;
-            checks["translation.aiDraftMarkedInFloating"]=overlay.LyricSurface.DraftNotice.Visibility==Visibility.Visible && overlay.LyricSurface.DraftNotice.Text=="AI 译稿 · 待校对";
-            coordinator.SetTranslationVisibility(true,false);await Task.Delay(40);
-            checks["translation.disabledFloatingHidesDraftNotice"]=overlay.LyricSurface.DraftNotice.Visibility==Visibility.Collapsed;
+            checks["translation.aiMainHasNoReviewBadge"]=!vm.LyricStatus.Contains("待校对") && translationBlocks[4].IsVisible;
+            checks["translation.aiFloatingHasNoReviewBadge"]=!Descendants<TextBlock>(overlay.LyricSurface).Any(b=>b.IsVisible && b.Text.Contains("待校对")) && overlay.LyricSurface.CurrentChinese.IsVisible;
+            checks["translation.privateProvenanceRetained"]=coordinator.Translation is{Draft:true,Review:"AI 译稿 · 待校对"};
+            preferences=new(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();preferences.SelectTranslationTab();await Task.Delay(40);
+            checks["translation.aiSettingsHasNoReviewBadge"]=!Descendants<TextBlock>(preferences.ChineseTranslations).Any(b=>b.Text.Contains("待校对")) && coordinator.TranslationStatus.Contains("AI 生成");
+            overlay.ToolbarPopup.IsOpen=true;await Task.Delay(40);
+            checks["translation.toolbarSwitchAvailableAboveLyrics"]=overlay.ChineseTranslationToggle.IsVisible && System.Windows.Automation.AutomationProperties.GetName(overlay.ChineseTranslationToggle)=="悬浮歌词中文译文开关" && overlay.Toolbar.PointToScreen(new()).Y<overlay.PointToScreen(new()).Y;
+            string unchangedTheme=settings.UiTheme;string unchangedChrome=overlay.Toolbar.Background.ToString();
+            var peer=new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(overlay.ChineseTranslationToggle);
+            var toggle=(System.Windows.Automation.Provider.IToggleProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle);
+            toggle.Toggle();await Task.Delay(40);
+            checks["translation.toolbarToggleOnlyChangesFloating"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks[4].IsVisible && vm.CurrentTranslation.Length==0;
+            checks["translation.toolbarTogglePersists"]=store.Load().ShowChineseTranslation && !store.Load().OverlayShowChineseTranslation;
+            var floatingSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="悬浮歌词中文译文开关");
+            checks["translation.toolbarToggleReflectsInOpenSettings"]=floatingSetting.IsChecked==false;
+            preferences.ChineseTranslations.SetVisibility(false,true);await Task.Delay(40);
+            checks["translation.settingsReflectsInToolbar"]=overlay.ChineseTranslationToggle.IsChecked==true && vm.CurrentTranslation.Length>0 && !settings.ShowChineseTranslation;
+            toggle.Toggle();await Task.Delay(40);
+            checks["translation.toolbarPreservesDisabledMainSwitch"]=!settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation;
+            checks["translation.toolbarPreservesThemes"]=settings.UiTheme==unchangedTheme && overlay.Toolbar.Background.ToString()==unchangedChrome;
+            toggle.Toggle();await Task.Delay(40);
+            VisualVerification.Save(overlay.Toolbar,Path.Combine(directory,"overlay-translation-toolbar.png"));
+            checks["translation.toolbarToggleRestoresTranslation"]=!settings.ShowChineseTranslation && vm.CurrentTranslation.Length>0;
+            preferences.Close();preferences=null;overlay.ToolbarPopup.IsOpen=false;
         }
         finally
         {

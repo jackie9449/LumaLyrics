@@ -13,7 +13,6 @@
     <TextBlock x:Name="NextLine" TextWrapping="Wrap" TextAlignment="Center"/>
    </Grid>
    <TextBlock x:Name="NextChinese" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,2,0,0"/>
-   <TextBlock x:Name="DraftNotice" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,6,0,0" FontSize="10"/>
   </StackPanel>
  </Grid>
 </UserControl>

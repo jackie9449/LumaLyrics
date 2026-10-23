@@ -75,21 +75,21 @@ public partial class MainWindow
             foreach(var theme in OverlayThemes.All.Where(t=>t.Appearance.Material is "liquid" or "frost"))
             {
                 string material=theme.Appearance.Material;
-                var appearance=theme.Appearance with{Radius=48,Animations=false};
+                var appearance=theme.Appearance with{CornerRatio=.8,Animations=false};
                 appearance.Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".initial");
                 checks["overlayCorners."+material+".roundedCompositedBackdrop"]=floating.BlurAccepted && floating.GlassHostVisible && floating.GlassHostInputTransparent;
                 await CheckComposition(material);
                 VisualVerification.Save(floating.LyricSurface,Path.Combine(directory,"overlay-"+material+"-rounded.png"));
                 var bitmap=VisualVerification.Render(floating.LyricSurface);int stride=bitmap.PixelWidth*4;var pixels=new byte[stride*bitmap.PixelHeight];bitmap.CopyPixels(pixels,stride,0);
                 checks["overlayCorners."+material+".wpfCornersTransparent"]=new[]{(0,0),(bitmap.PixelWidth-1,0),(0,bitmap.PixelHeight-1),(bitmap.PixelWidth-1,bitmap.PixelHeight-1)}.All(p=>pixels[p.Item2*stride+p.Item1*4+3]==0);
-                (appearance with{Width=540,FontSize=52,TwoLines=false,Radius=64}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".resizedSingleLine");
+                (appearance with{Width=540,FontSize=52,TwoLines=false,CornerRatio=1}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".resizedSingleLine");
                 floating.SetLocked(true,false);await Settle();Check(material+".locked");
                 floating.SetLocked(false,false);await Settle();Check(material+".unlocked");
                 floating.Hide();floating.Show();await Settle();Check(material+".reshown");
                 (appearance with{SystemBlur=false}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".blurDisabled");
                 appearance.Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".blurReenabled");
-                (appearance with{Radius=0}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".zeroRadius",false);
-                (appearance with{Radius=24}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".roundedAfterSquare");
+                (appearance with{CornerRatio=0}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".zeroRadius",false);
+                (appearance with{CornerRatio=.4}).Apply(fixture);floating.ApplyStyle();await Settle();Check(material+".roundedAfterSquare");
                 checks["overlayCorners."+material+".roundedAfterSquareKeepsBlur"]=floating.BlurAccepted && fixture.OverlaySystemBlur;
                 await CheckComposition(material+"-roundtrip");
                 CornerNative.GetLayeredWindowAttributes(floating.GlassHostHandle,out _,out byte fullAlpha,out _);

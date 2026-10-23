@@ -81,7 +81,8 @@ internal sealed class DesktopGlassHost : IDisposable
         if(!GetWindowRect(NativeWindow.Handle(foreground),out var bounds))throw new Win32Exception();
         int width=bounds.Right-bounds.Left,height=bounds.Bottom-bounds.Top;if(width<=0 || height<=0){Hide();return;}
         var dpi=VisualTreeHelper.GetDpi(foreground);
-        float rx=(float)Math.Min(appearance.Radius*dpi.DpiScaleX,width/2d),ry=(float)Math.Min(appearance.Radius*dpi.DpiScaleY,height/2d);
+        double radius=appearance.ResolveCornerRadius(foreground.ActualWidth,foreground.ActualHeight);
+        float rx=(float)Math.Min(radius*dpi.DpiScaleX,width/2d),ry=(float)Math.Min(radius*dpi.DpiScaleY,height/2d);
         var visual=(width,height,rx,ry);
         if(visualSize!=visual)
         {
@@ -89,7 +90,7 @@ internal sealed class DesktopGlassHost : IDisposable
         }
         // Constant window alpha blends the blurred substrate with the desktop. Sprite alpha
         // on a legacy layered HWND would instead expose its black redirection background.
-        byte nextOpacity=(byte)Math.Round(255*Math.Clamp((appearance.Material=="frost"?.98:.78)*foreground.Opacity,0,1));
+        byte nextOpacity=(byte)Math.Round(255*Math.Clamp((appearance.Material=="frost"?.98:.78)*appearance.BackgroundEffectOpacity()*foreground.Opacity,0,1));
         if(nextOpacity!=opacity){if(!SetLayeredWindowAttributes(handle,0,nextOpacity,2))throw new Win32Exception();opacity=nextOpacity;}
         var size=(width,height,(int)Math.Ceiling(rx),(int)Math.Ceiling(ry));
         if(regionSize!=size)

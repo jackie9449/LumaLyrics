@@ -8,7 +8,7 @@ public sealed class OverlayThemeSessionTests
     {
         Font = "Test Font " + n, FontSize = 35 + n, Weight = "Bold", Alignment = n % 2 == 0 ? "Left" : "Right",
         Color = "#D9B8FA", Background = "#202B40", Accent = "#B8DFFF", Opacity = .31 + n * .03,
-        Width = 860 + n * 20, Radius = 15 + n, Padding = 17 + n, LineGap = 3 + n,
+        Width = 860 + n * 20, Radius = 15 + n, CornerRatio=.2+n*.07, Padding = 17 + n, LineGap = 3 + n,
         NextScale = .55, NextOpacity = .45, ShadowStrength = .35, GlassIntensity = .4 + n * .02,
         TwoLines = n % 2 == 0, Shadow = false, AdaptiveContrast = false, Transparent = n == 7,
         SystemBlur = false, Border = false, Animations = false, TransitionMs = 300 + n * 10

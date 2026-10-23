@@ -11,6 +11,7 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
 {
     readonly PlaybackCoordinator coordinator;readonly CheckBox main,floating;readonly TextBlock progress=new(),source=new();
     readonly Button prepare,pause,retry,import;
+    bool syncing;
     public ChineseTranslationPanel(PlaybackCoordinator coordinator)
     {
         this.coordinator=coordinator;
@@ -31,16 +32,19 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         pause=DialogUi.Button(actions,"暂停",coordinator.PauseTranslationPreparation);
         retry=DialogUi.Button(actions,"重试待补齐",()=>_=coordinator.StartTranslationPreparationAsync(true));
         AddText("准备时向网易云音乐公开接口发送歌名和歌手，并在本机核对专辑、版本、时长及完整原文。来源没有译文或对应未通过时保持留空。",11);
-        AddText("来源译文与 AI 译稿分别统计。AI 译稿明确显示“待校对”；社区译文的逐行检查也不代表语义已经人工逐首校对。所有译文保存在个人资料中，可单独导出。",11);
+        AddText("来源译文与 AI 译文分别统计，可在当前歌曲查看来源。所有译文保存在个人资料中，可单独导出。",11);
         AddText("当前歌曲",15);source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=21;ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(source);
         import=DialogUi.Button(this,"导入当前歌曲的中文 LRC…",Import);
         coordinator.Updated+=Refresh;Refresh();
     }
     void AddText(string text,double size)
     {var label=new TextBlock{Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,size>=15?9:7)};if(size<15)ThemeManager.Bind(label,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(label);}
-    void VisibilityChanged(object s,RoutedEventArgs e)=>coordinator.SetTranslationVisibility(main.IsChecked==true,floating.IsChecked==true);
+    void VisibilityChanged(object s,RoutedEventArgs e){if(!syncing)coordinator.SetTranslationVisibility(main.IsChecked==true,floating.IsChecked==true);}
     void Refresh()
     {
+        syncing=true;
+        try{main.IsChecked=coordinator.Settings.ShowChineseTranslation;floating.IsChecked=coordinator.Settings.OverlayShowChineseTranslation;}
+        finally{syncing=false;}
         progress.Text=coordinator.TranslationProgress.ToString();source.Text=coordinator.TranslationStatus;
         bool running=coordinator.TranslationProgress.Running;prepare.IsEnabled=retry.IsEnabled=!running&&coordinator.Settings.OnlineLookup;pause.IsEnabled=running;
         import.IsEnabled=coordinator.Document is {IsSynced:true,Instrumental:false};

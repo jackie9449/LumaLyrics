@@ -8,7 +8,7 @@ public sealed record TranslationQueueItem(string Key,Track Track,string Original
 public sealed record TranslationProgress(int Total,int Prepared,int Chinese,int Instrumental,int MissingOriginal,int MissingTranslation,int Mismatch,int Errors,int Pending,bool Running,string Message)
 {
     public int Drafts {get;init;}
-    public override string ToString()=>$"资料库 {Total} 首 · 来源译文 {Prepared} · AI 译稿 {Drafts}（待校对）\n中文原词 {Chinese} · 纯音乐 {Instrumental} · 待处理 {Pending}\n原词待确认 {MissingOriginal} · 暂无完整译文 {MissingTranslation} · 对应待核 {Mismatch} · 网络待重试 {Errors}\n{Message}";
+    public override string ToString()=>$"资料库 {Total} 首 · 来源译文 {Prepared} · AI 译文 {Drafts}\n中文原词 {Chinese} · 纯音乐 {Instrumental} · 待处理 {Pending}\n原词待确认 {MissingOriginal} · 暂无完整译文 {MissingTranslation} · 对应待核 {Mismatch} · 网络待重试 {Errors}\n{Message}";
 }
 public sealed record StoredTranslation(Track Track,ChineseTranslation Translation,bool Manual);
 

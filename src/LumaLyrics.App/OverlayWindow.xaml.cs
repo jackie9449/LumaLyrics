@@ -16,6 +16,7 @@ public partial class OverlayWindow : Window
     readonly DispatcherTimer contrastTimer=new(){Interval=TimeSpan.FromMilliseconds(400)};
     bool appearanceEditing,visibleBeforeEditing,visibilityPreferenceBeforeEditing;
     bool interactiveMove,closed;
+    bool syncingTranslationToggle=true;
     HwndSource? nativeSource;
     double opacityBeforeEditing;
     OverlayAppearance? previewAppearance;
@@ -33,7 +34,7 @@ public partial class OverlayWindow : Window
     public bool BlurAccepted=>backdrop.Accepted;
     public OverlayWindow(MainWindow owner,PlayerViewModel vm,AppSettings settings)
     {
-        InitializeComponent(); this.owner=owner; this.settings=settings; DataContext=vm;backdrop=new(this);
+        InitializeComponent(); this.owner=owner; this.settings=settings; DataContext=vm;backdrop=new(this);RefreshTranslationToggle();
         ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new(new Point(Math.Max(0,target.Width-popup.Width),-popup.Height-4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical),new(new Point(Math.Max(0,target.Width-popup.Width),target.Height+4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical)];
         SourceInitialized+=(_,_)=>{NativeWindow.NoActivate(this);nativeSource=HwndSource.FromHwnd(NativeWindow.Handle(this));nativeSource.AddHook(MoveHook);};
         Loaded+=(_,_)=> {var left=settings.OverlayLeft;var top=settings.OverlayTop;ApplyStyle();UpdateLayout();NativeWindow.Place(this,left,top,true,DefaultBottomInset());placed=true;RememberPosition();};
@@ -43,8 +44,8 @@ public partial class OverlayWindow : Window
         toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver)ToolbarPopup.IsOpen=false;};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible){ToolbarPopup.IsOpen=false;toolbarDelay.Stop();}UpdateAdaptiveText();backdrop.Refresh();};
         LocationChanged+=(_,_)=> {if(placed)RememberPosition();backdrop.Refresh();};
-        SizeChanged+=(_,_)=> { if(placed) {settings.OverlayWidth=Width;backdrop.RoundRegion(CurrentAppearance.Radius);}backdrop.Refresh();};
-        DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{backdrop.RoundRegion(CurrentAppearance.Radius);backdrop.Refresh();}));
+        SizeChanged+=(_,_)=> { if(placed) {settings.OverlayWidth=Width;RoundRegion();}backdrop.Refresh();};
+        DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{RoundRegion();backdrop.Refresh();}));
         contrastTimer.Tick+=(_,_)=>UpdateAdaptiveText();
         Closed+=(_,_)=>{closed=true;nativeSource?.RemoveHook(MoveHook);nativeSource=null;toolbarDelay.Stop();contrastTimer.Stop();ToolbarPopup.IsOpen=false;backdrop.Dispose();};
     }
@@ -71,8 +72,19 @@ public partial class OverlayWindow : Window
         ThemeManager.ApplyOverlayResources(Toolbar,a);
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
         Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(OverlayContrast.Paint(a,darkAdaptiveText),settings.ReduceMotion);backdrop.Apply(a);
-        if(IsLoaded) {UpdateLayout();backdrop.RoundRegion(a.Radius);if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
+        if(IsLoaded) {UpdateLayout();RoundRegion();if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
         ApplyInstrumentalState();
+    }
+    void RoundRegion()=>backdrop.RoundRegion(CurrentAppearance.ResolveCornerRadius(ActualWidth,ActualHeight));
+    internal void RefreshTranslationToggle()
+    {
+        syncingTranslationToggle=true;
+        try{ChineseTranslationToggle.IsChecked=settings.OverlayShowChineseTranslation;}
+        finally{syncingTranslationToggle=false;}
+    }
+    void TranslationToggled(object sender,RoutedEventArgs e)
+    {
+        e.Handled=true;if(!syncingTranslationToggle)owner.SetOverlayChineseTranslation(ChineseTranslationToggle.IsChecked==true);
     }
     void UpdateAdaptiveText()
     {

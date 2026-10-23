@@ -15,10 +15,9 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
     public string Offset { get => offset; set => Set(ref offset,value); }
     public string Current { get => current; set => Set(ref current,value); }
     public string Next { get => next; set => Set(ref next,value); }
-    string currentTranslation="",nextTranslation="",translationNotice="";
+    string currentTranslation="",nextTranslation="";
     public string CurrentTranslation {get=>currentTranslation;set=>Set(ref currentTranslation,value);}
     public string NextTranslation {get=>nextTranslation;set=>Set(ref nextTranslation,value);}
-    public string TranslationNotice {get=>translationNotice;set=>Set(ref translationNotice,value);}
     public string Quality { get => quality; set => Set(ref quality,value); }
     string library="资料库：等待扫描";
     public string Library {get=>library;set=>Set(ref library,value);}

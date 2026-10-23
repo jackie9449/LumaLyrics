@@ -26,23 +26,23 @@ public partial class MainWindow
             editor.FontPicker.SelectedIndex = index; Slider(editor, "主歌词字号").Value = size;
             Color(editor, "文字颜色").Text = index == 1 ? "#493D34" : "#D9B8FA";
             editor.SelectLayoutTab(); editor.UpdateLayout();
-            Slider(editor, "圆角").Value = radius; Slider(editor, "背景不透明度").Value = opacity;
+            Slider(editor, "圆角比例").Value = radius; Slider(editor, "背景不透明度").Value = opacity;
             Slider(editor, "桌面歌词宽度").Value = width; Color(editor, "背景底色").Text = background;
         }
         static void Reset(AppearanceWindow editor) => Descendants<Button>(editor).Single(b => b.Content as string == "重置当前主题").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         try
         {
             settings.OverlayThemeProfiles = [];
-            var legacy = OverlayThemes.All[0].Appearance with { Radius = 37, Opacity = .29, FontSize = 43, Background = "#203040" };
+            var legacy = (OverlayThemes.All[0].Appearance with { Radius = 37, CornerRatio=null, Opacity = .29, FontSize = 43, Background = "#203040" }).Normalize();
             legacy.Apply(settings); ShowAppearance(this); await Settle(); var editor = appearanceWindow!;
             Select(editor, OverlayThemes.All[1]); Select(editor, OverlayThemes.All[0]);
             checks["themeMemory.legacyActiveCustomizationRestored"] = OverlayAppearance.From(settings) == legacy;
-            Customize(editor, 0, 43, 37, .29, 980, "#203040");
+            Customize(editor, 0, 43, .37, .29, 980, "#203040");
             overlay.Width = 1020; overlay.UpdateLayout(); await Settle();
             checks["themeMemory.directResizeUpdatesLiveWidth"] = settings.OverlayWidth == 1020;
             var liquid = OverlayAppearance.From(settings);
-            Select(editor, OverlayThemes.All[1]); Customize(editor, 1, 34, 18, .71, 740, "#E6DDD0"); var frost = OverlayAppearance.From(settings);
-            Select(editor, OverlayThemes.All[2]); Customize(editor, 2, 39, 44, .88, 900, "#CCEEDD"); var material = OverlayAppearance.From(settings);
+            Select(editor, OverlayThemes.All[1]); Customize(editor, 1, 34, .18, .71, 740, "#E6DDD0"); var frost = OverlayAppearance.From(settings);
+            Select(editor, OverlayThemes.All[2]); Customize(editor, 2, 39, .44, .88, 900, "#CCEEDD"); var material = OverlayAppearance.From(settings);
             var expected = new[] { liquid, frost, material };
             for (int i = 0; i < expected.Length; i++)
             {
@@ -61,7 +61,7 @@ public partial class MainWindow
                 Select(editor, OverlayThemes.All[i]); checks[$"themeMemory.reopenRestores.{i}"] = OverlayAppearance.From(settings) == expected[i];
             }
             Select(editor, OverlayThemes.All[1]); Reset(editor); var reset = OverlayAppearance.From(settings);
-            checks["themeMemory.resetUsesPresetMaterial"] = reset.Background == OverlayThemes.All[1].Appearance.Background && reset.Radius == OverlayThemes.All[1].Appearance.Radius && reset.Opacity == OverlayThemes.All[1].Appearance.Opacity;
+            checks["themeMemory.resetUsesPresetMaterial"] = reset.Background == OverlayThemes.All[1].Appearance.Background && reset.CornerRatio == OverlayThemes.All[1].Appearance.CornerRatio && reset.Opacity == OverlayThemes.All[1].Appearance.Opacity;
             checks["themeMemory.resetRetainsTypography"] = reset.Font == frost.Font && reset.FontSize == frost.FontSize && reset.Width == frost.Width;
             Select(editor, OverlayThemes.All[0]); checks["themeMemory.resetLeavesOtherThemeIntact"] = OverlayAppearance.From(settings) == liquid;
             Customize(editor, 3, 52, 59, .91, 1100, "#334455"); editor.Close(); await Settle(); persisted = store.Load();

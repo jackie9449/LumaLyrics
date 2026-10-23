@@ -109,7 +109,8 @@ public partial class MainWindow : Window
         vm.Status=s is null?"等待 Apple Music":$"已连接 · {(s.Status==PlayState.Playing?"正在播放":s.Status==PlayState.Paused?"已暂停":"已停止")}";
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=s?.CanSeek==true;
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
-        vm.LyricStatus=coordinator.LyricsStatus+(settings.ShowChineseTranslation && coordinator.Translation?.Draft==true?" · AI 译稿（待校对）":"");vm.Duration=s?.Track.DurationMs ?? 1;
+        vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
+        overlay.RefreshTranslationToggle();
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
@@ -141,6 +142,7 @@ public partial class MainWindow : Window
         if(sameDocument){manualUntil=browsingUntil;scrollProgrammatically=true;LyricsScroll.ScrollToVerticalOffset(previousScroll);scrollProgrammatically=false;}
         else{LyricsScroll.ScrollToTop();manualUntil=DateTime.MinValue;}
     }
+    internal void SetOverlayChineseTranslation(bool enabled)=>coordinator.SetTranslationVisibility(settings.ShowChineseTranslation,enabled);
     void Tick()
     {
         var s=coordinator.Snapshot; var p=coordinator.Position;
@@ -164,7 +166,6 @@ public partial class MainWindow : Window
         bool translate=settings.OverlayShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
         vm.CurrentTranslation=translate && index>=0?coordinator.Translation?.TextAt(index)??"":"";
         vm.NextTranslation=translate && index+1<displayed!.Groups.Count?coordinator.Translation?.TextAt(index+1)??"":"";
-        vm.TranslationNotice=translate && coordinator.Translation?.Draft==true && (vm.CurrentTranslation.Length>0 || vm.NextTranslation.Length>0)?"AI 译稿 · 待校对":"";
         if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=coordinator.LyricsStatus;
         var desired=s?.Status==PlayState.Playing && (IsVisible||overlay.IsVisible)?33:500;
         if(timer.Interval.TotalMilliseconds!=desired)timer.Interval=TimeSpan.FromMilliseconds(desired);

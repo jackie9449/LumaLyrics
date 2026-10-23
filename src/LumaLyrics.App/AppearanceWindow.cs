@@ -96,14 +96,14 @@ public sealed class AppearanceWindow : Window
         AddCheck(layout.Left,"transparent","完全透明背景",a=>a with{Transparent=checks["transparent"].IsChecked==true});
         AddCheck(layout.Right,"blur","系统背景模糊（玻璃主题）",a=>a with{SystemBlur=checks["blur"].IsChecked==true});
         AddColor(layout.Left,"background","背景底色",a=>a.Background,(a,v)=>a with{Background=v});
-        AddSlider(layout.Right,"opacity","背景不透明度",0,1,.01,a=>a with{Opacity=sliders["opacity"].Value},true);
+        AddSlider(layout.Right,"opacity","背景不透明度",0,1,.001,a=>a with{Opacity=sliders["opacity"].Value},true);
         AddSlider(layout.Left,"glass","材质高光 / 渐层强度",0,1,.05,a=>a with{GlassIntensity=sliders["glass"].Value},true);
-        AddSlider(layout.Right,"radius","圆角",0,64,1,a=>a with{Radius=sliders["radius"].Value});
+        AddSlider(layout.Right,"radius","圆角比例",0,1,.01,a=>a with{CornerRatio=sliders["radius"].Value},true);
         AddSlider(layout.Left,"width","桌面歌词宽度",360,1800,20,a=>a with{Width=sliders["width"].Value});
         AddSlider(layout.Right,"padding","卡片留白",8,56,1,a=>a with{Padding=sliders["padding"].Value});
         AddSlider(layout.Left,"gap","两行间距",0,36,1,a=>a with{LineGap=sliders["gap"].Value});
         AddCheck(layout.Right,"border","精细边框与玻璃轮廓",a=>a with{Border=checks["border"].IsChecked==true});
-        layout.Left.Children.Add(Label("透明度只影响背景，文字始终清晰。",11,"#8E99AE"));
+        layout.Left.Children.Add(Label("不透明度同时控制背景模糊、高光和边框，文字保持清晰。圆角 100% 为短边一半的圆角半径。",11,"#8E99AE"));
         var footer=new Grid{Margin=new(0,18,0,0)};Grid.SetRow(footer,2);root.Children.Add(footer);footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         var info=new StackPanel{VerticalAlignment=VerticalAlignment.Center};status.FontSize=10;ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.TextWrapping=TextWrapping.Wrap;info.Children.Add(status);info.Children.Add(validation);footer.Children.Add(info);
         var actions=new StackPanel{Orientation=Orientation.Horizontal};Grid.SetColumn(actions,1);footer.Children.Add(actions);
@@ -138,8 +138,9 @@ public sealed class AppearanceWindow : Window
     {
         var row=new DockPanel();var value=values[id]=Label("",11,"#C7B8FF");value.HorizontalAlignment=HorizontalAlignment.Right;DockPanel.SetDock(value,Dock.Right);row.Children.Add(value);row.Children.Add(Label(label));panel.Children.Add(row);
         var slider=sliders[id]=new(){Minimum=min,Maximum=max,TickFrequency=step,SmallChange=step,LargeChange=step*5,IsSnapToTickEnabled=true,Margin=new(0,4,0,19)};AutomationProperties.SetName(slider,label);panel.Children.Add(slider);
-        slider.ValueChanged+=(_,_)=>{value.Text=percent?$"{slider.Value:P0}":$"{slider.Value:0} {(id=="transition"?"ms":"px")}";if(!syncing)Change(change);};
+        slider.ValueChanged+=(_,_)=>{value.Text=FormatValue(id,slider.Value,percent);if(!syncing)Change(change);};
     }
+    static string FormatValue(string id,double value,bool percent)=>percent?(id=="opacity"?$"{value:P1}":$"{value:P0}"):$"{value:0} {(id=="transition"?"ms":"px")}";
     void AddCheck(Panel panel,string id,string text,Func<OverlayAppearance,OverlayAppearance> change)
     {
         var check=checks[id]=new(){Content=text,FontSize=12,Margin=new(0,6,0,18)};panel.Children.Add(check);check.Checked+=(_,_)=>{if(!syncing)Change(change);};check.Unchecked+=(_,_)=>{if(!syncing)Change(change);};
@@ -168,8 +169,8 @@ public sealed class AppearanceWindow : Window
         syncing=true;
         themes.SelectedItem=themes.Items.Cast<ListBoxItem>().FirstOrDefault(x=>((OverlayTheme)x.Tag).Name==current.Preset);
         font.SelectedItem=current.Font;weight.SelectedIndex=Array.IndexOf(new[]{"Normal","Medium","SemiBold","Bold"},current.Weight);alignment.SelectedIndex=Array.IndexOf(new[]{"Left","Center","Right"},current.Alignment);
-        var data=new Dictionary<string,double>{{"size",current.FontSize},{"nextScale",current.NextScale},{"nextOpacity",current.NextOpacity},{"shadowStrength",current.ShadowStrength},{"opacity",current.Opacity},{"glass",current.GlassIntensity},{"radius",current.Radius},{"width",current.Width},{"padding",current.Padding},{"gap",current.LineGap},{"transition",current.TransitionMs}};
-        foreach(var (id,value) in data){sliders[id].Value=value;values[id].Text=id is "nextScale" or "nextOpacity" or "shadowStrength" or "opacity" or "glass"?$"{value:P0}":$"{value:0} {(id=="transition"?"ms":"px")}";}
+        var data=new Dictionary<string,double>{{"size",current.FontSize},{"nextScale",current.NextScale},{"nextOpacity",current.NextOpacity},{"shadowStrength",current.ShadowStrength},{"opacity",current.Opacity},{"glass",current.GlassIntensity},{"radius",current.CornerRatio!.Value},{"width",current.Width},{"padding",current.Padding},{"gap",current.LineGap},{"transition",current.TransitionMs}};
+        foreach(var (id,value) in data){sliders[id].Value=value;values[id].Text=FormatValue(id,value,id is "nextScale" or "nextOpacity" or "shadowStrength" or "opacity" or "glass" or "radius");}
         colors["text"].Text=current.Color;colors["background"].Text=current.Background;colors["accent"].Text=current.Accent;
         checks["two"].IsChecked=current.TwoLines;checks["shadow"].IsChecked=current.Shadow;checks["transparent"].IsChecked=current.Transparent;checks["blur"].IsChecked=current.SystemBlur;checks["border"].IsChecked=current.Border;checks["animations"].IsChecked=current.Animations;
         checks["adaptive"].IsChecked=current.AdaptiveContrast;
