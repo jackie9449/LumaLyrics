@@ -26,6 +26,7 @@ Copy-Item -LiteralPath docs/library-assets.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/personal-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/glass-materials.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/theme-memory.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/theme-memory.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/music-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
