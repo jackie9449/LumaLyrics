@@ -63,7 +63,7 @@ internal static partial class AppleMusicLibraryHandoff
                     void Visit(AutomationElement element,int depth)
                     {
                         token.ThrowIfCancellationRequested();if(depth>20 || --remaining<0)return;
-                        string name=Name(element);rows.Add(new{depth,type=element.Properties.ControlType.ValueOrDefault.ToString(),id=element.Properties.AutomationId.ValueOrDefault,name=name[..Math.Min(240,name.Length)],scroll=element.Patterns.Scroll.IsSupported,itemContainer=element.Patterns.ItemContainer.IsSupported});
+                        string name=Name(element);rows.Add(new{depth,type=element.Properties.ControlType.ValueOrDefault.ToString(),id=element.Properties.AutomationId.ValueOrDefault,name=name[..Math.Min(240,name.Length)],scroll=element.Patterns.Scroll.IsSupported,itemContainer=element.Patterns.ItemContainer.IsSupported,invoke=element.Patterns.Invoke.IsSupported,select=element.Patterns.SelectionItem.IsSupported});
                         for(var child=walker.GetFirstChild(element);child is not null && remaining>0;child=walker.GetNextSibling(child))Visit(child,depth+1);
                     }
                     Visit(root,0);
@@ -81,7 +81,7 @@ internal static partial class AppleMusicLibraryHandoff
                                 if(item is null){end=true;break;}
                                 var names=RawNames(automation,item,token);
                                 if(names.Length==0 && item.Patterns.VirtualizedItem.IsSupported){item.Patterns.VirtualizedItem.Pattern.Realize();names=RawNames(automation,item,token);}
-                                items.Add(new{name=Name(item),names});previous=item;
+                                items.Add(new{name=Name(item),names,invoke=item.Patterns.Invoke.IsSupported,select=item.Patterns.SelectionItem.IsSupported});previous=item;
                             }
                         }
                         catch(Exception ex){failure=ex.GetType().Name+": "+ex.Message;}

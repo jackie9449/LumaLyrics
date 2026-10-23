@@ -18,7 +18,7 @@ public partial class MainWindow
         var checks=new Dictionary<string,object?>();
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-sidebar"))
         {
-            await VerifyPlaybackSidebarAsync(directory,checks);await VerifyNativeHandoffReadinessAsync(checks);
+            await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-queue"))
@@ -178,7 +178,7 @@ public partial class MainWindow
         await VerifyOverlayIsolationAsync(directory,checks);
         await VerifyMusicLibraryAsync(directory,checks);
         await VerifyPlaybackQueueAsync(directory,checks);
-        await VerifyPlaybackSidebarAsync(directory,checks);await VerifyNativeHandoffReadinessAsync(checks);
+        await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
         await VerifyTranslationsAsync(directory,checks);
         await VerifyOverlayAdjustmentsAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));

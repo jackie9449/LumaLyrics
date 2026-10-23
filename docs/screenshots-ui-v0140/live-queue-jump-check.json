@@ -1,0 +1,19 @@
+{
+  "version": "0.14.0",
+  "date": "2026-10-23",
+  "clientVersion": "1.1540.23042.0",
+  "checks": {
+    "nativeQueuePositionConfirmed": true,
+    "secondRepeatedOccurrenceConfirmed": true,
+    "sameRecordingAsCurrentDistinguished": true,
+    "originalQueueRetainedAfterSkippingRepeatedInsertions": true,
+    "lastOccurrenceConfirmed": true,
+    "explicitEmptyQueueRetainsCurrent": true,
+    "staleSelectionRejected": true,
+    "staleSelectionPreservesQueue": true,
+    "successfulJumpsMinimizeAppleMusic": true,
+    "originalRecordingRestored": true,
+    "originalRemainingQueueRestored": true,
+    "originalPauseStateRestored": true
+  }
+}

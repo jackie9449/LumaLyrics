@@ -9,6 +9,7 @@ public sealed class AppThemeTests
         Assert.Equal("liquid", settings.UiTheme);
         Assert.Equal("暖纸留白", settings.OverlayPreset);
         Assert.Equal(44, settings.OverlayFontSize);
+        Assert.True(settings.ShowPlaybackQueue);
     }
 
     [Theory]

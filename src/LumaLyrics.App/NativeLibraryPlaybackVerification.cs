@@ -6,6 +6,7 @@ namespace LumaLyrics.App;
 public partial class MainWindow
 {
     sealed record QueueRestoreVerification(MusicQueueSnapshot Baseline,MusicQueueSnapshot Expected);
+    sealed record QueueBaselineVerification(MusicQueueSnapshot Queue,LumaLyrics.Core.PlayState State);
     // Explicit integration mode only. Reports contain private library metadata and must
     // stay in the isolated directory selected by the caller, never in software docs.
     async Task VerifyNativeLibraryPlaybackAsync(string directory,string[] args)
@@ -14,6 +15,7 @@ public partial class MainWindow
         void Trace(string stage,object? value){lock(traceGate)File.AppendAllText(traceFile,JsonSerializer.Serialize(new{utc=DateTimeOffset.UtcNow,stage,value})+Environment.NewLine);}
         string? Argument(string name){int index=Array.IndexOf(args,name);return index>=0 && index+1<args.Length?args[index+1]:null;}
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
         if(args.Contains("--native-start-visible"))Trace("preparedVisible",new{visible=await AppleMusicLibraryHandoff.PrepareVisibleVerificationAsync(timeout.Token)});
         Trace("initial",await Task.Run(AppleMusicLibraryHandoff.Inspect,timeout.Token).WaitAsync(TimeSpan.FromSeconds(12),timeout.Token));
         if(args.Contains("--native-inspect-queue")){Trace("queue",await AppleMusicLibraryHandoff.InspectQueueAsync(timeout.Token));return;}
@@ -29,7 +31,53 @@ public partial class MainWindow
             Trace("queueRestored",new{restored=await AppleMusicLibraryHandoff.RestoreQueueVerificationAsync(request.Baseline,request.Expected,timeout.Token)});return;
         }
         if(args.Contains("--native-inspect-only"))return;
+        if(args.Contains("--native-play-queue"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);await Task.Delay(200,timeout.Token);
+            var queueBridge=new AppleMusicPlaybackBridge(coordinator,Trace);
+            var baseline=await queueBridge.ReadQueueAsync(timeout.Token);Trace("queuePlaybackBefore",new{queue=baseline,actual=coordinator.Source.Latest});
+            int index=int.TryParse(Argument("--native-queue-index"),out int selectedIndex)?selectedIndex:1;
+            var selection=new MusicQueueSelection(baseline,index);var queueResult=await queueBridge.PlayQueueAsync(selection,timeout.Token);
+            var after=await queueBridge.ReadQueueAsync(timeout.Token);Trace("queuePlaybackResult",new{result=queueResult,occurrenceConfirmed=MusicPlaybackQueue.ConfirmsJump(selection,after),actual=coordinator.Source.Latest,after});
+            if(queueResult.Confirmed && args.Contains("--native-stale-queue-check"))
+            {
+                var stale=await queueBridge.PlayQueueAsync(selection,timeout.Token);var retained=await queueBridge.ReadQueueAsync(timeout.Token);
+                Trace("staleQueueResult",new{stale,queuePreserved=after.Current==retained.Current && after.Upcoming.SequenceEqual(retained.Upcoming)});
+            }
+            if(queueResult.Confirmed && args.Contains("--native-pause-after")){bool paused=await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);Trace("paused",new{paused,actual=coordinator.Source.Latest});}
+            return;
+        }
+        if(args.Contains("--native-probe-queue-selection"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);await Task.Delay(200,timeout.Token);
+            var baseline=await AppleMusicLibraryHandoff.ReadQueueAsync(timeout.Token,Trace);
+            int index=int.TryParse(Argument("--native-queue-index"),out int selectedIndex)?selectedIndex:1;
+            var selection=new MusicQueueSelection(baseline,index);var context=new AppleMusicLibraryHandoff.HandoffContext();
+            var failure=await AppleMusicLibraryHandoff.SelectQueueAsync(selection,timeout.Token,context,Trace);Trace("queueSelectionProbe",new{index,failure});
+            await Task.Delay(2500,timeout.Token);await coordinator.Source.RefreshAsync();
+            var after=await AppleMusicLibraryHandoff.ReadQueueAsync(timeout.Token,Trace);bool confirmed=MusicPlaybackQueue.ConfirmsJump(selection,after);
+            Trace("queueSelectionProbeResult",new{confirmed,actual=coordinator.Source.Latest,after});
+            await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(context,confirmed,Trace);return;
+        }
         var catalog=await Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(timeout.Token),timeout.Token);
+        if(args.Contains("--native-restore-queue-baseline"))
+        {
+            var baseline=JsonSerializer.Deserialize<QueueBaselineVerification>(File.ReadAllText(Path.Combine(directory,"queue-baseline-input.json")))??throw new InvalidDataException("Missing private original queue baseline.");
+            var original=baseline.Queue.Current??throw new InvalidDataException("Missing original current recording.");
+            var albums=MusicLibraryAlbums.Group(catalog.Songs).Where(a=>a.Songs.Any(s=>MusicLibraryPlayback.IsRequestedRecording(original,s.Track))).ToArray();
+            if(albums.Length!=1)throw new InvalidDataException("The original recording does not identify a unique native album.");
+            await coordinator.Source.StartAsync(timeout.Token);var restoreBridge=new AppleMusicPlaybackBridge(coordinator,Trace);
+            var played=await restoreBridge.PlayAlbumAsync(albums[0],timeout.Token);if(!played.Confirmed)throw new InvalidOperationException("The original album could not be confirmed.");
+            var queue=await restoreBridge.ReadQueueAsync(timeout.Token);
+            if(queue.Current is null || !MusicLibraryPlayback.IsRequestedRecording(original,queue.Current))
+            {
+                var indexes=queue.Upcoming.Select((entry,index)=>(entry,index)).Where(p=>MusicLibraryPlayback.IsRequestedRecording(original,p.entry.Track) && queue.Upcoming.Skip(p.index+1).SequenceEqual(baseline.Queue.Upcoming)).Select(p=>p.index).ToArray();
+                if(indexes.Length!=1)throw new InvalidDataException("The original recording and remaining sequence could not be uniquely restored.");
+                var restored=await restoreBridge.PlayQueueAsync(new(queue,indexes[0]),timeout.Token);if(!restored.Confirmed)throw new InvalidOperationException("The original queue position could not be confirmed.");
+            }
+            bool state=baseline.State==LumaLyrics.Core.PlayState.Playing || await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);await coordinator.Source.RefreshAsync();
+            var after=await restoreBridge.ReadQueueAsync(timeout.Token);Trace("queueBaselineRestored",new{recordingRestored=after.Current is not null && MusicLibraryPlayback.IsRequestedRecording(original,after.Current),remainingQueueRestored=baseline.Queue.Upcoming.SequenceEqual(after.Upcoming),playStateRestored=state && coordinator.Source.Latest?.Status==baseline.State});return;
+        }
         string title=Argument("--native-song")??throw new ArgumentException("Specify --native-song and --native-artist for a real playback check.");
         string artist=Argument("--native-artist")??throw new ArgumentException("Specify --native-artist.");
         string? album=Argument("--native-album");
@@ -47,10 +95,20 @@ public partial class MainWindow
             await coordinator.Source.RefreshAsync();await Task.Delay(100,timeout.Token);
             Trace("insertResult",new{inserted,currentPreserved=before is not null && coordinator.Snapshot is { } actual && MusicLibraryPlayback.IsRequestedRecording(before.Track,actual.Track),before,actual=coordinator.Snapshot});
             var after=await bridge.ReadQueueAsync(timeout.Token);Trace("queueAfter",after);
+            bool repeatedConfirmed=false;
             if(args.Contains("--native-repeat-insert"))
             {
                 var repeated=await bridge.InsertNextAsync(matches[0],timeout.Token);after=await bridge.ReadQueueAsync(timeout.Token);
+                repeatedConfirmed=inserted.Confirmed && repeated.Confirmed;
                 Trace("repeatInsertResult",new{repeated,after});
+            }
+            if(args.Contains("--native-play-second-insert"))
+            {
+                if(!repeatedConfirmed || after.Upcoming.Count<2 || !after.Upcoming.Take(2).All(e=>e.Inserted && MusicLibraryPlayback.IsRequestedRecording(matches[0].Track,e.Track)))
+                    throw new InvalidOperationException("Both exact repeated insertions must be confirmed before testing the second occurrence.");
+                var selection=new MusicQueueSelection(after,1);var jumpResult=await bridge.PlayQueueAsync(selection,timeout.Token);var remaining=await bridge.ReadQueueAsync(timeout.Token);
+                Trace("repeatedQueueJumpResult",new{result=jumpResult,secondOccurrenceConfirmed=MusicPlaybackQueue.ConfirmsJump(selection,remaining),originalRemainingQueueRetained=baseline.Upcoming.SequenceEqual(remaining.Upcoming),actual=coordinator.Source.Latest,remaining});
+                if(jumpResult.Confirmed && args.Contains("--native-pause-after")){bool paused=await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);Trace("paused",new{paused,actual=coordinator.Source.Latest});}
             }
             if(args.Contains("--native-restore-after"))Trace("queueRestored",new{restored=await AppleMusicLibraryHandoff.RestoreQueueVerificationAsync(baseline,after,timeout.Token)});
             return;

@@ -1,0 +1,7 @@
+# Playback queue visibility and occurrence navigation
+
+Add a persistent playback-list toggle at the lower right of the playback page. Default to visible for existing profiles, collapse the queue column and expand the remaining content when hidden, and stop hidden queue polling. Keep Settings theme selection and independent floating appearance unchanged.
+
+Double-clicking an upcoming row, or pressing Enter on it, plays that exact occurrence in the actual Apple Music queue. A single click only selects. Apply this to the compact playback sidebar and the library queue. Do not replace the queue by playing a library search result, deduplicate repeated tracks, or issue repeated Next commands. Revalidate the displayed snapshot against the actual native queue immediately before invoking its row. Reject a stale or incomplete recording identity with a refreshable message. Confirm actual playing media and remaining queue before reporting success, minimize Apple Music through the existing ownership-aware handoff, and prevent stale completions from activating the application. Preserve queue/history/scroll preferences and cancellation cleanup.
+
+Use isolated original fixtures for public checks and screenshots. Keep real queue metadata and integration diagnostics private. Publish version 0.14.0 after unit tests, responsive WPF verification, packaged checks, native occurrence playback verification where available, and distribution privacy checks. Synchronize a conventional commit to GitHub using the checked remote head.

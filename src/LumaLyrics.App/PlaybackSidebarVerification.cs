@@ -14,7 +14,7 @@ public partial class MainWindow
 {
     async Task VerifyPlaybackSidebarAsync(string directory,Dictionary<string,object?> checks)
     {
-        var oldTheme=settings.UiTheme;var oldLibrary=musicLibrary;var oldChild=PlaybackQueueHost.Child;var oldTrack=coordinator.ActiveTrack;var oldBinding=coordinator.Binding;var oldArtwork=Artwork.Source;var oldPalette=artworkPalette;var oldPlaceholder=CoverPlaceholder.Visibility;
+        var oldTheme=settings.UiTheme;bool oldQueueVisible=settings.ShowPlaybackQueue;SetPlaybackQueueVisible(true,false);var oldLibrary=musicLibrary;var oldChild=PlaybackQueueHost.Child;var oldTrack=coordinator.ActiveTrack;var oldBinding=coordinator.Binding;var oldArtwork=Artwork.Source;var oldPalette=artworkPalette;var oldPlaceholder=CoverPlaceholder.Visibility;
         string root=Path.Combine(store.Root,"sidebar-fixtures");Directory.CreateDirectory(root);var covers=new List<string>();
         foreach(var (name,color) in new[]{("tide",Color.FromRgb(50,117,135)),("light",Color.FromRgb(184,107,69)),("night",Color.FromRgb(88,69,130))})
         {
@@ -40,7 +40,7 @@ public partial class MainWindow
         }
         async Task<MusicLibraryResult> Load(CancellationToken token){loads++;await Task.Delay(10,token);if(libraryFails)throw new IOException("original cover lookup failure");if(busyAfterLoad)busy=true;return new(songs,"");}
         var browser=new MusicLibraryView(_=>Task.FromResult(new MusicLibraryResult(songs,"")),(_,_)=>selection?.Task??Task.FromResult(new LibraryPlayResult(true,"原创播放成功")),()=>{},ShowLyricsPage,()=>activated++,vm,()=>{},()=>{},()=>{});
-        var sidebar=new PlaybackQueueSidebar(this,LyricsPage,Read,Load,()=>{opened++;_=ShowMusicLibraryAsync();},()=>busy);PlaybackQueueHost.Child=sidebar.View;musicLibrary=browser;MainPageHost.Children.Add(browser);browser.Visibility=Visibility.Collapsed;
+        var sidebar=new PlaybackQueueSidebar(this,PlaybackQueueHost,Read,Load,()=>{opened++;_=ShowMusicLibraryAsync();},()=>busy);PlaybackQueueHost.Child=sidebar.View;musicLibrary=browser;MainPageHost.Children.Add(browser);browser.Visibility=Visibility.Collapsed;
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
         async Task AwaitScheduledRefresh()
         {
@@ -79,6 +79,26 @@ public partial class MainWindow
                 SetArtwork(File.ReadAllBytes(covers[0]));SelectUiTheme(theme.Id);await Task.Delay(80);UpdateLayout();sidebar.View.RefreshButton.Focus();checks["sidebar."+theme.Id+".themeAndKeyboard"]=sidebar.View.RefreshButton.IsKeyboardFocused && PlaybackQueueHost.Background==FindResource("PanelBrush");VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"playback-sidebar-"+theme.Id+".png"),true);
             }
             checks["sidebar.wideArtworkRemainsSquare"]=Math.Abs(ArtworkBorder.ActualWidth-ArtworkBorder.ActualHeight)<1;
+            foreach(var theme in AppThemes.All)
+            {
+                SelectUiTheme(theme.Id);SetPlaybackQueueVisible(false);await Task.Delay(60);UpdateLayout();
+                checks["queueToggle."+theme.Id+".accessibleAndSaved"]=PlaybackQueueToggle.IsChecked==false && !store.Load().ShowPlaybackQueue && AutomationProperties.GetName(PlaybackQueueToggle)=="显示播放列表";
+                PlaybackQueueToggle.Focus();checks["queueToggle."+theme.Id+".keyboardFocus"]=PlaybackQueueToggle.IsKeyboardFocused;
+                foreach(double width in new[]{1220d,980d,820d})
+                {
+                    Width=width;Height=width==820?640:820;await Task.Delay(60);UpdateLayout();
+                    var bounds=LyricsPanel.TransformToAncestor(Body).TransformBounds(new Rect(0,0,LyricsPanel.ActualWidth,LyricsPanel.ActualHeight));
+                    var toggle=PlaybackQueueToggle.TransformToAncestor(LyricsPage).TransformBounds(new Rect(0,0,PlaybackQueueToggle.ActualWidth,PlaybackQueueToggle.ActualHeight));
+                    checks["queueToggle."+theme.Id+".hiddenLayout."+width]=!PlaybackQueueHost.IsVisible && PlaybackQueueColumn.ActualWidth==0 && bounds.Right>=Body.ActualWidth-1 && LyricsPanel.ActualWidth>=300 && toggle.Right<=LyricsPage.ActualWidth+.5;
+                }
+                Width=1220;Height=820;await Task.Delay(60);UpdateLayout();VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"playback-queue-hidden-"+theme.Id+".png"),true);
+                SetPlaybackQueueVisible(true);await sidebar.ActiveRefresh!;checks["queueToggle."+theme.Id+".restoredAndSaved"]=PlaybackQueueHost.IsVisible && PlaybackQueueToggle.IsChecked==true && store.Load().ShowPlaybackQueue;
+            }
+            before=reads;SetPlaybackQueueVisible(false);await Task.Delay(80);await ShowMusicLibraryAsync();ShowLyricsPage();await Task.Delay(80);
+            checks["queueToggle.hiddenReentryDoesNotPoll"]=!sidebar.IsPolling && reads==before && !PlaybackQueueHost.IsVisible;
+            SetPlaybackQueueVisible(true);await sidebar.ActiveRefresh!;
+            mode=4;delayed=new(TaskCreationOptions.RunContinuationsAsynchronously);var hiddenRead=sidebar.RefreshAsync();SetPlaybackQueueVisible(false);mode=5;SetPlaybackQueueVisible(true);await sidebar.ActiveRefresh!;delayed.SetResult(Queue() with{Message="隐藏前的旧请求"});await hiddenRead;
+            checks["queueToggle.hiddenDelayedReadCannotOverwriteReopenedQueue"]=sidebar.View.Snapshot?.Upcoming[0].Track.Title=="最新队列";mode=0;await sidebar.RefreshAsync();
             foreach(double width in new[]{1220d,980d,820d})
             {
                 Width=width;Height=width==820?640:820;await Task.Delay(80);UpdateLayout();
@@ -95,7 +115,7 @@ public partial class MainWindow
         catch{File.WriteAllText(Path.Combine(directory,"sidebar-check.partial.json"),System.Text.Json.JsonSerializer.Serialize(checks,new System.Text.Json.JsonSerializerOptions{WriteIndented=true}));throw;}
         finally
         {
-            sidebar.Dispose();browser.Dispose();MainPageHost.Children.Remove(browser);musicLibrary=oldLibrary;PlaybackQueueHost.Child=oldChild;ShowLyricsPage();Width=1220;Height=820;WindowState=WindowState.Normal;
+            sidebar.Dispose();browser.Dispose();MainPageHost.Children.Remove(browser);musicLibrary=oldLibrary;PlaybackQueueHost.Child=oldChild;ShowLyricsPage();Width=1220;Height=820;WindowState=WindowState.Normal;SetPlaybackQueueVisible(oldQueueVisible);
             if(oldTrack is not null && oldBinding is not null){coordinator.Import(oldTrack,oldBinding.Raw,oldBinding.Source,oldBinding.Plain);coordinator.SetOffset(oldBinding.OffsetMs);}Artwork.Source=oldArtwork;artworkPalette=oldPalette;CoverPlaceholder.Visibility=oldPlaceholder;SelectUiTheme(oldTheme);Update();
         }
     }

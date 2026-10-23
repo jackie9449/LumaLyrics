@@ -60,4 +60,51 @@ public sealed class MusicPlaybackQueueTests
         Assert.False(MusicPlaybackQueue.ConfirmsInsertion(song,before,MusicQueueSnapshot.Unavailable("unavailable")));
         Assert.True(MusicPlaybackQueue.ConfirmsInsertion(song,before,before with{Upcoming=[requested,wrong]}));
     }
+
+    static MusicQueueSnapshot JumpFixture()=>new(new("微光","浮光","原创",180000),
+        [new(new("夜航","浮光","原创",200000),Inserted:true),new(new("海面","浮光","原创",220000)),new(new("夜航","浮光","原创",200000))],true,true,DateTimeOffset.UtcNow,"");
+
+    [Fact] public void QueueSelectionRevalidatesTheWholeSequenceAndCurrentRecording()
+    {
+        var queue=JumpFixture();var selection=new MusicQueueSelection(queue,2);
+        Assert.True(MusicPlaybackQueue.MatchesSelection(selection,queue with{CapturedUtc=DateTimeOffset.UtcNow.AddSeconds(2),Message="refreshed"}));
+        Assert.False(MusicPlaybackQueue.MatchesSelection(selection,queue with{Current=queue.Upcoming[0].Track}));
+        Assert.False(MusicPlaybackQueue.MatchesSelection(selection,queue with{Upcoming=queue.Upcoming.Reverse().ToArray()}));
+        Assert.False(MusicPlaybackQueue.MatchesSelection(selection,queue with{Upcoming=queue.Upcoming.Skip(1).ToArray()}));
+        Assert.False(MusicPlaybackQueue.MatchesSelection(selection,queue with{IsComplete=false}));
+    }
+    [Theory] [InlineData(-1)] [InlineData(3)] [InlineData(int.MaxValue)]
+    public void QueueSelectionRejectsInvalidIndexes(int index)=>Assert.False(MusicPlaybackQueue.CanSelect(new(JumpFixture(),index)));
+
+    [Fact] public void QueueSelectionRejectsUnavailableOrIncompleteRecordingIdentity()
+    {
+        var queue=JumpFixture();
+        Assert.False(MusicPlaybackQueue.CanSelect(new(queue with{Available=false},0)));
+        Assert.False(MusicPlaybackQueue.CanSelect(new(queue with{Current=null},0)));
+        Assert.False(MusicPlaybackQueue.CanSelect(new(queue with{Upcoming=[queue.Upcoming[0] with{MetadataComplete=false}]},0)));
+        Assert.False(MusicPlaybackQueue.CanSelect(new(queue with{Upcoming=[new(new("夜航","","原创",null))]},0)));
+    }
+    [Fact] public void JumpConfirmationDistinguishesRepeatedOccurrencesByTheRemainingQueue()
+    {
+        var queue=JumpFixture();var after=queue with{Current=queue.Upcoming[2].Track,Upcoming=[]};
+        Assert.True(MusicPlaybackQueue.ConfirmsJump(new(queue,2),after));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(new(queue,0),after));
+        Assert.True(MusicPlaybackQueue.ConfirmsJump(new(queue,0),queue with{Current=queue.Upcoming[0].Track,Upcoming=queue.Upcoming.Skip(1).ToArray()}));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(new(queue,2),queue));
+    }
+    [Fact] public void JumpConfirmationRejectsWrongEditionUnavailableOrPartialResult()
+    {
+        var queue=JumpFixture();var selection=new MusicQueueSelection(queue,1);var after=queue with{Current=queue.Upcoming[1].Track,Upcoming=queue.Upcoming.Skip(2).ToArray()};
+        Assert.True(MusicPlaybackQueue.ConfirmsJump(selection,after));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(selection,after with{Available=false}));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(selection,after with{IsComplete=false}));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(selection,after with{Current=after.Current! with{Album="原创 (Live)"}}));
+    }
+    [Fact] public void PartialSnapshotCanConfirmOnlyItsKnownRemainingPrefix()
+    {
+        var queue=JumpFixture() with{IsComplete=false};var after=queue with{Current=queue.Upcoming[0].Track,Upcoming=queue.Upcoming.Skip(1).Append(new(new("远方","浮光","原创",180000))).ToArray()};
+        Assert.True(MusicPlaybackQueue.MatchesSelection(new(queue,0),queue));
+        Assert.True(MusicPlaybackQueue.ConfirmsJump(new(queue,0),after));
+        Assert.False(MusicPlaybackQueue.ConfirmsJump(new(queue,2),after with{Current=queue.Upcoming[2].Track,Upcoming=[]}));
+    }
 }

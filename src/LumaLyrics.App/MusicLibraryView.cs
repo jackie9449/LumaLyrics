@@ -41,9 +41,9 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     internal ComboBox SortChoice=>sort;
     internal bool HasEmptyMessage=>empty.Visibility==Visibility.Visible;
     internal Task? ActivePlayback {get;private set;}
-    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null)
+    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue=null)
     {
-        this.load=load;this.play=play;this.playAlbum=playAlbum;this.readQueue=readQueue;this.insertNext=insertNext;this.activate=activate;Margin=new(28,14,30,18);
+        this.load=load;this.play=play;this.playAlbum=playAlbum;this.readQueue=readQueue;this.insertNext=insertNext;this.playQueue=playQueue;this.activate=activate;Margin=new(28,14,30,18);
         var root=new Grid();Content=root;root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new Grid{Margin=new(0,0,0,22)};heading.ColumnDefinitions.Add(new());heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});root.Children.Add(heading);
         var copy=new StackPanel();heading.Children.Add(copy);copy.Children.Add(new TextBlock{Text="你的音乐，随时抵达。",FontSize=25,FontWeight=FontWeights.SemiBold});copy.Children.Add(new TextBlock{Text="M Y   M U S I C",FontSize=9,Margin=new(1,7,0,12)});copy.Children.Add(count);
@@ -140,7 +140,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     }
     async Task RequestPlaybackAsync(string message,Func<CancellationToken,Task<LibraryPlayResult>> action)
     {
-        playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text=message;
+        queuePanel.CancelPlayback();playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text=message;
         try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;if(result.Confirmed && result.ActivateWindow)activate();RefreshVisibleQueue();}}
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException){if(!disposed && requests.IsCurrent(request))status.Text="播放切换失败，请确认 Apple Music 可用后重试。";}

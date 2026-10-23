@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     {
         store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();DataContext=vm;coordinator=new(Dispatcher,store,settings);
-        playbackBridge=new(coordinator);playbackSidebar=new(this,LyricsPage,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;
+        playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();});PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
         SelectUiTheme(settings.UiTheme,false);
@@ -237,9 +237,13 @@ public partial class MainWindow : Window
     }
     void OnSize(object s,SizeChangedEventArgs e)
     {
-        if(InfoPanel is null)return;bool narrow=ActualWidth<1180;
+        ApplyPlaybackLayout();
+    }
+    void ApplyPlaybackLayout()
+    {
+        if(InfoPanel is null)return;bool narrow=ActualWidth<(settings.ShowPlaybackQueue?1180:940);
         Grid.SetColumn(InfoPanel,0);Grid.SetRow(InfoPanel,0);Grid.SetColumn(LyricsPanel,narrow?0:1);Grid.SetRow(LyricsPanel,narrow?1:0);Grid.SetColumnSpan(InfoPanel,narrow?2:1);Grid.SetColumnSpan(LyricsPanel,narrow?2:1);
-        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1360?248:280);PlaybackQueueColumn.Width=new GridLength(ActualWidth<930?244:ActualWidth<1180?270:296);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
+        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1360?248:280);PlaybackQueueColumn.Width=new GridLength(settings.ShowPlaybackQueue?(ActualWidth<930?244:ActualWidth<1180?270:296):0);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
         InfoPanel.RowDefinitions[0].Height=GridLength.Auto;ArtworkBorder.Height=narrow?double.NaN:InfoColumn.Width.Value-28;ArtworkBorder.VerticalAlignment=VerticalAlignment.Top;
         ArtworkBorder.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;InfoPanel.Margin=narrow?new Thickness(0,0,0,12):new Thickness(0,0,28,0);
         TrackTitle.FontSize=narrow?18:25;TrackTitle.MaxHeight=narrow?26:70;TrackTitle.Margin=narrow?new Thickness(0,0,0,4):new Thickness(0,20,0,7);TrackArtist.MaxHeight=narrow?18:36;TrackTime.Margin=narrow?new Thickness(0,5,0,0):new Thickness(0,18,0,2);

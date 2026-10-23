@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Threading;
+using System.Windows.Controls.Primitives;
 using ControlType=FlaUI.Core.Definitions.ControlType;
 using FlaUI.UIA3;
 namespace LumaLyrics.App;
@@ -49,6 +50,25 @@ public partial class MainWindow
             checks["nativeQueue.repeatedInsertionsRetained"]=snapshot.Upcoming.Take(2).Select(e=>e.Track.Title).SequenceEqual(new[]{"夜航","夜航"});
             checks["nativeQueue.virtualizedTailRead"]=snapshot.Upcoming.LastOrDefault()?.Track.Title=="原创片段 69" && snapshot.IsComplete;
             checks["nativeQueue.currentSeparatedFromUpcoming"]=snapshot.Current?.Title=="微光之间" && snapshot.Current.Artist=="浮光工作室" && snapshot.Current.Album=="原创测试";
+            var occurrences=await Task.Run(()=>
+            {
+                using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
+                var lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Where(l=>(l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();
+                var items=new List<FlaUI.Core.AutomationElements.AutomationElement>();var captured=AppleMusicLibraryHandoff.CaptureQueue(automation,root,lists,timeout.Token,null,items);
+                var context=new AppleMusicLibraryHandoff.HandoffContext();var stale=AppleMusicLibraryHandoff.InvokeQueueOccurrence(automation,root,lists,new(captured with{Upcoming=captured.Upcoming.Skip(1).ToArray()},0),timeout.Token,context);
+                return new{allMapped=items.Count==captured.Upcoming.Count,duplicateOccurrencesDistinct=!items[0].Equals(items[1]),staleRejected=stale?.Contains("已经变化",StringComparison.Ordinal)==true && !context.CommandAttempted};
+            },timeout.Token);
+            checks["nativeQueue.allOccurrencesMappedToNativeItems"]=occurrences.allMapped;
+            checks["nativeQueue.equalRecordingsHaveDistinctNativeTargets"]=occurrences.duplicateOccurrencesDistinct;
+            checks["nativeQueue.staleSnapshotDoesNotAttemptPlayback"]=occurrences.staleRejected;
+            content.Children.Remove(automatic);foreach(var list in content.Children.OfType<ListBox>().ToArray())content.Children.Remove(list);
+            var upcomingToggle=new ToggleButton{Content="待播清单",IsChecked=true};var emptyLabel=new TextBlock{Text="无待播歌曲。"};
+            var queueContent=new StackPanel();queueContent.Children.Add(upcomingToggle);var pane=new GroupBox{Header="原创空队列",Content=queueContent};AutomationProperties.SetAutomationId(pane,"PaneRoot");content.Children.Add(pane);content.Children.Add(emptyLabel);window.UpdateLayout();
+            Task<LumaLyrics.Infrastructure.MusicQueueSnapshot?> Empty()=>Task.Run(()=>{using var automation=new UIA3Automation();return AppleMusicLibraryHandoff.CaptureExplicitEmptyQueue(automation.FromHandle(handle));},timeout.Token);
+            checks["nativeQueue.emptyLabelOutsideNativePaneIsRejected"]=await Empty() is null;
+            content.Children.Remove(emptyLabel);queueContent.Children.Add(emptyLabel);window.UpdateLayout();var explicitEmpty=await Empty();
+            checks["nativeQueue.explicitEmptyStateRetainsCurrentRecording"]=explicitEmpty is {Available:true,IsComplete:true,Upcoming.Count:0,Current.Title:"微光之间"};
+            upcomingToggle.IsChecked=false;window.UpdateLayout();checks["nativeQueue.emptyHistoryIsNotAnEmptyUpcomingQueue"]=await Empty() is null;
         }
         finally{window.Close();}
     }

@@ -39,6 +39,7 @@ internal static partial class AppleMusicLibraryHandoff
             try
             {
                 token.ThrowIfCancellationRequested();if(!opened){toggle.Patterns.Toggle.Pattern.Toggle();token.WaitHandle.WaitOne(250);}
+                MusicQueueSnapshot? emptyCandidate=null;
                 for(int attempt=0;attempt<10;attempt++)
                 {
                     token.ThrowIfCancellationRequested();
@@ -50,6 +51,12 @@ internal static partial class AppleMusicLibraryHandoff
                     }
                     var lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Where(l=>(l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();
                     if(lists.Length>0)return CaptureQueue(automation,root,lists,token,trace);
+                    // The installed client removes all queue lists after the final
+                    // upcoming song starts. Its explicit empty state, observed twice,
+                    // distinguishes an empty queue from an unavailable provider.
+                    var empty=CaptureExplicitEmptyQueue(root);
+                    if(empty is not null && emptyCandidate is not null && empty.Current==emptyCandidate.Current){trace?.Invoke("queueSnapshot",empty);return empty;}
+                    emptyCandidate=empty;
                     token.WaitHandle.WaitOne(100);
                 }
                 return MusicQueueSnapshot.Unavailable("Apple Music 暂未提供待播清单，请打开客户端的队列后重试。");
@@ -71,7 +78,16 @@ internal static partial class AppleMusicLibraryHandoff
         var names=root.FindAllDescendants(cf=>cf.ByAutomationId("ScrollingText")).Select(Name).Where(n=>n.Length>0).ToArray();
         return names.Length==2?MusicPlaybackQueue.ParseNativeRow(names)?.Track:null;
     }
-    internal static MusicQueueSnapshot CaptureQueue(UIA3Automation automation,AutomationElement root,IReadOnlyList<AutomationElement> lists,CancellationToken token,Action<string,object?>? trace)
+    internal static MusicQueueSnapshot? CaptureExplicitEmptyQueue(AutomationElement root)
+    {
+        var current=QueueCurrent(root);
+        bool empty=root.FindAllDescendants(cf=>cf.ByAutomationId("PaneRoot")).Any(pane=>
+            pane.FindFirstDescendant(cf=>cf.ByControlType(ControlType.Text).And(cf.ByName("无待播歌曲。"))) is not null
+            && pane.FindFirstDescendant(cf=>cf.ByControlType(ControlType.Button).And(cf.ByName("待播清单").Or(cf.ByName("Playing Next")))) is { } button
+            && button.Patterns.Toggle.IsSupported && button.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On);
+        return empty && current==QueueCurrent(root)?new(current,[],true,true,DateTimeOffset.UtcNow,"接下来还没有歌曲"):null;
+    }
+    internal static MusicQueueSnapshot CaptureQueue(UIA3Automation automation,AutomationElement root,IReadOnlyList<AutomationElement> lists,CancellationToken token,Action<string,object?>? trace,List<AutomationElement>? nativeItems=null)
     {
         var before=QueueCurrent(root);var entries=new List<MusicQueueEntry>();bool complete=lists.Count>0,metadataComplete=true;
         var watch=Stopwatch.StartNew();
@@ -81,7 +97,7 @@ internal static partial class AppleMusicLibraryHandoff
             if(names.Length==0 && item.Patterns.VirtualizedItem.IsSupported){item.Patterns.VirtualizedItem.Pattern.Realize();names=RawNames(automation,item,token);}
             var entry=MusicPlaybackQueue.ParseNativeRow(names);
             if(entry is null){metadataComplete=false;entry=new(new(Name(item),"","",null),false);}
-            entries.Add(entry with{Inserted=inserted});
+            entries.Add(entry with{Inserted=inserted});nativeItems?.Add(item);
         }
         // Manual Play Next entries occupy a distinct native list before the album's
         // remaining queue. Read all exposed queue lists in native control-tree order.

@@ -4,6 +4,7 @@ using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
 public sealed record MusicQueueEntry(Track Track,bool MetadataComplete=true,bool Inserted=false);
+public sealed record MusicQueueSelection(MusicQueueSnapshot Snapshot,int Index);
 public sealed record MusicQueueSnapshot(Track? Current,IReadOnlyList<MusicQueueEntry> Upcoming,bool Available,bool IsComplete,DateTimeOffset CapturedUtc,string Message)
 {
     public static MusicQueueSnapshot Unavailable(string message)=>new(null,[],false,false,DateTimeOffset.UtcNow,message);
@@ -11,6 +12,25 @@ public sealed record MusicQueueSnapshot(Track? Current,IReadOnlyList<MusicQueueE
 
 public static class MusicPlaybackQueue
 {
+    public static bool CanSelect(MusicQueueSelection selection)=>selection.Snapshot is {Available:true,Current:not null} snapshot
+        && selection.Index>=0 && selection.Index<snapshot.Upcoming.Count && snapshot.Upcoming[selection.Index] is {MetadataComplete:true} entry
+        && !string.IsNullOrWhiteSpace(entry.Track.Title) && !string.IsNullOrWhiteSpace(entry.Track.Artist);
+
+    public static bool MatchesSelection(MusicQueueSelection selection,MusicQueueSnapshot actual)=>CanSelect(selection) && actual.Available
+        && selection.Snapshot.Current==actual.Current && selection.Snapshot.IsComplete==actual.IsComplete
+        && selection.Snapshot.Upcoming.SequenceEqual(actual.Upcoming);
+
+    public static bool ConfirmsJump(MusicQueueSelection selection,MusicQueueSnapshot after)
+    {
+        if(!CanSelect(selection) || !after.Available || after.Current is null
+            || !MusicLibraryPlayback.IsRequestedRecording(selection.Snapshot.Upcoming[selection.Index].Track,after.Current))return false;
+        var remaining=selection.Snapshot.Upcoming.Skip(selection.Index+1).ToArray();
+        // Repeated recordings need occurrence evidence: matching media metadata alone
+        // cannot distinguish the first queued occurrence from a later one.
+        return selection.Snapshot.IsComplete?after.IsComplete && remaining.SequenceEqual(after.Upcoming)
+            :remaining.Length>0 && remaining.SequenceEqual(after.Upcoming.Take(remaining.Length));
+    }
+
     // These are complete menu labels, never a prefix or a title search. In particular,
     // Play, Play Last and playlist actions cannot satisfy a Play Next request.
     public static bool IsPlayNextCommand(string command)=>new[]{"插播","Play Next","次に再生"}.Contains(command.Trim().Normalize(NormalizationForm.FormKC),StringComparer.OrdinalIgnoreCase);

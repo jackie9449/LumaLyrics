@@ -7,19 +7,28 @@ internal sealed record LibraryPlayResult(bool Confirmed,string Message,bool Acti
 internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,Action<string,object?>? trace=null,TimeSpan? confirmationDelay=null)
 {
     int pending;
+    readonly object selectionGate=new();
+    CancellationTokenSource? selecting;
     internal bool IsBusy=>Volatile.Read(ref pending)>0;
     internal event Action? HandoffCompleted;
     internal Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token)=>AppleMusicLibraryHandoff.ReadQueueAsync(token,trace);
-    async Task<LibraryPlayResult> RunCommandAsync(Func<AppleMusicLibraryHandoff.HandoffContext,Task<LibraryPlayResult>> action)
+    async Task<LibraryPlayResult> RunSelectionAsync(Func<AppleMusicLibraryHandoff.HandoffContext,CancellationToken,Task<LibraryPlayResult>> action,CancellationToken token)
+    {
+        using var current=CancellationTokenSource.CreateLinkedTokenSource(token);
+        lock(selectionGate){selecting?.Cancel();selecting=current;}
+        try{return await RunCommandAsync(context=>action(context,current.Token),current.Token);}
+        finally{lock(selectionGate){if(ReferenceEquals(selecting,current))selecting=null;}}
+    }
+    async Task<LibraryPlayResult> RunCommandAsync(Func<AppleMusicLibraryHandoff.HandoffContext,Task<LibraryPlayResult>> action,CancellationToken token)
     {
         Interlocked.Increment(ref pending);var context=new AppleMusicLibraryHandoff.HandoffContext();LibraryPlayResult? result=null;bool minimized=false;
         try{result=await action(context);}
         finally
         {
-            try{minimized=await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(context,result?.Confirmed==true,trace);}
+            try{minimized=await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(context,result?.Confirmed==true && !token.IsCancellationRequested,trace);}
             finally{Interlocked.Decrement(ref pending);HandoffCompleted?.Invoke();}
         }
-        return result with{ActivateWindow=result.Confirmed && minimized};
+        token.ThrowIfCancellationRequested();return result with{ActivateWindow=result.Confirmed && minimized};
     }
     internal Task<LibraryPlayResult> InsertNextAsync(MusicLibrarySong song,CancellationToken token)=>RunCommandAsync(async context=>
     {
@@ -40,20 +49,40 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         }
         catch(OperationCanceledException) when(!token.IsCancellationRequested){}
         return new(false,"已发送插播请求，暂未确认下一首。请刷新播放列表查看。");
-    });
-    internal Task<LibraryPlayResult> PlayAsync(MusicLibrarySong song,CancellationToken token)=>RunCommandAsync(async context=>
+    },token);
+    internal Task<LibraryPlayResult> PlayAsync(MusicLibrarySong song,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
-        string? failure=await AppleMusicLibraryHandoff.SelectAsync(song,token,context,trace);
+        string? failure=await AppleMusicLibraryHandoff.SelectAsync(song,requestToken,context,trace);
         if(failure is not null)return new(false,failure);
-        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(song.Track,track),"正在播放 · "+song.Title,token,context);
-    });
-    internal Task<LibraryPlayResult> PlayAlbumAsync(MusicAlbum album,CancellationToken token)=>RunCommandAsync(async context=>
+        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(song.Track,track),"正在播放 · "+song.Title,requestToken,context);
+    },token);
+    internal Task<LibraryPlayResult> PlayAlbumAsync(MusicAlbum album,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
-        var selection=await AppleMusicLibraryHandoff.SelectAlbumAsync(album,token,context,trace);
+        var selection=await AppleMusicLibraryHandoff.SelectAlbumAsync(album,requestToken,context,trace);
         if(selection.Failure is not null)return new(false,selection.Failure);
         if(selection.FirstTrack is not { } first)return new(false,"尚无法确认 Apple Music 的专辑首曲，当前歌词继续跟随实际播放。");
-        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),"正在播放专辑 · "+album.Title,token,context);
-    });
+        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),"正在播放专辑 · "+album.Title,requestToken,context);
+    },token);
+    internal Task<LibraryPlayResult> PlayQueueAsync(MusicQueueSelection selection,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
+    {
+        string? failure=await AppleMusicLibraryHandoff.SelectQueueAsync(selection,requestToken,context,trace);
+        if(failure is not null)return new(false,failure);
+        var track=selection.Snapshot.Upcoming[selection.Index].Track;
+        var playback=await ConfirmAsync(actual=>MusicLibraryPlayback.IsRequestedRecording(track,actual),"正在播放 · "+track.Title,requestToken,context);
+        if(!playback.Confirmed)return playback;
+        using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(requestToken);confirmation.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            while(true)
+            {
+                var after=await ReadQueueAsync(confirmation.Token);
+                if(MusicPlaybackQueue.ConfirmsJump(selection,after))return playback;
+                await Task.Delay(250,confirmation.Token);
+            }
+        }
+        catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
+        return new(false,"已发送队列跳转请求，尚未确认目标位置。请刷新播放列表查看。");
+    },token);
     async Task<LibraryPlayResult> ConfirmAsync(Func<Track,bool> matches,string message,CancellationToken token,AppleMusicLibraryHandoff.HandoffContext context)
     {
         var issued=DateTimeOffset.UtcNow;bool delayed=false;
