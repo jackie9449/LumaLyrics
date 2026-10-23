@@ -17,6 +17,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
 {
     readonly Func<CancellationToken,Task<MusicLibraryResult>> load;
     readonly Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play;
+    readonly Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum;
     readonly Action activate;
     readonly TextBox search=new(){MinWidth=180,Padding=new(14,11,14,11),FontSize=13};
     readonly ListBox songs=new(){HorizontalContentAlignment=HorizontalAlignment.Stretch,BorderThickness=new(0),Padding=new(0,0,5,0)};
@@ -40,9 +41,9 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     internal ComboBox SortChoice=>sort;
     internal bool HasEmptyMessage=>empty.Visibility==Visibility.Visible;
     internal Task? ActivePlayback {get;private set;}
-    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next)
+    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null)
     {
-        this.load=load;this.play=play;this.activate=activate;Margin=new(28,14,30,18);
+        this.load=load;this.play=play;this.playAlbum=playAlbum;this.activate=activate;Margin=new(28,14,30,18);
         var root=new Grid();Content=root;root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new Grid{Margin=new(0,0,0,22)};heading.ColumnDefinitions.Add(new());heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});root.Children.Add(heading);
         var copy=new StackPanel();heading.Children.Add(copy);copy.Children.Add(new TextBlock{Text="你的音乐，随时抵达。",FontSize=25,FontWeight=FontWeights.SemiBold});copy.Children.Add(new TextBlock{Text="M Y   M U S I C",FontSize=9,Margin=new(1,7,0,12)});copy.Children.Add(count);
@@ -121,8 +122,18 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     async Task PlayAsync(MusicRow row)
     {
         if(!row.Song.CanPlay){status.Text="这首歌的名称或艺人信息不完整，暂时无法准确点播。";return;}
-        playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text="正在切换 · "+row.Song.Title;
-        try{var result=await play(row.Song,token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();}}
+        await RequestPlaybackAsync("正在切换 · "+row.Song.Title,token=>play(row.Song,token));
+    }
+    void BeginPlayAlbum(MusicAlbum album){ActivePlayback=PlayAlbumAsync(album);}
+    async Task PlayAlbumAsync(MusicAlbum album)
+    {
+        if(!album.CanPlay || playAlbum is null){status.Text="这张专辑的录音信息不完整，暂时无法准确播放。";return;}
+        await RequestPlaybackAsync("正在打开专辑 · "+album.Title,token=>playAlbum(album,token));
+    }
+    async Task RequestPlaybackAsync(string message,Func<CancellationToken,Task<LibraryPlayResult>> action)
+    {
+        playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text=message;
+        try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();}}
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException){if(!disposed && requests.IsCurrent(request))status.Text="播放切换失败，请确认 Apple Music 可用后重试。";}
     }

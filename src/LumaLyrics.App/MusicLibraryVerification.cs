@@ -36,6 +36,7 @@ public partial class MainWindow
         };
         fixture.AddRange(Enumerable.Range(1,3000).Select(i=>new MusicLibrarySong("fixture",i.ToString(),new("片段 "+i.ToString("0000"),"工作室 "+(i%8),"创作集 "+(i%12),120000+i*10),coverPaths[i%3])));
         int mode=0,cancelled=0,manageCount=0,transportCount=0,loadCount=0;bool playbackUnavailable=false;var played=new List<string>();
+        int albumCancelled=0;bool albumUnavailable=false;var playedAlbums=new List<MusicAlbum>();
         async Task<MusicLibraryResult> Load(CancellationToken token)
         {
             loadCount++;
@@ -44,10 +45,19 @@ public partial class MainWindow
         }
         async Task<LibraryPlayResult> Play(MusicLibrarySong song,CancellationToken token)
         {
-            try{if(playbackUnavailable)throw new TimeoutException("fixture playback timeout");await Task.Delay(song.PersistentId=="one"?250:20,token);played.Add(song.PersistentId);return new(true,"已确认 · "+song.Title);}
+            try{if(playbackUnavailable)throw new TimeoutException("fixture playback timeout");await Task.Delay(song.PersistentId=="one"?700:20,token);played.Add(song.PersistentId);return new(true,"已确认 · "+song.Title);}
             catch(OperationCanceledException){cancelled++;throw;}
         }
-        var browser=new MusicLibraryView(Load,Play,()=>manageCount++,ShowLyricsPage,()=>{},vm,()=>transportCount++,()=>transportCount++,()=>transportCount++);
+        async Task<LibraryPlayResult> PlayAlbum(MusicAlbum album,CancellationToken token)
+        {
+            try
+            {
+                playedAlbums.Add(album);await Task.Delay(album.Title=="原创测试"?700:35,token);
+                return albumUnavailable?new(false,"专辑播放未获确认 · 原创失败示例"):new(true,"已确认专辑 · "+album.Title);
+            }
+            catch(OperationCanceledException){albumCancelled++;throw;}
+        }
+        var browser=new MusicLibraryView(Load,Play,()=>manageCount++,ShowLyricsPage,()=>{},vm,()=>transportCount++,()=>transportCount++,()=>transportCount++,PlayAlbum);
         musicLibrary=browser;MainPageHost.Children.Add(browser);
         Button ButtonWith(string text)=>Descendants<Button>(browser).First(b=>b.Content?.ToString()==text);
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
@@ -104,10 +114,12 @@ public partial class MainWindow
             checks["musicLibrary.thumbnailCacheBounded"]=cache.Count==128;
             string bad=Path.Combine(fixtureRoot,"invalid.png");File.WriteAllText(bad,"invalid fixture");checks["musicLibrary.corruptCoverHandled"]=cache.Get(bad) is null;
             await VerifyAlbumBrowserAsync(browser,directory,checks,async large=>{mode=large?3:0;await browser.RefreshAsync();});
+            await VerifyAlbumPlaybackAsync(browser,directory,checks,()=>playedAlbums,()=>albumCancelled,value=>albumUnavailable=value);
+            await VerifyNativeSelectorIsolationAsync(checks);
             await VerifyAlbumArtworkAsync(browser,directory,checks,coverPaths,value=>mode=value,()=>loadCount);
             browser.ShowAllSongs();
-            await Search("微光");SelectSong("one");Click(ButtonWith("播放所选"));var pending=browser.ActivePlayback!;browser.Dispose();await pending;
-            checks["musicLibrary.disposeCancelsPlayback"]=cancelled==2;
+            await Search("微光");SelectSong("one");int cancelledBeforeDispose=cancelled;Click(ButtonWith("播放所选"));var pending=browser.ActivePlayback!;browser.Dispose();await pending;
+            checks["musicLibrary.disposeCancelsPlayback"]=cancelled==cancelledBeforeDispose+1;
         }
         finally
         {

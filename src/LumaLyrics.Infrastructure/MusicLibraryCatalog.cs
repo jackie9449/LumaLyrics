@@ -78,6 +78,23 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
 
 public static class MusicLibraryPlayback
 {
+    static bool AlbumNameEquals(string a,string b)=>string.Equals(a.Trim().Normalize(System.Text.NormalizationForm.FormKC),b.Trim().Normalize(System.Text.NormalizationForm.FormKC),StringComparison.OrdinalIgnoreCase);
+    public static MusicLibrarySong? AlbumAnchor(MusicAlbum album)
+    {
+        if(album.Songs.Count==0 || album.Songs.Select(s=>s.Source).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=1 || album.Songs.Any(s=>string.IsNullOrWhiteSpace(s.Album) || !AlbumNameEquals(s.Album,album.Title)))return null;
+        return album.Songs.GroupBy(s=>s.Track.Fingerprint,StringComparer.Ordinal).Where(g=>g.Count()==1).Select(g=>g.Single()).FirstOrDefault(s=>s.CanPlay);
+    }
+    public static bool AlbumContextMatches(MusicAlbum album,string title,IReadOnlyList<string> headerNames,IReadOnlyList<IReadOnlyList<string>> rows)
+    {
+        if(AlbumAnchor(album) is null || !AlbumNameEquals(album.Title,title) || rows.Count==0)return false;
+        var albumArtists=album.Songs.Select(s=>s.AlbumArtist).Where(s=>!string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var artists=albumArtists.Length>0?albumArtists:album.Songs.Select(s=>s.Artist).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if(artists.Length!=1 || !headerNames.Any(n=>AlbumNameEquals(n,artists[0])))return false;
+        // Native album rows omit the repeated album/artist columns. Their verified
+        // header supplies context; the native queue, not this collection order, plays them.
+        return rows.All(row=>album.Songs.Any(song=>NamesMatch(song.Track,row.Concat(new[]{song.Artist,song.Album}).ToArray())));
+    }
+    public static bool IsRequestedAlbum(MusicAlbum album,Track actual)=>album.Songs.Any(s=>IsRequestedRecording(s.Track,actual));
     public static bool NamesMatch(Track track,IReadOnlyList<string> names)
     {
         if(string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))return false;

@@ -40,4 +40,38 @@ public sealed class MusicAlbumTests
         var album=Assert.Single(MusicLibraryAlbums.Group([Song("1") with{CoverPath="first.png"},Song("2") with{CoverPath="second.png"},Song("3") with{CoverPath="first.png"}]));
         Assert.True(album.Matches("光 曲目2"));Assert.False(album.Matches("光 另一个"));Assert.Equal(new[]{"first.png","second.png"},album.CoverPaths);Assert.Empty(MusicLibraryAlbums.Group([]));
     }
+    [Fact] public void PlaybackAnchorMustBeAUniqueRecordingInOneNamedAlbumAndSource()
+    {
+        var album=MusicLibraryAlbums.Group([Song("1"),Song("2")]).Single();
+        Assert.NotNull(MusicLibraryPlayback.AlbumAnchor(album));
+        Assert.Null(MusicLibraryPlayback.AlbumAnchor(album with{Songs=[]}));
+        Assert.Null(MusicLibraryPlayback.AlbumAnchor(album with{Songs=[Song("1",album:"")]}));
+        Assert.Null(MusicLibraryPlayback.AlbumAnchor(album with{Songs=[Song("1"),Song("2",source:"other")]}));
+        var duplicate=Song("1") with{PersistentId="duplicate"};
+        Assert.Null(MusicLibraryPlayback.AlbumAnchor(album with{Songs=[Song("1"),duplicate]}));
+        Assert.Equal("2",MusicLibraryPlayback.AlbumAnchor(album with{Songs=[Song("1"),duplicate,Song("2")]})!.PersistentId);
+    }
+    [Fact] public void NativeAlbumContextRequiresExactEditionArtistAndMatchingVisibleTrackRows()
+    {
+        var album=MusicLibraryAlbums.Group([Song("1",albumArtist:"浮光"),Song("2",albumArtist:"浮光")]).Single();
+        IReadOnlyList<IReadOnlyList<string>> rows=new[]{new[]{"1","曲目 1","3:00"},new[]{"2","曲目 2","3:00"}};
+        Assert.True(MusicLibraryPlayback.AlbumContextMatches(album,"光",["浮光"],rows));
+        Assert.False(MusicLibraryPlayback.AlbumContextMatches(album,"光 - 现场",["浮光"],rows));
+        Assert.False(MusicLibraryPlayback.AlbumContextMatches(album,"光",["另一位"],rows));
+        Assert.False(MusicLibraryPlayback.AlbumContextMatches(album,"光",["浮光"],new[]{new[]{"曲目 1","3:30"}}));
+        Assert.False(MusicLibraryPlayback.AlbumContextMatches(album,"光",["浮光"],new[]{new[]{"曲目 99","3:00"}}));
+        Assert.False(MusicLibraryPlayback.AlbumContextMatches(album,"光",["浮光"],[]));
+        // A virtualized album exposes only some rows; native album identity and every
+        // exposed recording still have to agree before invoking its album Play button.
+        Assert.True(MusicLibraryPlayback.AlbumContextMatches(album,"光",["浮光"],new[]{new[]{"曲目 2","3:00"}}));
+    }
+    [Fact] public void NativeAlbumContextSupportsCompilationAndMemberConfirmation()
+    {
+        var album=MusicLibraryAlbums.Group([Song("1",artist:"艺人甲",albumArtist:"Various Artists"),Song("2",artist:"艺人乙",albumArtist:"Various Artists")]).Single();
+        Assert.True(MusicLibraryPlayback.AlbumContextMatches(album,"光",["Various Artists"],new[]{new[]{"曲目 1","3:00"},new[]{"曲目 2","3:00"}}));
+        Assert.True(MusicLibraryPlayback.IsRequestedAlbum(album,new("曲目 2","艺人乙 — 光","",179000)));
+        Assert.False(MusicLibraryPlayback.IsRequestedAlbum(album,new("曲目 2","艺人丙","光",179000)));
+        Assert.False(MusicLibraryPlayback.IsRequestedAlbum(album,new("曲目 2","艺人乙","光 - 现场",179000)));
+        Assert.False(MusicLibraryPlayback.IsRequestedAlbum(album,new("曲目 3","艺人乙","光",179000)));
+    }
 }

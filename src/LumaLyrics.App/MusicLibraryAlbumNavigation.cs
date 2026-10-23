@@ -13,6 +13,7 @@ internal sealed partial class MusicLibraryView
     readonly Border albumHeader=new(){Margin=new(0,0,0,18),Padding=new(18),CornerRadius=new(18),BorderThickness=new(1),Visibility=Visibility.Collapsed};
     readonly Image albumImage=new(){Stretch=Stretch.UniformToFill};
     readonly TextBlock albumTitle=new(){FontSize=23,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis},albumArtist=new(){FontSize=13,Margin=new(0,8,0,0)},albumSummary=new(){FontSize=11,Margin=new(0,8,0,0)};
+    readonly Button playAlbumButton=new(){Content="▷ 播放专辑",Padding=new(14,8,14,8),Margin=new(0,0,8,0)};
     MusicLibraryAlbumView albumShelf=null!;
     IReadOnlyList<MusicAlbum> albumGroups=[];
     MusicAlbum? selectedAlbum;
@@ -31,9 +32,11 @@ internal sealed partial class MusicLibraryView
         headingCopy=heading.Children.OfType<StackPanel>().First();heading.Children.Remove(manage);var actions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Top};actions.Children.Add(albumsTab);actions.Children.Add(songsTab);actions.Children.Add(manage);Grid.SetColumn(actions,1);heading.Children.Add(actions);
         AutomationProperties.SetName(albumsTab,"按专辑浏览");AutomationProperties.SetName(songsTab,"查看全部歌曲");albumsTab.Click+=(_,_)=>ShowAlbums();songsTab.Click+=(_,_)=>ShowAllSongs();
         body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new());Grid.SetRow(songs,1);Grid.SetRow(empty,1);empty.IsHitTestVisible=false;
-        albumShelf=new(OpenAlbum,albumCovers);Grid.SetRow(albumShelf,1);body.Children.Insert(0,albumShelf);body.Children.Add(albumHeader);
+        albumShelf=new(OpenAlbum,BeginPlayAlbum,albumCovers,playAlbum is not null);Grid.SetRow(albumShelf,1);body.Children.Insert(0,albumShelf);body.Children.Add(albumHeader);
         ThemeManager.Bind(albumHeader,Border.BackgroundProperty,"PanelBrush");ThemeManager.Bind(albumHeader,Border.BorderBrushProperty,"BorderBrush");
-        var detail=new DockPanel();albumHeader.Child=detail;var back=new Button{Content="‹ 所有专辑",Padding=new(12,8,12,8),VerticalAlignment=VerticalAlignment.Top,Margin=new(14,0,0,0)};AutomationProperties.SetName(back,"返回所有专辑");back.Click+=(_,_)=>ShowAlbums();DockPanel.SetDock(back,Dock.Right);detail.Children.Add(back);
+        var detail=new DockPanel();albumHeader.Child=detail;var back=new Button{Content="‹ 所有专辑",Padding=new(12,8,12,8),VerticalAlignment=VerticalAlignment.Top,Margin=new(0)};AutomationProperties.SetName(back,"返回所有专辑");back.Click+=(_,_)=>ShowAlbums();
+        var detailActions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Top,Margin=new(14,0,0,0)};DockPanel.SetDock(detailActions,Dock.Right);detail.Children.Add(detailActions);
+        AutomationProperties.SetName(playAlbumButton,"播放当前专辑");playAlbumButton.SetResourceReference(StyleProperty,"PrimaryButton");playAlbumButton.Click+=(_,_)=>{if(selectedAlbum is { } album)BeginPlayAlbum(album);};detailActions.Children.Add(playAlbumButton);detailActions.Children.Add(back);
         detailCover=new Border{Width=96,Height=96,CornerRadius=new(12),Margin=new(0,0,18,0),Child=albumImage,Clip=new RectangleGeometry(new Rect(0,0,96,96),12,12)};ThemeManager.Bind(detailCover,Border.BackgroundProperty,"ArtworkBrush");DockPanel.SetDock(detailCover,Dock.Left);detail.Children.Add(detailCover);
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center};text.Children.Add(albumTitle);text.Children.Add(albumArtist);text.Children.Add(albumSummary);albumArtist.TextTrimming=albumSummary.TextTrimming=TextTrimming.CharacterEllipsis;ThemeManager.Bind(albumArtist,TextBlock.ForegroundProperty,"MutedBrush");ThemeManager.Bind(albumSummary,TextBlock.ForegroundProperty,"MutedBrush");detail.Children.Add(text);SizeChanged+=(_,_)=>SizeAlbumHeader();UpdateAlbumSurface();
     }
@@ -64,7 +67,7 @@ internal sealed partial class MusicLibraryView
     }
     void UpdateAlbumHeader(MusicAlbum album)
     {
-        albumTitle.Text=album.Title;albumArtist.Text=album.Artist;albumSummary.Text=album.Summary+" · 选择歌曲开始聆听";albumImage.Source=album.CoverPaths.Select(p=>albumCovers.Get(p)).FirstOrDefault(i=>i is not null);
+        albumTitle.Text=album.Title;albumArtist.Text=album.Artist;albumSummary.Text=album.Summary+" · 选择歌曲或播放整张专辑";albumImage.Source=album.CoverPaths.Select(p=>albumCovers.Get(p)).FirstOrDefault(i=>i is not null);playAlbumButton.IsEnabled=album.CanPlay && playAlbum is not null;
     }
     void UpdateAlbumSurface()
     {

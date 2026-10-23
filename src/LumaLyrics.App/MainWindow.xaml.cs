@@ -65,6 +65,14 @@ public partial class MainWindow : Window
     {
         NativeWindow.Place(this,settings.MainLeft,settings.MainTop);
         var startupArgs=Environment.GetCommandLineArgs();int uiArg=Array.IndexOf(startupArgs,"--verify-ui");
+        int nativeArg=Array.IndexOf(startupArgs,"--verify-native-library-playback");
+        if(nativeArg>=0 && nativeArg+1<startupArgs.Length)
+        {
+            timer.Stop();settings.OnlineLookup=false;settings.AutoPrefetchLibrary=false;
+            try{await VerifyNativeLibraryPlaybackAsync(startupArgs[nativeArg+1],startupArgs);}
+            catch(Exception ex){Directory.CreateDirectory(startupArgs[nativeArg+1]);File.WriteAllText(Path.Combine(startupArgs[nativeArg+1],"failure.txt"),ex.ToString());}
+            await QuitAsync();return;
+        }
         if(uiArg>=0 && uiArg+1<startupArgs.Length)
         {
             SetupTray();timer.Stop();

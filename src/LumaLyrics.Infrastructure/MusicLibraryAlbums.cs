@@ -4,6 +4,7 @@ namespace LumaLyrics.Infrastructure;
 public sealed record MusicAlbum(string Key,string Title,string Artist,IReadOnlyList<MusicLibrarySong> Songs)
 {
     public string Summary=>$"{Songs.Count:N0} 首歌曲";
+    public bool CanPlay=>MusicLibraryPlayback.AlbumAnchor(this) is not null;
     public IReadOnlyList<string> CoverPaths=>Songs.Select(s=>s.CoverPath).OfType<string>().Where(p=>p.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).Take(8).ToArray();
     public bool Matches(string query)
     {
