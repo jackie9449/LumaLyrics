@@ -41,9 +41,9 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     internal ComboBox SortChoice=>sort;
     internal bool HasEmptyMessage=>empty.Visibility==Visibility.Visible;
     internal Task? ActivePlayback {get;private set;}
-    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null)
+    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null)
     {
-        this.load=load;this.play=play;this.playAlbum=playAlbum;this.activate=activate;Margin=new(28,14,30,18);
+        this.load=load;this.play=play;this.playAlbum=playAlbum;this.readQueue=readQueue;this.insertNext=insertNext;this.activate=activate;Margin=new(28,14,30,18);
         var root=new Grid();Content=root;root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new Grid{Margin=new(0,0,0,22)};heading.ColumnDefinitions.Add(new());heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});root.Children.Add(heading);
         var copy=new StackPanel();heading.Children.Add(copy);copy.Children.Add(new TextBlock{Text="你的音乐，随时抵达。",FontSize=25,FontWeight=FontWeights.SemiBold});copy.Children.Add(new TextBlock{Text="M Y   M U S I C",FontSize=9,Margin=new(1,7,0,12)});copy.Children.Add(count);
@@ -56,9 +56,10 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         VirtualizingPanel.SetIsVirtualizing(songs,true);VirtualizingPanel.SetVirtualizationMode(songs,VirtualizationMode.Recycling);VirtualizingPanel.SetScrollUnit(songs,ScrollUnit.Pixel);ScrollViewer.SetCanContentScroll(songs,true);ScrollViewer.SetHorizontalScrollBarVisibility(songs,ScrollBarVisibility.Disabled);
         songs.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));songs.ItemTemplate=RowTemplate();
         AutomationProperties.SetName(songs,"音乐库歌曲");songs.SelectionChanged+=(_,_)=>playSelected.IsEnabled=songs.SelectedItem is MusicRow{Song.CanPlay:true};
-        songs.MouseDoubleClick+=(_,e)=>{if(FindRow(e.OriginalSource as DependencyObject) is { } row)BeginPlay(row);};songs.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Enter && songs.SelectedItem is MusicRow row){e.Handled=true;BeginPlay(row);}};
+        songs.MouseDoubleClick+=(_,e)=>{if(!IsSongAction(e.OriginalSource as DependencyObject) && FindRow(e.OriginalSource as DependencyObject) is { } row)BeginPlay(row);};songs.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Enter && !IsSongAction(e.OriginalSource as DependencyObject) && songs.SelectedItem is MusicRow row){e.Handled=true;BeginPlay(row);}};
         body.Children.Add(songs);empty.VerticalAlignment=VerticalAlignment.Center;empty.Margin=new(24);ThemeManager.Bind(empty,TextBlock.ForegroundProperty,"MutedBrush");body.Children.Add(empty);
         SetupAlbumNavigation(heading,manageButton,body);
+        SetupQueueNavigation(root,heading,filters,body);
         var footer=new Grid{Margin=new(0,16,0,0)};Grid.SetRow(footer,3);root.Children.Add(footer);footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.Margin=new(0,0,14,14);footer.Children.Add(status);playSelected.SetResourceReference(StyleProperty,"PrimaryButton");Grid.SetColumn(playSelected,1);footer.Children.Add(playSelected);playSelected.Click+=(_,_)=>{if(songs.SelectedItem is MusicRow row)BeginPlay(row);};
         var now=new Border{CornerRadius=new(16),Padding=new(16,10,16,10),Margin=new(0,4,0,0),BorderThickness=new(1)};ThemeManager.Bind(now,Border.BackgroundProperty,"PanelBrush");ThemeManager.Bind(now,Border.BorderBrushProperty,"BorderBrush");Grid.SetRow(now,1);Grid.SetColumnSpan(now,2);footer.Children.Add(now);
@@ -74,6 +75,13 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     {
         var row=new FrameworkElementFactory(typeof(DockPanel));row.SetValue(HeightProperty,68d);row.SetValue(MarginProperty,new Thickness(1,0,1,0));
         var playButton=new FrameworkElementFactory(typeof(Button));playButton.SetValue(ContentControl.ContentProperty,"▷");playButton.SetValue(WidthProperty,40d);playButton.SetValue(HeightProperty,40d);playButton.SetValue(Control.PaddingProperty,new Thickness(0));playButton.SetValue(MarginProperty,new Thickness(8,0,0,0));playButton.SetValue(DockPanel.DockProperty,Dock.Right);playButton.SetBinding(IsEnabledProperty,new Binding("Song.CanPlay"));playButton.SetValue(ToolTipProperty,"播放这首歌");playButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((_,e)=>{e.Handled=true;if((e.Source as FrameworkElement)?.DataContext is MusicRow item)BeginPlay(item);}));row.AppendChild(playButton);
+        playButton.SetBinding(AutomationProperties.NameProperty,new Binding("Song.Title"){StringFormat="播放 · {0}"});
+        if(insertNext is not null)
+        {
+            var insertButton=new FrameworkElementFactory(typeof(Button));insertButton.SetValue(ContentControl.ContentProperty,"插播");insertButton.SetValue(WidthProperty,56d);insertButton.SetValue(HeightProperty,36d);insertButton.SetValue(Control.PaddingProperty,new Thickness(6,0,6,0));insertButton.SetValue(MarginProperty,new Thickness(8,0,0,0));insertButton.SetValue(DockPanel.DockProperty,Dock.Right);insertButton.SetBinding(IsEnabledProperty,new Binding("Song.CanPlay"));insertButton.SetValue(ToolTipProperty,"在当前歌曲结束后播放");insertButton.SetBinding(AutomationProperties.NameProperty,new Binding("Song.Title"){StringFormat="插播 · {0}"});
+            insertButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((_,e)=>{e.Handled=true;if((e.Source as FrameworkElement)?.DataContext is MusicRow item)BeginInsert(item);}));
+            insertButton.AddHandler(Keyboard.PreviewKeyDownEvent,new KeyEventHandler((_,e)=>{if(e.Key==Key.Enter){e.Handled=true;if((e.Source as FrameworkElement)?.DataContext is MusicRow item)BeginInsert(item);}}));row.AppendChild(insertButton);
+        }
         FrameworkElementFactory Label(string binding,double size,string brush,int width=0){var t=new FrameworkElementFactory(typeof(TextBlock));t.SetBinding(TextBlock.TextProperty,new Binding(binding));t.SetValue(TextBlock.FontSizeProperty,size);t.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.CharacterEllipsis);t.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);t.SetResourceReference(TextBlock.ForegroundProperty,brush);if(width>0)t.SetValue(WidthProperty,(double)width);return t;}
         var duration=Label("Song.Duration",11,"MutedBrush",54);duration.SetValue(DockPanel.DockProperty,Dock.Right);duration.SetValue(TextBlock.TextAlignmentProperty,TextAlignment.Right);row.AppendChild(duration);
         var album=Label("Song.Album",11,"MutedBrush",170);album.SetValue(DockPanel.DockProperty,Dock.Right);album.SetValue(MarginProperty,new Thickness(16,0,14,0));row.AppendChild(album);
@@ -95,7 +103,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         {
             var result=await load(token);token.ThrowIfCancellationRequested();if(disposed)return;
             var context=preserveContext?CaptureArtworkContext():null;
-            thumbnails.Clear();albumCovers.Clear();lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
+            thumbnails.Clear();albumCovers.Clear();queuePanel.SetLibrary(result.Songs);lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
             SetNowPlaying(nowPlayingTrack,nowPlaying);
             artworkLoadedRevision=revision;applied=true;
             if(context is not null)await RestoreArtworkContextAsync(context);
@@ -108,7 +116,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     void Filter()
     {
         if(view is null)return;terms=search.Text.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(MatchRules.Normalize).Where(s=>s.Length>0).ToArray();
-        UpdateAlbumSurface();if(showAlbumShelf){FilterAlbums();return;}
+        UpdateAlbumSurface();UpdateQueueSurface();if(showingQueue)return;if(showAlbumShelf){FilterAlbums();return;}
         using(view.DeferRefresh())
         {
             view.Filter=item=>item is MusicRow row && (albumSongKeys is null || albumSongKeys.Contains(row.Song.Key)) && terms.All(t=>row.SearchText.Contains(t,StringComparison.Ordinal));view.SortDescriptions.Clear();
@@ -133,7 +141,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     async Task RequestPlaybackAsync(string message,Func<CancellationToken,Task<LibraryPlayResult>> action)
     {
         playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;var request=requests.Next();status.Text=message;
-        try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();}}
+        try{var result=await action(token);if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;activate();RefreshVisibleQueue();}}
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException){if(!disposed && requests.IsCurrent(request))status.Text="播放切换失败，请确认 Apple Music 可用后重试。";}
     }
@@ -141,10 +149,10 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     {
         nowPlayingTrack=track;nowPlaying=isPlaying;
         toggleButton.Content=isPlaying?"Ⅱ":"▷";
-        string key=track?.Fingerprint??"";if(key==lastTrack || view is null)return;lastTrack=key;
+        string key=track?.Fingerprint??"";if(key==lastTrack || view is null)return;lastTrack=key;RefreshVisibleQueue();
         foreach(MusicRow row in view.SourceCollection)row.NowPlaying=track is not null && MusicLibraryPlayback.IsRequestedRecording(row.Song.Track,track);
     }
-    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();artworkRefresh.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();thumbnails.Clear();albumCovers.Clear();}
+    public void Dispose(){if(disposed)return;disposed=true;debounce.Stop();artworkRefresh.Stop();loading?.Cancel();playing?.Cancel();loading?.Dispose();playing?.Dispose();DisposeQueue();thumbnails.Clear();albumCovers.Clear();}
     internal sealed class MusicRow(MusicLibrarySong song,ThumbnailCache cache):INotifyPropertyChanged
     {
         public MusicLibrarySong Song=>song;

@@ -6,6 +6,27 @@ internal sealed record LibraryPlayResult(bool Confirmed,string Message);
 
 internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,Action<string,object?>? trace=null)
 {
+    internal Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token)=>AppleMusicLibraryHandoff.ReadQueueAsync(token,trace);
+    internal async Task<LibraryPlayResult> InsertNextAsync(MusicLibrarySong song,CancellationToken token)
+    {
+        var before=await ReadQueueAsync(token);
+        string? failure=await AppleMusicLibraryHandoff.InsertNextAsync(song,token,trace);
+        if(failure is not null)return new(false,failure);
+        using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(token);confirmation.CancelAfter(TimeSpan.FromSeconds(8));
+        try
+        {
+            for(int attempt=0;attempt<6;attempt++)
+            {
+                // The menu closes before the native manual-queue list finishes updating.
+                // Retry reads only; never send the insertion a second time.
+                await Task.Delay(250,confirmation.Token);var queue=await ReadQueueAsync(confirmation.Token);
+                if(MusicPlaybackQueue.ConfirmsInsertion(song,before,queue))
+                    return new(true,"已插播 · "+song.Title+" · 将在当前歌曲结束后播放");
+            }
+        }
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){}
+        return new(false,"已发送插播请求，暂未确认下一首。请刷新播放列表查看。");
+    }
     internal async Task<LibraryPlayResult> PlayAsync(MusicLibrarySong song,CancellationToken token)
     {
         string? failure=await AppleMusicLibraryHandoff.SelectAsync(song,token,trace);

@@ -47,12 +47,14 @@ internal sealed partial class MusicLibraryView
     }
     internal void ShowAllSongs()
     {
+        HideQueue();
         if(!showAlbumShelf && selectedAlbum is null){Filter();return;}
         if(showAlbumShelf){shelfQuery=search.Text;shelfOffset=albumShelf.ScrollOffset;}
         bool wasDetail=selectedAlbum is not null;showAlbumShelf=false;selectedAlbum=null;albumSongKeys=null;if(wasDetail || search.Text!=songQuery)search.Text=songQuery;Filter();
     }
     internal void ShowAlbums()
     {
+        HideQueue();
         if(showAlbumShelf && selectedAlbum is null){Filter();return;}
         if(!showAlbumShelf && selectedAlbum is null)songQuery=search.Text;
         showAlbumShelf=true;selectedAlbum=null;albumSongKeys=null;search.Text=shelfQuery;Filter();
@@ -60,6 +62,7 @@ internal sealed partial class MusicLibraryView
     }
     internal void OpenAlbum(MusicAlbum album)
     {
+        HideQueue();
         if(showAlbumShelf){shelfQuery=search.Text;shelfOffset=albumShelf.ScrollOffset;}
         selectedAlbum=album;albumSongKeys=album.Songs.Select(s=>s.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);showAlbumShelf=false;search.Text="";
         UpdateAlbumHeader(album);Filter();songs.SelectedItem=null;

@@ -1,0 +1,23 @@
+{
+  "version": "0.12.0",
+  "clientVersion": "1.1540.23042.0",
+  "date": "2026-10-23",
+  "checks": {
+    "singleInsertConfirmed": true,
+    "repeatedInsertConfirmed": true,
+    "currentRecordingPreserved": true,
+    "pausedStatePreserved": true,
+    "manualSectionPrecedesOriginalQueue": true,
+    "repeatedHeadOccurrencesRetained": true,
+    "originalUpcomingOrderPreserved": true,
+    "originalQueueRestoredAfterTest": true,
+    "nativeFiltersRestored": true,
+    "historyReadAvailable": true,
+    "historyPreferenceRestored": true,
+    "minimizedReadAvailable": true,
+    "minimizedPreferenceRetained": true,
+    "queuePanelPreferenceRetained": true,
+    "currentRetainedAcrossQueueReads": true,
+    "nativeQueueFullyRead": true
+  }
+}

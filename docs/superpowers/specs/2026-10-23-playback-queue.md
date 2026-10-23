@@ -1,0 +1,9 @@
+# Playback queue and Play Next
+
+The music library gains a current playback list entry. The list shows the actual Apple Music queue and distinguishes the current recording from upcoming tracks. A song action labelled 插播 invokes the native Play Next command for one uniquely verified recording, without starting that recording immediately. The library retains its existing album and song browsing state when the queue is opened or closed.
+
+The integration must read Apple Music's exposed queue, retain its order and duplicate recordings, and explicitly describe unavailable or partially exposed data. Never present an inferred album sequence or the entire library as the native queue. Queue metadata and live integration diagnostics remain personal data outside Git and distribution files. The three application themes share readable queue controls; floating lyric appearance is independent.
+
+Native actions use the existing serialized UI Automation handoff and preserve the original minimized preference and temporary local song filter. Queue reads restore the queue panel's original open state. Play Next requires an exact supported localized menu command; it must never fall through to Play or another destructive command. Cancellation and timeouts must prevent stale reads or requests from replacing newer UI state.
+
+Validate the actual installed Apple Music queue structure before finalizing parsing. Verify current/upcoming ordering, repeated recordings, bounded or unsupported structures, exact menu matching, current-song continuity after insertion, and the exact inserted recording occupying the actual native next slot. Preserve the current recording during verification and restore test insertions against an exact captured baseline. Run the existing regression suite and source/packaged WPF checks. Synchronize the tested change to GitHub with a conventional commit and expected-head protection.

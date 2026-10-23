@@ -1,0 +1,55 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Threading;
+using ControlType=FlaUI.Core.Definitions.ControlType;
+using FlaUI.UIA3;
+namespace LumaLyrics.App;
+
+public partial class MainWindow
+{
+    // A queue occurrence has its own identity, even when it repeats the same recording.
+    // WPF value-equal data objects share an item peer and cannot model two occurrences.
+    sealed class NativeQueueFixtureRow(string title,string metadata,string duration)
+    {
+        public string Title=>title;
+        public string Metadata=>metadata;
+        public string Duration=>duration;
+    }
+    async Task VerifyNativeQueueStructureAsync(Dictionary<string,object?> checks)
+    {
+        var content=new StackPanel();
+        foreach(string name in new[]{"微光之间","浮光工作室 — 原创测试"}){var text=new TextBlock{Text=name};AutomationProperties.SetAutomationId(text,"ScrollingText");content.Children.Add(text);}
+        ListBox List(string id,NativeQueueFixtureRow[] rows)
+        {
+            var list=new ListBox{Height=125,ItemsSource=rows};AutomationProperties.SetAutomationId(list,id);
+            var panel=new FrameworkElementFactory(typeof(StackPanel));
+            foreach(string property in new[]{"Title","Metadata","Duration"}){var label=new FrameworkElementFactory(typeof(TextBlock));label.SetBinding(TextBlock.TextProperty,new Binding(property));panel.AppendChild(label);}
+            list.ItemTemplate=new DataTemplate{VisualTree=panel};VirtualizingPanel.SetIsVirtualizing(list,true);VirtualizingPanel.SetVirtualizationMode(list,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(list,true);content.Children.Add(list);return list;
+        }
+        List("PlayQueueListViewManual",[new("夜航","浮光工作室 — 原创测试","3:00"),new("夜航","浮光工作室 — 原创测试","3:00")]);
+        var automatic=List("PlayQueueListView",Enumerable.Range(0,70).Select(i=>new NativeQueueFixtureRow("原创片段 "+i,"浮光工作室 — 创作集","2:00")).ToArray());
+        var window=new Window{Owner=this,Title="浮光歌词 · 原创队列结构回归",Width=450,Height=380,Content=content,ShowInTaskbar=false};window.Show();
+        try
+        {
+            await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);nint handle=NativeWindow.Handle(window);
+            checks["nativeQueue.fixtureActuallyVirtualizes"]=Descendants<ListBoxItem>(automatic).Count()<70;
+            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(18));
+            var snapshot=await Task.Run(()=>
+            {
+                using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
+                var lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Where(l=>(l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();
+                return AppleMusicLibraryHandoff.CaptureQueue(automation,root,lists,timeout.Token,null);
+            },timeout.Token);
+            checks["nativeQueue.exposedEntries"]=snapshot.Upcoming.Count;
+            checks["nativeQueue.manualEntries"]=snapshot.Upcoming.Count(e=>e.Inserted);
+            checks["nativeQueue.bothNativeSectionsIncluded"]=snapshot.Available && snapshot.Upcoming.Count==72;
+            checks["nativeQueue.manualBeforeOriginalQueue"]=snapshot.Upcoming.Take(2).All(e=>e.Inserted && e.Track.Title=="夜航") && snapshot.Upcoming.Skip(2).All(e=>!e.Inserted);
+            checks["nativeQueue.repeatedInsertionsRetained"]=snapshot.Upcoming.Take(2).Select(e=>e.Track.Title).SequenceEqual(new[]{"夜航","夜航"});
+            checks["nativeQueue.virtualizedTailRead"]=snapshot.Upcoming.LastOrDefault()?.Track.Title=="原创片段 69" && snapshot.IsComplete;
+            checks["nativeQueue.currentSeparatedFromUpcoming"]=snapshot.Current?.Title=="微光之间" && snapshot.Current.Artist=="浮光工作室" && snapshot.Current.Album=="原创测试";
+        }
+        finally{window.Close();}
+    }
+}

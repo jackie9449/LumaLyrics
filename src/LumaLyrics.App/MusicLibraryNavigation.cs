@@ -14,7 +14,7 @@ public partial class MainWindow
             var bridge=new AppleMusicPlaybackBridge(coordinator);
             musicLibrary=new(token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),bridge.PlayAsync,
                 ()=>LibraryClicked(this,new()),ShowLyricsPage,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},vm,
-                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync);
+                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync);
             MainPageHost.Children.Add(musicLibrary);
         }
         LyricsPage.Visibility=Visibility.Collapsed;musicLibrary.Visibility=Visibility.Visible;SelectNavigation(true);
