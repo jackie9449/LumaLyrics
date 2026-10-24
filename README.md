@@ -1,8 +1,11 @@
-# 浮光歌词 LumaLyrics 0.16.4
+# 浮光歌词 LumaLyrics 0.16.5
 
 Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资料库封面与动态歌词，支持独立的透明悬浮歌词窗口。
 
 ## 这次更新
+
+- 播放页随窗口宽高实时调整封面、歌曲信息、歌词字号和留白。大窗口封面更大，歌词正文保持适合阅读的行宽；窄窗或高度不足时保留缩略封面，播放控制和右侧队列保持可用。[布局预览](docs/screenshots-ui-v0165/README.md)。
+- 悬浮歌词外观直接整合到「设置 → 悬浮歌词」。主题、字体、配色、背景和动效在同一页预览，保存／取消继续独立；外观快捷入口均跳转到此页。离开页面或关闭设置会撤销未保存预览。
 
 - 主界面右下角新增「中文译文」开关，与设置页即时同步并保存；保留原词、时间轴和手动浏览位置，悬浮歌词开关保持独立。
 - 修复音乐库混入 Apple Music 本地曲目表中未加入资料库的记录：按原生主清单的持久 ID 确认成员，歌曲、专辑、后台歌词与封面准备使用同一范围。旧歌词、译文、手动偏移和封面文件保留；来源暂不可读时仅使用已核验的离线清单。[音乐库说明](docs/music-library.md)。
@@ -52,7 +55,7 @@ Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资
 
 | 液态玻璃 | 毛玻璃 | 谷歌平面 |
 | --- | --- | --- |
-| ![深色流光](docs/screenshots-ui-v0162/main-liquid.png) | ![浅色柔雾](docs/screenshots-ui-v0162/main-frost.png) | ![丁香平面](docs/screenshots-ui-v0162/main-material.png) |
+| ![深色流光](docs/screenshots-ui-v0165/responsive-liquid-large.png) | ![浅色柔雾](docs/screenshots-ui-v0165/responsive-frost-large.png) | ![丁香平面](docs/screenshots-ui-v0165/responsive-material-large.png) |
 
 更多 [主题实图与说明](docs/ui-themes.md) · [资料库导入说明](docs/library-assets.md)。预览文字和几何封面均为原创测试素材，不包含个人资料库内容。
 
@@ -90,7 +93,7 @@ Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资
 
 ## 验证
 
-297 项单元测试通过。0.16.4 在解锁桌面上的源码完整 WPF 回归和自包含运行包复验均为 770/770；早期失败记录、锁屏限制与程序集校验值见 [0.16.4 验证](docs/verification-v0164/README.md)，中文译文开关见[三主题预览](docs/screenshots-ui-v0164/README.md)。已有 36 项导航检查与 62 项玻璃检查继续回归；导航覆盖三种主题、六个入口和 100%／125%／150% 离屏渲染，见 [0.16.2 记录](docs/screenshots-ui-v0162/README.md)。[0.16.3 准备任务修复](docs/verification-v0163/README.md)、[0.16.1 玻璃修复](docs/screenshots-ui-v0161/README.md)与 [0.16.0 的原始失败及旧版对照](docs/screenshots-ui-v0160/README.md)继续保留。运行包使用随包 Microsoft host 执行相同检查，无需 SDK。原生队列排序和原词校对的既有实机记录见 [0.15.0 验证记录](docs/screenshots-ui-v0150/README.md)；本次界面回归没有操作真实 Apple Music。界面验证只使用原创文字与图片，不能代替个人全库逐首核对。软件分发拒绝 32 类私人文件或模型；原有功能继续回归。
+297 项单元测试通过。0.16.5 源码完整 WPF 回归和自包含运行包复验均为 873/873；新增 103 项窗口缩放与设置集成检查，早期开发结果、运行包首次一项淡出焦点失败及程序集校验值见 [0.16.5 验证](docs/verification-v0165/README.md)。[0.16.4 的范围筛选与译文开关](docs/verification-v0164/README.md)继续回归。已有 36 项导航检查与 62 项玻璃检查继续回归；导航覆盖三种主题、六个入口和 100%／125%／150% 离屏渲染，见 [0.16.2 记录](docs/screenshots-ui-v0162/README.md)。[0.16.3 准备任务修复](docs/verification-v0163/README.md)、[0.16.1 玻璃修复](docs/screenshots-ui-v0161/README.md)与 [0.16.0 的原始失败及旧版对照](docs/screenshots-ui-v0160/README.md)继续保留。运行包使用随包 Microsoft host 执行相同检查，无需 SDK。原生队列排序和原词校对的既有实机记录见 [0.15.0 验证记录](docs/screenshots-ui-v0150/README.md)；本次界面回归没有操作真实 Apple Music。界面验证只使用原创文字与图片，不能代替个人全库逐首核对。软件分发拒绝 32 类私人文件或模型；原有功能继续回归。
 
 真实资料库已完成整库封面导入；歌词批量下载仍受来源和服务可用性限制。GSMTC 为整秒位置插值，不能等同于 Apple 原生逐字同步；多显示器跨屏、两小时稳定性等完整兼容性验收仍见 [兼容报告](docs/compatibility-report.md)。
 

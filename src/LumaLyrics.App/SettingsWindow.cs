@@ -10,8 +10,10 @@ public sealed class SettingsWindow : Window
 {
     readonly TabControl tabs=new();
     readonly Dictionary<string,RadioButton> themeChoices=[];
-    readonly OverlaySurface overlayPreview=new();
-    readonly TextBlock overlaySummary=new();
+    readonly ContentControl overlayHost=new(){HorizontalContentAlignment=HorizontalAlignment.Stretch,VerticalContentAlignment=VerticalAlignment.Stretch};
+    AppearanceEditor? overlayEditor;
+    bool closingSettings;
+    internal AppearanceEditor? OverlayEditor=>overlayEditor;
     readonly AppSettings settings;
     internal PersonalLibraryPanel PersonalLibrary {get;}
     internal ChineseTranslationPanel ChineseTranslations {get;}
@@ -19,7 +21,7 @@ public sealed class SettingsWindow : Window
     public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme)
     {
         settings=coordinator.Settings;
-        Title="浮光歌词 · 设置";Width=840;Height=760;MinWidth=640;MinHeight=520;
+        Title="浮光歌词 · 设置";Width=1120;Height=940;MinWidth=640;MinHeight=520;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;
         FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");
@@ -54,20 +56,15 @@ public sealed class SettingsWindow : Window
         }
         tabs.Items.Add(Tab("应用界面",appPanel));
 
-        var overlayPanel=new StackPanel();
-        overlayPanel.Children.Add(new TextBlock{Text="只为桌面上的那一句。",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,10)});
-        overlayPanel.Children.Add(Text("主题、字体、配色、背景与动效均独立保存。",12));
-        overlayPanel.Children.Add(Text("调整悬浮歌词不会改变应用界面。",12));
-        overlayPreview.DataContext=new PlayerViewModel{Current="把此刻，轻轻唱成一束光。",Next="让旋律停留在你身旁"};
-        overlayPreview.VerticalAlignment=VerticalAlignment.Center;
-        var scene=new Border{CornerRadius=new(20),Padding=new(24),Margin=new(0,20,0,18),MinHeight=168,Background=new LinearGradientBrush(Color.FromRgb(35,53,75),Color.FromRgb(92,90,110),30)};
-        scene.Child=overlayPreview;overlayPanel.Children.Add(scene);
-        ThemeManager.Bind(overlaySummary,TextBlock.ForegroundProperty,"MutedBrush");overlaySummary.FontSize=12;overlayPanel.Children.Add(overlaySummary);
-        var edit=new Button{Content="打开悬浮歌词独立外观…",Margin=new(0,22,0,0),HorizontalAlignment=HorizontalAlignment.Left};
-        edit.SetResourceReference(StyleProperty,"PrimaryButton");AutomationProperties.SetName(edit,"悬浮歌词独立外观");
-        edit.Click+=(_,_)=>{if(Owner is MainWindow main){main.ShowAppearance(this);}};
-        Activated+=(_,_)=>RefreshOverlayPreview();
-        overlayPanel.Children.Add(edit);RefreshOverlayPreview();tabs.Items.Add(Tab("悬浮歌词",overlayPanel));
+        tabs.Items.Add(Tab("悬浮歌词",overlayHost));
+        ((ScrollViewer)((TabItem)tabs.Items[1]).Content).SizeChanged+=(_,_)=>SizeAppearanceEditor();
+        ((ScrollViewer)((TabItem)tabs.Items[1]).Content).ScrollChanged+=(_,e)=>{if(e.ViewportHeightChange!=0)SizeAppearanceEditor();};
+        tabs.SelectionChanged+=(_,e)=>{
+            if(!ReferenceEquals(e.Source,tabs))return;
+            if(tabs.SelectedIndex==1)BeginAppearanceEditing();
+            else overlayEditor?.Close();
+        };
+        Closing+=(_,_)=>{closingSettings=true;overlayEditor?.Close();};
 
         var general=new StackPanel();
         general.Children.Add(Text("常规选项修改后，点击下方“保存常规设置”。",12));
@@ -111,12 +108,30 @@ public sealed class SettingsWindow : Window
         ThemeManager.Bind(label,TextBlock.ForegroundProperty,accent?"AccentBrush":"MutedBrush");return label;
     }
     static TabItem Tab(string heading,UIElement content)=>new(){Header=heading,Content=new ScrollViewer{Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Padding=new(0,0,12,4)}};
-    void RefreshOverlayPreview()
+    internal void BeginAppearanceEditing()
     {
-        var appearance=OverlayAppearance.From(settings);overlayPreview.Apply(appearance,settings.ReduceMotion);
-        overlaySummary.Text=$"当前悬浮外观：{appearance.Preset} · {appearance.FontSize:0} px";
+        if(overlayEditor is null)CreateAppearanceEditor();
+        overlayEditor?.BeginEditing();
+    }
+    void CreateAppearanceEditor()
+    {
+        if(Owner is not MainWindow main || closingSettings)return;
+        var editor=overlayEditor=main.CreateAppearanceEditor();overlayHost.Content=editor;
+        editor.SizeChanged+=(_,_)=>SizeAppearanceEditor();SizeAppearanceEditor();
+        editor.Completed+=()=>{
+            if(!ReferenceEquals(editor,overlayEditor))return;
+            overlayEditor=null;overlayHost.Content=null;
+            if(!closingSettings && tabs.SelectedIndex==1)CreateAppearanceEditor();
+        };
+    }
+    void SizeAppearanceEditor()
+    {
+        if(overlayEditor is null)return;
+        var viewport=(ScrollViewer)((TabItem)tabs.Items[1]).Content;
+        overlayHost.Height=Math.Max(overlayEditor.MinHeight,viewport.ViewportHeight>0?viewport.ViewportHeight:viewport.ActualHeight-4);
     }
     internal void SelectApplicationTheme(string id)=>themeChoices[AppThemes.Find(id).Id].IsChecked=true;
+    internal void SelectApplicationTab()=>tabs.SelectedIndex=0;
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
     internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
     internal void SelectTranslationTab()=>tabs.SelectedIndex=4;

@@ -20,7 +20,7 @@ public partial class MainWindow : Window
     readonly AppleMusicPlaybackBridge playbackBridge;
     readonly PlaybackQueueSidebar playbackSidebar;
     readonly OverlayWindow overlay; readonly DispatcherTimer timer;
-    Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceWindow? appearanceWindow;
+    Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceEditor? appearanceWindow;
     SettingsWindow? settingsWindow;
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
@@ -32,7 +32,7 @@ public partial class MainWindow : Window
         store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
-        ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
+        ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
         overlay=new(this,vm,settings);
         RefreshMainTranslationToggle();
         SelectUiTheme(settings.UiTheme,false);
@@ -193,11 +193,11 @@ public partial class MainWindow : Window
         for(int i=0;i<lyricBlocks.Count;i++)
         {
             var line=lyricBlocks[i];bool active=i==newIndex;
-            if(i<translationBlocks.Count){translationBlocks[i].FontSize=active?19:16;translationBlocks[i].Opacity=active?.95:.72;}
+            if(i<translationBlocks.Count){translationBlocks[i].FontSize=(active?19:16)*playbackTextScale;translationBlocks[i].LineHeight=translationBlocks[i].FontSize*1.5;translationBlocks[i].Opacity=active?.95:.72;}
             double oldSize=line.FontSize*(line.RenderTransform is ScaleTransform prior?prior.ScaleX:1),oldOpacity=line.Opacity;
             var color=((SolidColorBrush)FindResource(active?"TextBrush":"MutedBrush")).Color;
             var priorColor=line.Foreground is SolidColorBrush previous?previous.Color:color;
-            line.FontSize=active?34:24;line.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;
+            line.FontSize=(active?34:24)*playbackTextScale;line.LineHeight=line.FontSize*1.45;line.Margin=i<translationBlocks.Count && translationBlocks[i].Visibility==Visibility.Visible?new Thickness(0):new Thickness(0,0,0,24*playbackTextScale);line.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;
             line.BeginAnimation(OpacityProperty,null);line.Opacity=active?1:ThemeManager.Current.IsDark?.65:.82;line.RenderTransform=Transform.Identity;
             var brush=new SolidColorBrush(color);line.Foreground=brush;
             if(!motion || i!=oldIndex && i!=newIndex)continue;
@@ -241,20 +241,6 @@ public partial class MainWindow : Window
     {
         ApplyPlaybackLayout();
     }
-    void ApplyPlaybackLayout()
-    {
-        if(InfoPanel is null)return;bool narrow=ActualWidth<(settings.ShowPlaybackQueue?1180:940);
-        Grid.SetColumn(InfoPanel,0);Grid.SetRow(InfoPanel,0);Grid.SetColumn(LyricsPanel,narrow?0:1);Grid.SetRow(LyricsPanel,narrow?1:0);Grid.SetColumnSpan(InfoPanel,narrow?2:1);Grid.SetColumnSpan(LyricsPanel,narrow?2:1);
-        InfoColumn.Width=narrow?new GridLength(1,GridUnitType.Star):new GridLength(ActualWidth<1360?248:280);PlaybackQueueColumn.Width=new GridLength(settings.ShowPlaybackQueue?(ActualWidth<930?244:ActualWidth<1180?270:296):0);InfoRow.Height=narrow?new GridLength(154):new GridLength(1,GridUnitType.Star);LyricsRow.Height=narrow?new GridLength(1,GridUnitType.Star):new GridLength(0);
-        InfoPanel.RowDefinitions[0].Height=GridLength.Auto;ArtworkBorder.Height=narrow?double.NaN:InfoColumn.Width.Value-28;ArtworkBorder.VerticalAlignment=VerticalAlignment.Top;
-        ArtworkBorder.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;InfoPanel.Margin=narrow?new Thickness(0,0,0,12):new Thickness(0,0,28,0);
-        TrackTitle.FontSize=narrow?18:25;TrackTitle.MaxHeight=narrow?26:70;TrackTitle.Margin=narrow?new Thickness(0,0,0,4):new Thickness(0,20,0,7);TrackArtist.MaxHeight=narrow?18:36;TrackTime.Margin=narrow?new Thickness(0,5,0,0):new Thickness(0,18,0,2);
-        PlaybackControls.Margin=narrow?new Thickness(0,2,0,0):new Thickness(0,8,0,12);
-        ConnectionStatus.Visibility=QualityStatus.Visibility=narrow?Visibility.Collapsed:Visibility.Visible;
-        EmptyState.MaxWidth=narrow?460:390;
-        EmptyState.LayoutTransform=new ScaleTransform(narrow?.68:1,narrow?.68:1);
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded,()=>{if(currentIndex>=0 && DateTime.UtcNow>=manualUntil)CenterLine(true);});
-    }
     public void Restore() {Show();WindowState=WindowState.Normal;Activate();NativeWindow.ClampVisible(this);}
     public void ToggleOverlay() {if(overlay.IsVisible)overlay.Hide();else {overlay.Show();NativeWindow.ClampVisible(overlay);}settings.OverlayVisible=overlay.IsVisible;coordinator.SaveSettings();}
     void ToggleOverlayClicked(object s,RoutedEventArgs e)=>ToggleOverlay();
@@ -281,14 +267,24 @@ public partial class MainWindow : Window
     void AppearanceClicked(object s,RoutedEventArgs e)=>ShowAppearance();
     public void ShowAppearance(Window? dialogOwner=null)
     {
-        if(appearanceWindow is not null){appearanceWindow.Activate();return;}
-        overlay.BeginAppearanceEditing();
-        try
-        {
-            var window=appearanceWindow=new(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=dialogOwner??this};
-            window.Closed+=(_,_)=>{appearanceWindow=null;overlay.EndAppearanceEditing();if(!quitting)coordinator.SaveSettings();};window.Show();
-        }
-        catch{appearanceWindow=null;overlay.EndAppearanceEditing();throw;}
+        var preferences=dialogOwner as SettingsWindow;
+        if(preferences is null){SettingsClicked(this,new());preferences=settingsWindow!;}
+        preferences.SelectOverlayTab();preferences.BeginAppearanceEditing();
+        if(preferences.WindowState==WindowState.Minimized)preferences.WindowState=WindowState.Normal;
+        preferences.Activate();
+    }
+    internal AppearanceEditor CreateAppearanceEditor()
+    {
+        var editor=new AppearanceEditor(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus);
+        editor.EditingStarted+=()=>{
+            if(appearanceWindow is not null && !ReferenceEquals(editor,appearanceWindow))appearanceWindow.Close();
+            appearanceWindow=editor;overlay.BeginAppearanceEditing();
+        };
+        editor.Completed+=()=>{
+            if(!ReferenceEquals(editor,appearanceWindow))return;
+            appearanceWindow=null;overlay.EndAppearanceEditing();if(!quitting)coordinator.SaveSettings();
+        };
+        return editor;
     }
     void DiagnosticsClicked(object s,RoutedEventArgs e)=>new DiagnosticsWindow(coordinator,store,hotkeyError){Owner=this}.ShowDialog();
     void LibraryClicked(object s,RoutedEventArgs e)=>new LibraryWindow(coordinator){Owner=this}.ShowDialog();

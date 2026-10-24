@@ -13,14 +13,14 @@ public partial class MainWindow
         var original = OverlayAppearance.From(settings); var originalProfiles = settings.OverlayThemeProfiles;
         AppearanceWindow? restarted = null;
         async Task Settle() { await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); await Task.Delay(80); }
-        static void Select(AppearanceWindow editor, OverlayTheme theme)
+        static void Select(FrameworkElement editor, OverlayTheme theme)
         {
             var list = Descendants<ListBox>(editor).Single(x => x.Items.Cast<object>().Any(i => i is ListBoxItem { Tag: OverlayTheme }));
             list.SelectedItem = list.Items.Cast<ListBoxItem>().Single(i => ((OverlayTheme)i.Tag).Name == theme.Name);
         }
-        static Slider Slider(AppearanceWindow editor, string name) => Descendants<Slider>(editor).Single(s => AutomationProperties.GetName(s) == name);
-        static TextBox Color(AppearanceWindow editor, string name) => Descendants<TextBox>(editor).Single(s => AutomationProperties.GetName(s) == name);
-        static void Customize(AppearanceWindow editor, int index, double size, double radius, double opacity, double width, string background)
+        static Slider Slider(FrameworkElement editor, string name) => Descendants<Slider>(editor).Single(s => AutomationProperties.GetName(s) == name);
+        static TextBox Color(FrameworkElement editor, string name) => Descendants<TextBox>(editor).Single(s => AutomationProperties.GetName(s) == name);
+        static void Customize(AppearanceEditor editor, int index, double size, double radius, double opacity, double width, string background)
         {
             Descendants<TabControl>(editor).Single().SelectedIndex = 0; editor.UpdateLayout();
             editor.FontPicker.SelectedIndex = index; Slider(editor, "主歌词字号").Value = size;
@@ -29,7 +29,7 @@ public partial class MainWindow
             Slider(editor, "圆角比例").Value = radius; Slider(editor, "背景不透明度").Value = opacity;
             Slider(editor, "桌面歌词宽度").Value = width; Color(editor, "背景底色").Text = background;
         }
-        static void Reset(AppearanceWindow editor) => Descendants<Button>(editor).Single(b => b.Content as string == "重置当前主题").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        static void Reset(FrameworkElement editor) => Descendants<Button>(editor).Single(b => b.Content as string == "重置当前主题").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         try
         {
             settings.OverlayThemeProfiles = [];
@@ -84,7 +84,7 @@ public partial class MainWindow
         }
         finally
         {
-            restarted?.Close(); appearanceWindow?.Close(); settings.OverlayThemeProfiles = originalProfiles;
+            restarted?.Close(); appearanceWindow?.Close(); settingsWindow?.Close(); settings.OverlayThemeProfiles = originalProfiles;
             original.Apply(settings); overlay.ApplyStyle(); coordinator.SaveSettings();
         }
     }
