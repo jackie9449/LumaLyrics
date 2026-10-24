@@ -20,9 +20,17 @@
     <Grid Grid.Row="1">
      <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
      <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Margin="0,6,0,20">
-      <DockPanel Margin="16,12,16,0">
-       <StackPanel DockPanel.Dock="Bottom"><Button Style="{StaticResource NavButton}" Content="&#xE713;" ToolTip="设置" AutomationProperties.Name="设置" Click="SettingsClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE9D9;" ToolTip="诊断" AutomationProperties.Name="诊断" Click="DiagnosticsClicked"/></StackPanel>
-       <StackPanel><Button x:Name="LyricsNav" Style="{StaticResource NavButton}" Content="&#xE8D6;" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="当前歌词" AutomationProperties.Name="回到当前歌词" Click="ReturnClicked"/><Button x:Name="MusicNav" Style="{StaticResource NavButton}" Content="&#xE93C;" ToolTip="音乐库 · 在浮光中选歌" AutomationProperties.Name="打开音乐库" Click="MusicLibraryClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE8F1;" ToolTip="{Binding Library}" AutomationProperties.Name="资料库缓存管理" Click="LibraryClicked"/><Button Style="{StaticResource NavButton}" Content="&#xE790;" ToolTip="桌面歌词外观" AutomationProperties.Name="桌面歌词外观" Click="AppearanceClicked"/></StackPanel>
+      <DockPanel x:Name="NavigationRail" Margin="0,12,0,0">
+       <StackPanel DockPanel.Dock="Bottom">
+        <Button x:Name="SettingsNav" Style="{StaticResource NavButton}" Content="{StaticResource NavSettingsIcon}" ToolTip="设置" AutomationProperties.Name="设置" Click="SettingsClicked"/>
+        <Button x:Name="DiagnosticsNav" Style="{StaticResource NavButton}" Content="{StaticResource NavDiagnosticsIcon}" ToolTip="诊断" AutomationProperties.Name="诊断" Click="DiagnosticsClicked"/>
+       </StackPanel>
+       <StackPanel>
+        <Button x:Name="LyricsNav" Style="{StaticResource NavButton}" Content="{StaticResource NavLyricsIcon}" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="当前歌词" AutomationProperties.Name="回到当前歌词" Click="ReturnClicked"/>
+        <Button x:Name="MusicNav" Style="{StaticResource NavButton}" Content="{StaticResource NavMusicIcon}" ToolTip="音乐库 · 在浮光中选歌" AutomationProperties.Name="打开音乐库" Click="MusicLibraryClicked"/>
+        <Button x:Name="CacheNav" Style="{StaticResource NavButton}" Content="{StaticResource NavCacheIcon}" ToolTip="{Binding Library}" AutomationProperties.Name="资料库缓存管理" Click="LibraryClicked"/>
+        <Button x:Name="AppearanceNav" Style="{StaticResource NavButton}" Content="{StaticResource NavAppearanceIcon}" ToolTip="桌面歌词外观" AutomationProperties.Name="桌面歌词外观" Click="AppearanceClicked"/>
+       </StackPanel>
       </DockPanel>
      </Border>
      <Grid Grid.Column="1" x:Name="MainPageHost">

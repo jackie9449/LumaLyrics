@@ -26,6 +26,7 @@ public partial class MainWindow
             foreach(var theme in AppThemes.All)
             {
                 SelectUiTheme(theme.Id);await Task.Delay(300);
+                await VerifyNavigationVisualsAsync(directory,checks,theme.Id);
                 var primary=new Button{Content="播放音乐",Margin=new(0,0,10,0)};primary.SetResourceReference(StyleProperty,"PrimaryButton");
                 var secondary=new Button{Content="加入播放列表",Margin=new(0)};
                 var input=new TextBox{Text="搜索此刻的心情",Margin=new(0,12,0,0)};

@@ -1,9 +1,10 @@
-# 浮光歌词 LumaLyrics 0.16.1
+# 浮光歌词 LumaLyrics 0.16.2
 
 Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资料库封面与动态歌词，支持独立的透明悬浮歌词窗口。
 
 ## 这次更新
 
+- 修复左侧导航图标的彩色毛边与缩放发虚：六个入口使用统一矢量描边，图标固定居中，悬停和按压只动画背景层，保留选中与键盘焦点反馈。[导航修复与验证](docs/screenshots-ui-v0162/README.md)。
 - 修复悬浮液态玻璃与毛玻璃背景偶发变黑、隐藏再显示后背景层被遮住的问题。背景淡出改由合成层处理，保留清晰文字、圆角、点击穿透及独立外观。[修复与验证](docs/screenshots-ui-v0161/README.md)。
 - 主应用采用统一的交互组件与页面设计：设置、导入、缓存管理、诊断与原词校对共享窗口框架；音乐库、专辑、歌曲和播放列表使用同一套按钮、列表、表单与圆角规则。液态玻璃、毛玻璃与谷歌平面各有完整的配色和形态，悬浮歌词保持独立外观。
 - 按钮、专辑卡片、菜单、开关、列表、输入焦点与标签选择具有连续的悬停、按压及选中反馈；页面和面板切换柔和进入。快速反向操作从当前可见状态继续，动效完成后释放动画，隐藏和关闭时清理状态。
@@ -48,7 +49,7 @@ Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资
 
 | 液态玻璃 | 毛玻璃 | 谷歌平面 |
 | --- | --- | --- |
-| ![深色流光](docs/screenshots-ui-v0160/main-liquid.png) | ![浅色柔雾](docs/screenshots-ui-v0160/main-frost.png) | ![丁香平面](docs/screenshots-ui-v0160/main-material.png) |
+| ![深色流光](docs/screenshots-ui-v0162/main-liquid.png) | ![浅色柔雾](docs/screenshots-ui-v0162/main-frost.png) | ![丁香平面](docs/screenshots-ui-v0162/main-material.png) |
 
 更多 [主题实图与说明](docs/ui-themes.md) · [资料库导入说明](docs/library-assets.md)。预览文字和几何封面均为原创测试素材，不包含个人资料库内容。
 
@@ -86,7 +87,7 @@ Windows 桌面歌词应用。Apple Music 负责播放，浮光歌词预缓存资
 
 ## 验证
 
-280 项单元测试通过。0.16.1 源码与自包含运行包的完整 WPF 回归均为 715 项全部通过，包含 62 项玻璃专项检查；此前的悬浮玻璃颜色采样失败已修复，新增连续画面、真实淡出、焦点和系统命中测试，详见 [0.16.1 修复与验证记录](docs/screenshots-ui-v0161/README.md)。[0.16.0 的原始失败与旧版对照](docs/screenshots-ui-v0160/README.md)继续保留。运行包使用随包 Microsoft host 执行相同检查，无需 SDK。原生队列排序和原词校对的既有实机记录见 [0.15.0 验证记录](docs/screenshots-ui-v0150/README.md)；本次界面回归没有操作真实 Apple Music。界面验证只使用原创文字与图片，不能代替个人全库逐首核对。软件分发拒绝 32 类私人文件或模型；原有功能继续回归。
+280 项单元测试通过。0.16.2 源码与自包含运行包的完整 WPF 回归均为 751 项全部通过，包含新增 36 项导航检查与此前 62 项玻璃检查；导航覆盖三种主题、六个入口和 100%／125%／150% 离屏渲染，详见 [0.16.2 修复与验证记录](docs/screenshots-ui-v0162/README.md)。[0.16.1 玻璃修复](docs/screenshots-ui-v0161/README.md)与 [0.16.0 的原始失败及旧版对照](docs/screenshots-ui-v0160/README.md)继续保留。运行包使用随包 Microsoft host 执行相同检查，无需 SDK。原生队列排序和原词校对的既有实机记录见 [0.15.0 验证记录](docs/screenshots-ui-v0150/README.md)；本次界面回归没有操作真实 Apple Music。界面验证只使用原创文字与图片，不能代替个人全库逐首核对。软件分发拒绝 32 类私人文件或模型；原有功能继续回归。
 
 真实资料库已完成整库封面导入；歌词批量下载仍受来源和服务可用性限制。GSMTC 为整秒位置插值，不能等同于 Apple 原生逐字同步；多显示器跨屏、两小时稳定性等完整兼容性验收仍见 [兼容报告](docs/compatibility-report.md)。
 
