@@ -12,6 +12,7 @@
 
 ## 来源与可验证范围
 
+- 资料库成员来自原生主清单，而非整个本地曲目表。先验证全部曲目记录，再核对主清单标记、持久 ID、成员数量和引用边界；不能确认时保留已核验的离线范围，不回退到全部缓存记录。歌词、译文、封面和覆盖报告共用这个读取范围；历史个人内容保留。格式适配仍需随客户端变化核查，不能把未识别的格式当成空资料库。
 - [Apple MusicKit Song](https://developer.apple.com/documentation/musickit/song)：公开属性有 `hasLyrics`，没有公开的歌词正文读取属性。不能据此声称第三方歌词已获 Apple 逐首核对。
 - [LRCLIB](https://lrclib.net/docs)：使用服务返回的时间戳和纯音乐标记，保留来源和筛查结果。自动检查降低错误风险，不能证明每个字或每个时间点准确。
 - [Apple Artwork](https://developer.apple.com/documentation/applemusicapi/artwork)：使用 Apple Music 本地索引中的图片地址及尺寸模板；不按歌名盲配封面。

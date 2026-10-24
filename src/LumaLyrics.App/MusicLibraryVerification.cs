@@ -41,7 +41,7 @@ public partial class MainWindow
         {
             loadCount++;
             await Task.Delay(10,token);
-            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),3=>new(fixture.Select((song,i)=>song with{Track=song.Track with{Album="专辑 "+i.ToString("0000")},CoverPath=i%17==1?null:song.CoverPath}).ToArray(),""),4=>new(fixture.Select(song=>song with{CoverPath=null}).ToArray(),""),_=>new(fixture,"")};
+            return mode switch{1=>new([],"尚未找到音乐库"),2=>throw new IOException("fixture unavailable"),3=>new(fixture.Select((song,i)=>song with{Track=song.Track with{Album="专辑 "+i.ToString("0000")},CoverPath=i%17==1?null:song.CoverPath}).ToArray(),""),4=>new(fixture.Select(song=>song with{CoverPath=null}).ToArray(),""),5=>new([],"资料库主清单暂不可读，请稍后刷新。"){Unavailable=true},_=>new(fixture,"")};
         }
         async Task<LibraryPlayResult> Play(MusicLibrarySong song,CancellationToken token)
         {
@@ -107,6 +107,9 @@ public partial class MainWindow
             mode=1;await browser.RefreshAsync();checks["musicLibrary.emptyLibraryState"]=browser.SongList.Items.Count==0 && browser.HasEmptyMessage;
             mode=2;await browser.RefreshAsync();checks["musicLibrary.readFailureState"]=browser.StatusText.Contains("暂时无法读取");
             mode=0;await Search("");await browser.RefreshAsync();checks["musicLibrary.refreshRecovers"]=browser.SongList.Items.Count==3003;
+            await Search("微光");SelectSong("one");var verifiedRows=browser.SongList.ItemsSource;mode=5;await browser.RefreshAsync();
+            checks["musicLibrary.unavailableMembershipPreservesVerifiedBrowsing"]=ReferenceEquals(verifiedRows,browser.SongList.ItemsSource) && browser.SearchBox.Text=="微光" && browser.SongList.SelectedItem is MusicLibraryView.MusicRow{Song.PersistentId:"one"} && browser.StatusText.Contains("主清单暂不可读");
+            mode=0;await Search("");
             Click(ButtonWith("回到歌词"));checks["musicLibrary.returnToLyrics"]=LyricsPage.IsVisible && !browser.IsVisible;
             await ShowMusicLibraryAsync();checks["musicLibrary.reopenPreservesLoadedLibrary"]=browser.SongList.Items.Count==3003;
             var cache=new MusicLibraryView.ThumbnailCache();

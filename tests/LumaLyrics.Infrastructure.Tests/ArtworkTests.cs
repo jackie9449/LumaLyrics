@@ -55,7 +55,7 @@ public class ArtworkTests : IDisposable
     }
     [Fact] public void BrowserCatalogFindsAnImportedCoverThroughTheRealPersonalCacheFormat()
     {
-        var snapshot=new LibrarySnapshot("fixture",1,[new("01",track)],"hash");
+        var snapshot=new LibrarySnapshot(Path.Combine(root,"missing.musicdb"),1,[new("01",track)],"hash");
         using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.SyncLibrary(snapshot);
         using var cache=new ArtworkCache(root);cache.Sync(snapshot,new Dictionary<string,AppleArtworkSource>{{"01",new("01","original",null,null)}});
         var catalog=new MusicLibraryCatalog(root,Path.Combine(root,"missing.musicdb"));

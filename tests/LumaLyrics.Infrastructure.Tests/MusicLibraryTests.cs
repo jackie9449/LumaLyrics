@@ -14,7 +14,7 @@ public sealed class MusicLibraryTests:IDisposable
         using(var repo=new LyricsRepository(Path.Combine(root,"lyrics.db")))
         {
             var tracks=new[]{new LibraryTrack("1",Song().Track),new LibraryTrack("2",new("未下载的歌","浮光","新专辑",200000))};
-            repo.SyncLibrary(new("fixture",2,tracks,"fixture-hash"));repo.Save(tracks[0].Track,"个人歌词","手工",true,plain:true);
+            repo.SyncLibrary(new(Path.Combine(root,"missing.musicdb"),2,tracks,"fixture-hash"));repo.Save(tracks[0].Track,"个人歌词","手工",true,plain:true);
         }
         var library=new MusicLibraryCatalog(root,Path.Combine(root,"missing.musicdb")).Load();
         Assert.Equal(2,library.Songs.Count);Assert.Contains(library.Songs,s=>s.Title=="未下载的歌");

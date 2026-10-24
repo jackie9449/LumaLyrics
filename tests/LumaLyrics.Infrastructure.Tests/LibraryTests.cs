@@ -8,7 +8,7 @@ public class LibraryTests : IDisposable
 {
     readonly string dir=Path.Combine(Path.GetTempPath(),"Luma-library-"+Guid.NewGuid().ToString("N"));
     public LibraryTests(){Directory.CreateDirectory(dir);}
-    static byte[] Library(int count=2,int? declared=null,string? albumArtist=null)
+    internal static byte[] Library(int count=2,int? declared=null,string? albumArtist=null,Action<BinaryWriter,int>? playlists=null)
     {
         using var content=new MemoryStream();using var writer=new BinaryWriter(content,Encoding.UTF8,true);
         writer.Write("ltma"u8);writer.Write(12);writer.Write(declared??count);
@@ -18,6 +18,7 @@ public class LibraryTests : IDisposable
             void Text(int type,string value){var b=Encoding.Unicode.GetBytes(value);var chunk=new byte[36+b.Length];"boma"u8.CopyTo(chunk);BitConverter.GetBytes(20).CopyTo(chunk,4);BitConverter.GetBytes(chunk.Length).CopyTo(chunk,8);BitConverter.GetBytes(type).CopyTo(chunk,12);BitConverter.GetBytes(1).CopyTo(chunk,20);BitConverter.GetBytes(b.Length).CopyTo(chunk,24);b.CopyTo(chunk,36);writer.Write(chunk);}
             Text(2,$"Track {i+1}");Text(3,"Album");Text(4,"Artist");if(albumArtist is not null)Text(0x1B,albumArtist);var numeric=new byte[180];"boma"u8.CopyTo(numeric);BitConverter.GetBytes(20).CopyTo(numeric,4);BitConverter.GetBytes(180).CopyTo(numeric,8);BitConverter.GetBytes(1).CopyTo(numeric,12);BitConverter.GetBytes(180000).CopyTo(numeric,176);writer.Write(numeric);
         }
+        if(playlists is null)MusicDbPlaylistFixture.Write(writer,new PlaylistFixture(Enumerable.Range(1,count).Select(i=>(ulong)i).ToArray()));else playlists(writer,count);
         using var zipped=new MemoryStream();using(var z=new ZLibStream(zipped,CompressionLevel.SmallestSize,true))z.Write(content.ToArray());var compressed=zipped.ToArray();int crypt=compressed.Length-compressed.Length%16;
         var file=new byte[160+compressed.Length];"hfma"u8.CopyTo(file);BitConverter.GetBytes(160).CopyTo(file,4);BitConverter.GetBytes(file.Length).CopyTo(file,8);BitConverter.GetBytes(crypt).CopyTo(file,84);
         using var aes=Aes.Create();aes.Key=Encoding.ASCII.GetBytes("BHUILuilfghuila3");aes.EncryptEcb(compressed.AsSpan(0,crypt),file.AsSpan(160),PaddingMode.None);compressed.AsSpan(crypt).CopyTo(file.AsSpan(160+crypt));return file;

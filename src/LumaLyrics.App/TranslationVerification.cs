@@ -29,6 +29,15 @@ public partial class MainWindow
             checks["translation.settingsTabAvailable"]=Descendants<TabItem>(preferences).Any(t=>t.Header?.ToString()=="中文译文");
             checks["translation.mainToggleIndependent"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks.Count(b=>b.Visibility==Visibility.Visible)==7 && vm.CurrentTranslation.Length==0;
             checks["translation.savedImmediately"]=store.Load().ShowChineseTranslation && !store.Load().OverlayShowChineseTranslation;
+            checks["translation.mainFooterReflectsSettings"]=MainChineseTranslationToggle.IsChecked==true && System.Windows.Automation.AutomationProperties.GetName(MainChineseTranslationToggle)=="主窗口中文译文开关";
+            var mainPeer=new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(MainChineseTranslationToggle);
+            var mainToggle=(System.Windows.Automation.Provider.IToggleProvider)mainPeer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle);
+            mainToggle.Toggle();await Task.Delay(40);
+            checks["translation.mainFooterHidesAndPersists"]=!settings.ShowChineseTranslation && !store.Load().ShowChineseTranslation && translationBlocks.All(b=>b.Visibility==Visibility.Collapsed);
+            var mainSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="主窗口中文译文开关");
+            checks["translation.mainFooterReflectsInOpenSettings"]=mainSetting.IsChecked==false;
+            mainToggle.Toggle();await Task.Delay(40);
+            checks["translation.mainFooterRestoresOnlyMain"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks.Count(b=>b.IsVisible)==7 && vm.CurrentTranslation.Length==0 && store.Load().ShowChineseTranslation;
             var keepBrowsing=DateTime.UtcNow.AddMinutes(1);manualUntil=keepBrowsing;preferences.ChineseTranslations.SetVisibility(false,false);preferences.ChineseTranslations.SetVisibility(true,false);
             checks["translation.togglePreservesManualBrowsing"]=manualUntil==keepBrowsing;manualUntil=DateTime.MinValue;
             checks["translation.originalRowsAndBlankIntervalPreserved"]=lyricBlocks.Count==8 && translationBlocks[3].Visibility==Visibility.Collapsed && lyricBlocks[3].Text==" ";
@@ -47,6 +56,16 @@ public partial class MainWindow
                 SelectUiTheme(id,false);Width=1220;Height=820;Tick();await Task.Delay(60);
                 checks["translation."+id+".subordinateText"]=translationBlocks[4].IsVisible && translationBlocks[4].FontSize<lyricBlocks[4].FontSize && translationBlocks[4].Foreground==FindResource("MutedBrush");
                 checks["translation."+id+".preservesOriginalHighlight"]=lyricBlocks[4].FontSize==34 && currentIndex==4;
+                foreach(double width in new[]{1220d,980d,820d})
+                {
+                    Width=width;await Task.Delay(40);UpdateLayout();
+                    var toggleBounds=new Rect(MainChineseTranslationToggle.TranslatePoint(new(),this),MainChineseTranslationToggle.RenderSize);
+                    var actionBounds=new Rect(PlaybackActions.TranslatePoint(new(),this),PlaybackActions.RenderSize);
+                    var offsetBounds=new Rect(OffsetActions.TranslatePoint(new(),this),OffsetActions.RenderSize);
+                    checks[$"translation.mainFooter.{id}.{width:0}.lowerRightAndWithinBounds"]=toggleBounds.Left>ActualWidth*.5 && toggleBounds.Top>ActualHeight*.7 && toggleBounds.Right<=ActualWidth-8 && actionBounds.Left>=offsetBounds.Right;
+                }
+                Width=1220;await Task.Delay(40);UpdateLayout();
+                checks["translation.mainFooter."+id+".keyboardFocus"]=MainChineseTranslationToggle.Focus() && MainChineseTranslationToggle.IsKeyboardFocused;
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"translations-"+id+".png"),true);
             }
             (appearance with{Animations=false,TwoLines=false}).Apply(settings);overlay.ApplyStyle();await Task.Delay(40);
@@ -83,6 +102,10 @@ public partial class MainWindow
             checks["translation.toolbarToggleReflectsInOpenSettings"]=floatingSetting.IsChecked==false;
             preferences.ChineseTranslations.SetVisibility(false,true);await Task.Delay(40);
             checks["translation.settingsReflectsInToolbar"]=overlay.ChineseTranslationToggle.IsChecked==true && vm.CurrentTranslation.Length>0 && !settings.ShowChineseTranslation;
+            checks["translation.settingsReflectsInMainFooter"]=MainChineseTranslationToggle.IsChecked==false;
+            mainToggle.Toggle();await Task.Delay(40);
+            checks["translation.mainFooterPreservesEnabledFloating"]=settings.ShowChineseTranslation && settings.OverlayShowChineseTranslation && vm.CurrentTranslation.Length>0 && translationBlocks[4].IsVisible;
+            mainToggle.Toggle();await Task.Delay(40);
             toggle.Toggle();await Task.Delay(40);
             checks["translation.toolbarPreservesDisabledMainSwitch"]=!settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation;
             checks["translation.toolbarPreservesThemes"]=settings.UiTheme==unchangedTheme && overlay.Toolbar.Background.ToString()==unchangedChrome;

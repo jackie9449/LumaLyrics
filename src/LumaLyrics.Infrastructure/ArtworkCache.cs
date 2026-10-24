@@ -43,7 +43,7 @@ public sealed class ArtworkCache : IDisposable
         var albums=snapshot.Tracks.Where(t=>t.Track.Album.Length>0 && t.Track.Artist.Length>0 && sources.ContainsKey(t.PersistentId))
             .GroupBy(t=>MatchRules.Normalize(t.Track.Artist)+"|"+MatchRules.Normalize(t.Track.Album))
             .ToDictionary(g=>g.Key,g=>g.Select(t=>sources[t.PersistentId]).DistinctBy(s=>s.RemoteUri?.AbsoluteUri??s.ArtworkId).ToArray());
-        using var tx=db.BeginTransaction();Execute("UPDATE LibraryArtwork SET Active=0 WHERE Source=$s",("$s",snapshot.Path));
+        using var tx=db.BeginTransaction();Execute("UPDATE LibraryArtwork SET Active=0");
         foreach(var item in snapshot.Tracks)
         {
             sources.TryGetValue(item.PersistentId,out var source);var track=item.Track;

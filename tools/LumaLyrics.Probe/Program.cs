@@ -82,7 +82,7 @@ if(args.ElementAtOrDefault(0)=="--library")
 {
     var reader=new LumaLyrics.Infrastructure.AppleMusicLibraryReader();
     var library=reader.Read(args.ElementAtOrDefault(1)??LumaLyrics.Infrastructure.AppleMusicLibraryReader.Discover()??throw new FileNotFoundException("No library found"));
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{declared=library.DeclaredCount,read=library.Tracks.Count,timed=library.Tracks.Count(x=>x.Track.DurationMs.HasValue),blankTitles=library.Tracks.Count(x=>x.Track.Title.Length==0)}));return;
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{declared=library.DeclaredCount,read=library.Tracks.Count,stored=library.StoredTrackCount,timed=library.Tracks.Count(x=>x.Track.DurationMs.HasValue),blankTitles=library.Tracks.Count(x=>x.Track.Title.Length==0)}));return;
 }
 if(args.ElementAtOrDefault(0)=="--lookup")
 {

@@ -31,6 +31,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
             CREATE TABLE IF NOT EXISTS LookupFailures(Fingerprint TEXT PRIMARY KEY, ExpiresUtc TEXT);
             CREATE TABLE IF NOT EXISTS LibraryTracks(Source TEXT, PersistentId TEXT, Title TEXT, Artist TEXT, Album TEXT, Duration REAL, Fingerprint TEXT, State TEXT DEFAULT 'Pending', Detail TEXT, RetryUtc TEXT, Active INTEGER DEFAULT 1, LyricsKind TEXT DEFAULT '', PRIMARY KEY(Source,PersistentId));
             CREATE INDEX IF NOT EXISTS IX_LibraryTracks_State ON LibraryTracks(Active,State);
+            CREATE TABLE IF NOT EXISTS LibraryMembership(Source TEXT NOT NULL, PersistentId TEXT NOT NULL, PRIMARY KEY(Source,PersistentId));
             """);
         var columns=new HashSet<string>();using(var c=Command("PRAGMA table_info(LyricsDocuments)")){using var r=c.ExecuteReader();while(r.Read())columns.Add(r.GetString(1));}
         var libraryColumns=new HashSet<string>();using(var c=Command("PRAGMA table_info(LibraryTracks)")){using var r=c.ExecuteReader();while(r.Read())libraryColumns.Add(r.GetString(1));}
@@ -103,7 +104,9 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     }
     public void SyncLibrary(LibrarySnapshot snapshot)
     {
-        using var tx=db.BeginTransaction();Execute("UPDATE LibraryTracks SET Active=0 WHERE Source=$s",("$s",snapshot.Path));
+        // This profile selects one native library. Replace only its derived
+        // membership; historical rows, documents and manual bindings survive.
+        using var tx=db.BeginTransaction();Execute("UPDATE LibraryTracks SET Active=0");Execute("DELETE FROM LibraryMembership");
         foreach(var item in snapshot.Tracks)
         {
             var t=item.Track;
@@ -115,18 +118,19 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
                 RetryUtc=CASE WHEN LibraryTracks.Fingerprint<>excluded.Fingerprint OR ABS(COALESCE(LibraryTracks.Duration,0)-COALESCE(excluded.Duration,0))>5000 THEN NULL ELSE LibraryTracks.RetryUtc END,
                 Title=excluded.Title,Artist=excluded.Artist,Album=excluded.Album,Duration=excluded.Duration,Fingerprint=excluded.Fingerprint,Active=1
                 """,("$s",snapshot.Path),("$id",item.PersistentId),("$t",t.Title),("$ar",t.Artist),("$al",t.Album),("$d",t.DurationMs),("$f",t.Fingerprint));
+            Execute("INSERT INTO LibraryMembership(Source,PersistentId) VALUES($s,$id)",("$s",snapshot.Path),("$id",item.PersistentId));
         }
         tx.Commit();
     }
     public IReadOnlyList<LibraryQueueItem> GetLibraryQueue(bool includeDeferred=false,bool cachedOnly=false)
     {
-        using var c=Command("SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks WHERE Active=1 AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now) ORDER BY CASE State WHEN 'Pending' THEN 0 WHEN 'Error' THEN 2 ELSE 1 END,Source,PersistentId",("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")));
+        using var c=Command("SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId) AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now) ORDER BY CASE State WHEN 'Pending' THEN 0 WHEN 'Error' THEN 2 ELSE 1 END,Source,PersistentId",("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")));
         using var r=c.ExecuteReader();var result=new List<LibraryQueueItem>();
         while(r.Read())result.Add(new(r.GetString(0),r.GetString(1),new(r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetDouble(5))));return result;
     }
     public LibraryProgress GetLibraryProgress(string message="",bool running=false)
     {
-        using var c=Command("SELECT State,LyricsKind,COUNT(*) FROM LibraryTracks WHERE Active=1 GROUP BY State,LyricsKind");using var r=c.ExecuteReader();var counts=new Dictionary<string,int>();int synced=0,instrumental=0;
+        using var c=Command("SELECT State,LyricsKind,COUNT(*) FROM LibraryTracks WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId) GROUP BY State,LyricsKind");using var r=c.ExecuteReader();var counts=new Dictionary<string,int>();int synced=0,instrumental=0;
         while(r.Read()){var state=r.GetString(0);int count=r.GetInt32(2);counts[state]=counts.GetValueOrDefault(state)+count;if(state=="Cached"){if(r.GetString(1)=="Instrumental")instrumental+=count;else if(r.GetString(1)=="Synced")synced+=count;}}
         return new(counts.Values.Sum(),counts.GetValueOrDefault("Cached"),counts.GetValueOrDefault("Missing")+counts.GetValueOrDefault("Incomplete"),counts.GetValueOrDefault("Error"),running,message){Synced=synced,Instrumental=instrumental,Manual=counts.GetValueOrDefault("Manual")};
     }

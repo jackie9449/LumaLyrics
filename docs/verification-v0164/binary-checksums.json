@@ -1,0 +1,22 @@
+[
+  {
+    "File": "LumaLyrics.dll",
+    "Sha256": "ecb0b3283d051d2a0cbc22565761b5697a87f7a607309283dc958115da0835ba"
+  },
+  {
+    "File": "LumaLyrics.Core.dll",
+    "Sha256": "aaecad9e27df38af36fc2ef3ac78407a77f536d1202ba2fa3765d9f6a6dfee1b"
+  },
+  {
+    "File": "LumaLyrics.Infrastructure.dll",
+    "Sha256": "afc9c6cd8a462dcad931f9666d464bb7169b61e9c22fdc892add672783219a65"
+  },
+  {
+    "File": "LumaLyrics.Windows.dll",
+    "Sha256": "12329f504dd6a8dea0abd7cda3065a98a195411c8d254557ed7a13e27c988e69"
+  },
+  {
+    "File": "LumaLyrics.Probe.dll",
+    "Sha256": "80e76e568c2e66a79121ca4b37220ed62b3704f5cc024d086e4a303640bd8b26"
+  }
+]

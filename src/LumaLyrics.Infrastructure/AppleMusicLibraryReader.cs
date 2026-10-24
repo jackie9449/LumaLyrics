@@ -6,7 +6,11 @@ using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
 public sealed record LibraryTrack(string PersistentId,Track Track,string? AlbumPersistentId=null,string AlbumArtist="");
-public sealed record LibrarySnapshot(string Path,int DeclaredCount,IReadOnlyList<LibraryTrack> Tracks,string SourceHash);
+public sealed record LibrarySnapshot(string Path,int DeclaredCount,IReadOnlyList<LibraryTrack> Tracks,string SourceHash)
+{
+    // The track table also contains recordings outside the user's library.
+    public int StoredTrackCount {get;init;}=DeclaredCount;
+}
 
 /// <summary>Original, read-only metadata reader. Binary field definitions are documented
 /// by Gary Vollink (musicdb format). It never reads media, account keys or credentials.</summary>
@@ -60,7 +64,12 @@ public sealed class AppleMusicLibraryReader
             var tag=Encoding.ASCII.GetString(payload,offset,4);if(tag=="ssma")break;
             int size=tag=="boma"?Int(payload,offset+8):Int(payload,offset+4);
             if(size<8||size>payload.Length-offset)throw new InvalidDataException($"资料库记录边界无效（{tag}，offset={offset}，size={size}，payload={payload.Length}，tracks={tracks.Count}/{expected}）。");
-            if(tag=="ltma")expected=Int(payload,offset+8);
+            if(tag=="ltma")
+            {
+                if(size<12)throw new InvalidDataException("曲目列表头不完整。");
+                expected=Int(payload,offset+8);if(expected<0)throw new InvalidDataException("曲目计数无效。");
+                if(expected==0){offset+=size;break;}
+            }
             if(tag!="itma"){offset+=size;continue;}
             if(size<24)throw new InvalidDataException("曲目记录不完整。");
             string id=BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(offset+16,8)).ToString("X16");
@@ -85,10 +94,76 @@ public sealed class AppleMusicLibraryReader
                 offset+=length;
             }
             tracks.Add(new(id,new(title,artist,album,duration),albumId,albumArtist));
-            if(expected>=0 && tracks.Count==expected)break; // Only the declared track section is needed.
+            if(expected>=0 && tracks.Count==expected)break;
         }
         if(expected<0||tracks.Count!=expected)throw new InvalidDataException($"资料库曲目计数不一致：声明 {expected}，读取 {tracks.Count}，未把部分结果当作全库。");
-        return new(path,expected,tracks,Convert.ToHexString(SHA256.HashData(bytes)));
+        if(tracks.Select(t=>t.PersistentId).Distinct(StringComparer.Ordinal).Count()!=tracks.Count)throw new InvalidDataException("曲目表包含重复标识，未替换资料库清单。");
+        var membership=ReadLibraryMembership(payload,offset);
+        var storedIds=tracks.Select(t=>t.PersistentId).ToHashSet(StringComparer.Ordinal);
+        if(!membership.IsSubsetOf(storedIds))throw new InvalidDataException("资料库主清单引用了缺失曲目，稍后同步完成后重试。");
+        var library=tracks.Where(t=>membership.Contains(t.PersistentId)).ToArray();
+        return new(path,library.Length,library,Convert.ToHexString(SHA256.HashData(bytes))){StoredTrackCount=expected};
+    }
+
+    static HashSet<string> ReadLibraryMembership(byte[] payload,int offset)
+    {
+        // Walk chunk boundaries; localized names and arbitrary matching bytes
+        // inside metadata cannot establish personal library membership.
+        while(offset+12<=payload.Length)
+        {
+            string tag=Encoding.ASCII.GetString(payload,offset,4);
+            if(tag=="ssma")break;
+            int size=ChunkSize(payload,offset,payload.Length);
+            if(tag!="lPma"){offset+=size;continue;}
+            int count=Int(payload,offset+8);
+            if(count<1||count>100000)throw new InvalidDataException("资料库播放清单计数无效。");
+            offset+=size;HashSet<string>? members=null;
+            for(int playlist=0;playlist<count;playlist++)
+            {
+                int header=ChunkSize(payload,offset,payload.Length);
+                if(header<48 || !payload.AsSpan(offset,4).SequenceEqual("lpma"u8))throw new InvalidDataException("资料库播放清单头不受支持。");
+                int total=Int(payload,offset+8),children=Int(payload,offset+12),declaredMembers=Int(payload,offset+16);
+                if(total<header || total>payload.Length-offset || children<0 || children>1000000 || declaredMembers<0)throw new InvalidDataException("资料库播放清单边界无效。");
+                bool master=Int(payload,offset+44)==1;
+                if(master && members is not null)throw new InvalidDataException("资料库出现多个主清单，未合并未确认的曲目。");
+                var selected=master?new HashSet<string>(StringComparer.Ordinal):null;
+                int end=offset+total,childOffset=offset+header;
+                for(int child=0;child<children;child++)
+                {
+                    int length=ChunkSize(payload,childOffset,end);
+                    if(length<20 || !payload.AsSpan(childOffset,4).SequenceEqual("boma"u8))throw new InvalidDataException("资料库播放清单内容不完整。");
+                    if(master && Int(payload,childOffset+12)==206)
+                    {
+                        int metadataHeader=Int(payload,childOffset+4);
+                        if(metadataHeader<20 || metadataHeader>length-28)throw new InvalidDataException("资料库成员引用不完整。");
+                        int reference=childOffset+metadataHeader;
+                        if(!payload.AsSpan(reference,4).SequenceEqual("ipfa"u8))throw new InvalidDataException("资料库成员引用格式不受支持。");
+                        int referenceSize=Int(payload,reference+4);
+                        if(referenceSize<28 || referenceSize>length-metadataHeader)throw new InvalidDataException("资料库成员引用边界无效。");
+                        string id=BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(reference+20,8)).ToString("X16");
+                        if(!selected!.Add(id))throw new InvalidDataException("资料库主清单包含重复曲目引用。");
+                    }
+                    childOffset+=length;
+                }
+                if(childOffset!=end)throw new InvalidDataException("资料库播放清单计数与边界不一致。");
+                if(master)
+                {
+                    if(selected!.Count!=declaredMembers)throw new InvalidDataException("资料库成员计数不一致，未把部分清单当作全库。");
+                    members=selected;
+                }
+                offset=end;
+            }
+            return members??throw new InvalidDataException("未找到可确认的资料库主清单，未把播放或浏览缓存当成个人资料库。");
+        }
+        throw new InvalidDataException("尚未取得资料库主清单，请先在 Apple Music 完成同步。");
+    }
+    static int ChunkSize(byte[] payload,int offset,int end)
+    {
+        if(offset<0 || offset>end-12 || end>payload.Length)throw new InvalidDataException("资料库记录不完整。");
+        bool metadata=payload.AsSpan(offset,4).SequenceEqual("boma"u8);
+        int size=Int(payload,offset+(metadata?8:4));
+        if(size<12 || size>end-offset)throw new InvalidDataException("资料库记录边界无效。");
+        return size;
     }
     static int Int(byte[] bytes,int offset)
     {

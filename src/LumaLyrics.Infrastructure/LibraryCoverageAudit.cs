@@ -3,7 +3,10 @@ using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
 public sealed record LibraryCoverageTrack(string PersistentId,Track Track,string OriginalState,string? Source,string? SourceHash,int OriginalGroups,string TranslationState,int RequiredGroups,int TranslatedGroups,string? TranslationSource,string? Review);
-public sealed record LibraryCoverageReport(DateTimeOffset CreatedUtc,string NativeLibraryHash,int DeclaredCount,int Total,int Timed,int Instrumental,int MissingOrUnconfirmed,int ForeignTimed,int CompleteTranslations,int AiDrafts,int MissingOrPartialTranslations,IReadOnlyList<LibraryCoverageTrack> Tracks);
+public sealed record LibraryCoverageReport(DateTimeOffset CreatedUtc,string NativeLibraryHash,int DeclaredCount,int Total,int Timed,int Instrumental,int MissingOrUnconfirmed,int ForeignTimed,int CompleteTranslations,int AiDrafts,int MissingOrPartialTranslations,IReadOnlyList<LibraryCoverageTrack> Tracks)
+{
+    public int StoredTrackCount {get;init;}=DeclaredCount;
+}
 public static class LibraryCoverageAudit
 {
     public static LibraryCoverageReport Create(string root,LibrarySnapshot library,CancellationToken token=default)
@@ -25,7 +28,7 @@ public static class LibraryCoverageAudit
             rows.Add(new(item.PersistentId,item.Track,state,bound?.Source,document is null?null:TranslationAlignment.Hash(document.Raw),document?.Groups.Count??0,translationState,required.Length,translated,translation?.Source,translation?.Review));
         }
         int foreign=rows.Count(x=>x.RequiredGroups>0);
-        return new(DateTimeOffset.UtcNow,library.SourceHash,library.DeclaredCount,rows.Count,rows.Count(x=>x.OriginalState is "ManualTimed" or "CheckedTimed"),rows.Count(x=>x.OriginalState=="Instrumental"),rows.Count(x=>x.OriginalState is "Missing" or "Unconfirmed"),foreign,rows.Count(x=>x.TranslationState is "CompleteDraft" or "CompleteTranslation"),rows.Count(x=>x.TranslationState.EndsWith("Draft",StringComparison.Ordinal)),rows.Count(x=>x.RequiredGroups>0 && x.TranslatedGroups<x.RequiredGroups),rows);
+        return new(DateTimeOffset.UtcNow,library.SourceHash,library.DeclaredCount,rows.Count,rows.Count(x=>x.OriginalState is "ManualTimed" or "CheckedTimed"),rows.Count(x=>x.OriginalState=="Instrumental"),rows.Count(x=>x.OriginalState is "Missing" or "Unconfirmed"),foreign,rows.Count(x=>x.TranslationState is "CompleteDraft" or "CompleteTranslation"),rows.Count(x=>x.TranslationState.EndsWith("Draft",StringComparison.Ordinal)),rows.Count(x=>x.RequiredGroups>0 && x.TranslatedGroups<x.RequiredGroups),rows){StoredTrackCount=library.StoredTrackCount};
     }
     public static void Write(LibraryCoverageReport report,string destination)
     {

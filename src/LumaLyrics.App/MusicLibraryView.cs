@@ -103,6 +103,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         try
         {
             var result=await load(token);token.ThrowIfCancellationRequested();if(disposed)return;
+            if(result.Unavailable && loaded){if(!preserveContext)status.Text=result.Message;return;}
             var context=preserveContext?CaptureArtworkContext():null;
             thumbnails.Clear();albumCovers.Clear();queuePanel.SetLibrary(result.Songs);lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
             SetNowPlaying(nowPlayingTrack,nowPlaying);

@@ -13,7 +13,10 @@ public sealed record MusicLibrarySong(string Source,string PersistentId,Track Tr
     public string LyricsLabel=>LyricsKind switch{"Synced"=>"动态歌词","Instrumental"=>"纯音乐","Manual"=>"个人歌词",_=>""};
     public bool CanPlay=>!string.IsNullOrWhiteSpace(Track.Title) && !string.IsNullOrWhiteSpace(Track.Artist);
 }
-public sealed record MusicLibraryResult(IReadOnlyList<MusicLibrarySong> Songs,string Message);
+public sealed record MusicLibraryResult(IReadOnlyList<MusicLibrarySong> Songs,string Message)
+{
+    public bool Unavailable {get;init;}
+}
 
 // Read-only connections: browsing never starts downloads, changes bindings or edits Apple's library.
 public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
@@ -21,13 +24,13 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
     public MusicLibraryResult Load(CancellationToken token=default)
     {
         token.ThrowIfCancellationRequested();
-        var cached=ReadCached(token);string? path=libraryPath??AppleMusicLibraryReader.Discover();LibrarySnapshot? snapshot=null;string message="";
+        string? path=libraryPath??AppleMusicLibraryReader.Discover();var cached=ReadCached(path,token);LibrarySnapshot? snapshot=null;string message="";
         if(path is not null)
         {
             try{token.ThrowIfCancellationRequested();snapshot=new AppleMusicLibraryReader().Read(path);}
-            catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException){message="本机 Apple Music 资料库暂不可读，显示已导入的歌曲。可在缓存管理中选择资料库后刷新。";}
+            catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException){message="本机 Apple Music 资料库主清单暂不可读；已有核验清单可离线浏览，请在同步完成后刷新。";}
         }
-        if(snapshot is null && cached.Count==0)return new([],"尚未找到音乐库。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库。");
+        if(snapshot is null && cached.Count==0)return new([],"尚未取得可确认的音乐库清单。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库后刷新。"){Unavailable=true};
         var covers=ReadCovers(token);
         IReadOnlyDictionary<string,AppleArtworkSource>? albumReferences=null;
         if(snapshot is not null)try{albumReferences=new AppleMusicArtworkReader().Read(snapshot.Path);}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or SqliteException){}
@@ -41,11 +44,14 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
         }
         return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message);
     }
-    Dictionary<string,MusicLibrarySong> ReadCached(CancellationToken token)
+    Dictionary<string,MusicLibrarySong> ReadCached(string? source,CancellationToken token)
     {
         var result=new Dictionary<string,MusicLibrarySong>(StringComparer.OrdinalIgnoreCase);string path=Path.Combine(root,"lyrics.db");if(!File.Exists(path))return result;
         using var db=Open(path);using var command=db.CreateCommand();
-        command.CommandText="SELECT Source,PersistentId,Title,Artist,Album,Duration,State,LyricsKind FROM LibraryTracks WHERE Active=1";
+        command.CommandText="SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='LibraryMembership'";
+        if(Convert.ToInt32(command.ExecuteScalar())==0)return result; // Old cached rows never established membership.
+        command.CommandText="SELECT l.Source,l.PersistentId,l.Title,l.Artist,l.Album,l.Duration,l.State,l.LyricsKind FROM LibraryTracks l JOIN LibraryMembership m ON m.Source=l.Source AND m.PersistentId=l.PersistentId WHERE l.Active=1 AND ($source IS NULL OR l.Source=$source COLLATE NOCASE)";
+        command.Parameters.AddWithValue("$source",(object?)source??DBNull.Value);
         using var rows=command.ExecuteReader();while(rows.Read())
         {
             token.ThrowIfCancellationRequested();string state=rows.GetString(6),kind=state=="Manual"?"Manual":state=="Cached"?rows.GetString(7):"";

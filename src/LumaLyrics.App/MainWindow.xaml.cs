@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
+        RefreshMainTranslationToggle();
         SelectUiTheme(settings.UiTheme,false);
         coordinator.Updated+=Update; coordinator.ArtworkChanged+=SetArtwork;
         timer=new DispatcherTimer(TimeSpan.FromMilliseconds(33),DispatcherPriority.Background,(_,_)=>Tick(),Dispatcher);
@@ -123,6 +124,7 @@ public partial class MainWindow : Window
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
         vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
         overlay.RefreshTranslationToggle();
+        RefreshMainTranslationToggle();
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
