@@ -10,7 +10,10 @@ public sealed class TranslationPreparation(string root,ITranslationProvider prov
     public event Action<TranslationProgress>? Progress;
     public event Action<Track>? Prepared;
     void Report(TranslationProgress progress)
-    {var path=ProgressPath(root);string temp=path+".tmp";File.WriteAllText(temp,JsonSerializer.Serialize(progress));File.Move(temp,path,true);Progress?.Invoke(progress);}
+    {
+        PreparationProgressFile.Write(ProgressPath(root),JsonSerializer.Serialize(progress));
+        Progress?.Invoke(progress);
+    }
     public async Task RunAsync(string libraryPath,CancellationToken token,int? maximum=null,bool retry=false)
     {
         Directory.CreateDirectory(root);FileStream lease;

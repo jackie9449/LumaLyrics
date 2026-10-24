@@ -30,8 +30,8 @@ public sealed class LibraryArtworkImporter : IDisposable
         using var pause=new LibraryPauseMonitor(Path.Combine(root,"lyrics.db"),token);token=pause.Token;
         void Report(string message,bool running)
         {
-            var progress=cache.GetProgress(message,running);var path=ProgressPath(root);var temp=path+".tmp";
-            File.WriteAllText(temp,JsonSerializer.Serialize(progress));File.Move(temp,path,true);Progress?.Invoke(progress);
+            var progress=cache.GetProgress(message,running);
+            PreparationProgressFile.Write(ProgressPath(root),JsonSerializer.Serialize(progress));Progress?.Invoke(progress);
         }
         bool Paused()=>File.Exists(LibraryPrefetcher.PausePath(Path.Combine(root,"lyrics.db")));
         try

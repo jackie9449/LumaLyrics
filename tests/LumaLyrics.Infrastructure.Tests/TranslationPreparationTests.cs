@@ -49,6 +49,28 @@ public class TranslationPreparationTests : IDisposable
         using var lease=new FileStream(Path.Combine(root,"translation-preparation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
         await new TranslationPreparation(root,Found()).RunAsync("nonexistent-own-library",default);Assert.False(File.Exists(Path.Combine(root,"translations.db")));
     }
+    [Fact] public async Task TemporaryProgressReaderDoesNotAbortPreparationOrReplaceIncompleteJson()
+    {
+        if(!OperatingSystem.IsWindows())return;
+        using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));using var translations=new TranslationRepository(root);
+        string path=TranslationPreparation.ProgressPath(root),previous="{\"ownPreviousSnapshot\":true}";File.WriteAllText(path,previous);
+        var created=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var watcher=new FileSystemWatcher(root,"translation-preparation-progress.json*.tmp");
+        watcher.Created+=(_,_)=>created.TrySetResult();watcher.EnableRaisingEvents=true;
+        var reader=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+        Task preparation=Task.CompletedTask;
+        try
+        {
+            preparation=Task.Run(()=>new TranslationPreparation(root,Found()).PrepareAsync(Snapshot(Track),lyrics,translations,default));
+            await created.Task.WaitAsync(TimeSpan.FromSeconds(3));await Task.Delay(40);
+            Assert.False(preparation.IsCompleted);Assert.Equal(previous,File.ReadAllText(path));
+        }
+        finally{reader.Dispose();await preparation.WaitAsync(TimeSpan.FromSeconds(5));}
+        var progress=System.Text.Json.JsonSerializer.Deserialize<TranslationProgress>(File.ReadAllText(path));
+        Assert.NotNull(progress);Assert.False(progress.Running);Assert.Equal(1,progress.Prepared);
+        Assert.NotNull(translations.Find(Track,new LrcParser().Parse(Original)));
+        Assert.Empty(Directory.GetFiles(root,"translation-preparation-progress.json*.tmp"));
+    }
     [Fact] public async Task StopsAfterFourProviderErrorsAndKeepsAResumableQueue()
     {
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));using var translations=new TranslationRepository(root);int requests=0;

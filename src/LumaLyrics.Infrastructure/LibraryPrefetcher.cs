@@ -22,8 +22,7 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
     }
     void Report(LibraryProgress progress)
     {
-        var path=ProgressPath(databasePath);var temp=path+".tmp";
-        File.WriteAllText(temp,System.Text.Json.JsonSerializer.Serialize(progress));File.Move(temp,path,true);Progress?.Invoke(progress);
+        PreparationProgressFile.Write(ProgressPath(databasePath),System.Text.Json.JsonSerializer.Serialize(progress));Progress?.Invoke(progress);
     }
     public event Action<LibraryProgress>? Progress;
     public event Action<Track>? Cached;
