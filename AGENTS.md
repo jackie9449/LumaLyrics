@@ -2,6 +2,8 @@
 
 ## Product requirements
 
+- Main application pages, settings, import/cache/diagnostic/review dialogs share one visual language within each application theme. Liquid, Frosted and Material have distinct surface, shape and interaction tokens. Keep floating lyric surfaces, toolbar and appearance editor independently scoped.
+- Application controls provide smooth hover, press, keyboard focus and selection feedback; page changes have short interruptible entrances. Respect both reduced-motion settings and system animation preferences, release completed clocks and unload subscriptions, retain input/command semantics and keep animation inside layout/scroll bounds.
 - Application UI themes are selected in Settings. Keep theme selectors off the playback/lyrics main page.
 - Liquid Glass and Frosted Glass derive readable surfaces, glows and control colors from the current cover. Preserve neutral grayscale and default fallbacks, reduced-motion behavior and interruption continuity. Material keeps its fixed palette.
 - Floating desktop lyrics have independent appearance settings, previews, save/cancel behavior and scoped UI resources. Changing the application theme must not change floating lyrics, their toolbar or their appearance editor.

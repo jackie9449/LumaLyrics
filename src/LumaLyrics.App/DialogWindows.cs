@@ -15,7 +15,7 @@ internal static class DialogUi
         ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         var p=new StackPanel{Margin=new(26)};p.Children.Add(new TextBlock{Text=heading,FontSize=24,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,12)});
         var hintLabel=new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,18)};ThemeManager.Bind(hintLabel,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(hintLabel);
-        window.Content=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};return p;
+        ApplicationWindowFrame.SetContent(window,new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return p;
     }
     public static TextBox Field(Panel p,string label,string value="") {p.Children.Add(new TextBlock{Text=label,Margin=new(0,8,0,4)});var box=new TextBox{Text=value};p.Children.Add(box);return box;}
     public static Button Button(Panel p,string label,Action clicked) {var b=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Left,Margin=new(0,12,8,0)};b.Click+=(_,_)=>clicked();p.Children.Add(b);return b;}

@@ -87,7 +87,21 @@ public partial class MainWindow
             mode=0;Click(browser.QueuePanel.RefreshButton);await browser.ActiveQueueRefresh!;
             foreach(var theme in AppThemes.All)
             {
-                SelectUiTheme(theme.Id);await Task.Delay(80);UpdateLayout();browser.QueuePanel.RefreshButton.Focus();
+                SelectUiTheme(theme.Id);
+                var navigation=Descendants<Button>(browser).Where(b=>b.Content?.ToString() is "专辑" or "歌曲" or "播放列表").ToArray();
+                bool OnlySelected(string name)=>navigation.Length==3 && navigation.All(b=>AppMotion.GetIsSelected(b)==(b.Content?.ToString()==name) && Math.Abs(AppMotion.GetSelected(b)-(b.Content?.ToString()==name?1:0))<.001);
+                async Task<bool> WaitForSelection(string name)
+                {
+                    for(int attempt=0;attempt<75;attempt++){if(OnlySelected(name))return true;await Task.Delay(20);}
+                    return OnlySelected(name);
+                }
+                browser.ShowAlbums();bool albumSelected=await WaitForSelection("专辑");
+                await OpenQueue();bool queueSelected=await WaitForSelection("播放列表");
+                browser.ShowAllSongs();bool songsSelected=await WaitForSelection("歌曲");
+                await OpenQueue();bool queueRestored=await WaitForSelection("播放列表");
+                checks["queue."+theme.Id+".navigationHasOneSelectedTab"]=albumSelected && queueSelected && songsSelected && queueRestored;
+                checks["queue."+theme.Id+".navigationSelectionStages"]=$"albums={albumSelected};queue={queueSelected};songs={songsSelected};return={queueRestored}";
+                await Task.Delay(80);UpdateLayout();browser.QueuePanel.RefreshButton.Focus();
                 checks["queue."+theme.Id+".themeAndKeyboard"]=browser.QueuePanel.RefreshButton.IsKeyboardFocused && Descendants<TextBlock>(browser.QueuePanel).First(t=>t.Text=="当前播放列表").Foreground==FindResource("TextBrush");
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"playback-queue-"+theme.Id+".png"),true);
             }

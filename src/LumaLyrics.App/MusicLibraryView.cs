@@ -39,6 +39,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     internal string StatusText=>status.Text;
     internal int CachedThumbnailCount=>thumbnails.Count;
     internal ComboBox SortChoice=>sort;
+    internal bool IsFiltering=>debounce.IsEnabled;
     internal bool HasEmptyMessage=>empty.Visibility==Visibility.Visible;
     internal Task? ActivePlayback {get;private set;}
     internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorderQueue=null)
@@ -52,7 +53,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         var filters=new Grid{Margin=new(0,0,0,18)};filters.ColumnDefinitions.Add(new());filters.ColumnDefinitions.Add(new(){Width=GridLength.Auto});filters.ColumnDefinitions.Add(new(){Width=GridLength.Auto});Grid.SetRow(filters,1);root.Children.Add(filters);
         var searchHost=new Grid();searchHost.Children.Add(search);var hint=new TextBlock{Text="搜索歌曲、艺人或专辑",Margin=new(15,0,0,0),VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false};ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");searchHost.Children.Add(hint);filters.Children.Add(searchHost);AutomationProperties.SetName(search,"搜索音乐库");
         Grid.SetColumn(sort,1);filters.Children.Add(sort);AutomationProperties.SetName(sort,"音乐库排序");Grid.SetColumn(refresh,2);filters.Children.Add(refresh);refresh.Margin=new(0);refresh.Click+=async(_,_)=>await RefreshAsync();
-        var body=new Grid();Grid.SetRow(body,2);root.Children.Add(body);
+        var body=new Grid();AppMotion.SetRevealOnChange(body,true);Grid.SetRow(body,2);root.Children.Add(body);
         VirtualizingPanel.SetIsVirtualizing(songs,true);VirtualizingPanel.SetVirtualizationMode(songs,VirtualizationMode.Recycling);VirtualizingPanel.SetScrollUnit(songs,ScrollUnit.Pixel);ScrollViewer.SetCanContentScroll(songs,true);ScrollViewer.SetHorizontalScrollBarVisibility(songs,ScrollBarVisibility.Disabled);
         songs.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));songs.ItemTemplate=RowTemplate();
         AutomationProperties.SetName(songs,"音乐库歌曲");songs.SelectionChanged+=(_,_)=>playSelected.IsEnabled=songs.SelectedItem is MusicRow{Song.CanPlay:true};

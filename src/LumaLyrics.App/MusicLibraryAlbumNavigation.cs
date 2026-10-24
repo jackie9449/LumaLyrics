@@ -33,6 +33,7 @@ internal sealed partial class MusicLibraryView
         AutomationProperties.SetName(albumsTab,"按专辑浏览");AutomationProperties.SetName(songsTab,"查看全部歌曲");albumsTab.Click+=(_,_)=>ShowAlbums();songsTab.Click+=(_,_)=>ShowAllSongs();
         body.RowDefinitions.Add(new(){Height=GridLength.Auto});body.RowDefinitions.Add(new());Grid.SetRow(songs,1);Grid.SetRow(empty,1);empty.IsHitTestVisible=false;
         albumShelf=new(OpenAlbum,BeginPlayAlbum,albumCovers,playAlbum is not null);Grid.SetRow(albumShelf,1);body.Children.Insert(0,albumShelf);body.Children.Add(albumHeader);
+        AppMotion.SetRevealOnChange(albumShelf,true);AppMotion.SetRevealOnChange(songs,true);AppMotion.SetRevealOnChange(albumHeader,true);
         ThemeManager.Bind(albumHeader,Border.BackgroundProperty,"PanelBrush");ThemeManager.Bind(albumHeader,Border.BorderBrushProperty,"BorderBrush");
         var detail=new DockPanel();albumHeader.Child=detail;var back=new Button{Content="‹ 所有专辑",Padding=new(12,8,12,8),VerticalAlignment=VerticalAlignment.Top,Margin=new(0)};AutomationProperties.SetName(back,"返回所有专辑");back.Click+=(_,_)=>ShowAlbums();
         var detailActions=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Top,Margin=new(14,0,0,0)};DockPanel.SetDock(detailActions,Dock.Right);detail.Children.Add(detailActions);
@@ -83,7 +84,7 @@ internal sealed partial class MusicLibraryView
         foreach(var child in headingCopy.Children.OfType<TextBlock>().Take(2))child.Visibility=selectedAlbum is null?Visibility.Visible:Visibility.Collapsed;
         playSelected.Visibility=showAlbumShelf?Visibility.Collapsed:Visibility.Visible;
         foreach(var (button,active) in new[]{(albumsTab,showAlbumShelf || selectedAlbum is not null),(songsTab,!showAlbumShelf && selectedAlbum is null)})
-        {button.SetResourceReference(Control.BackgroundProperty,active?"AccentSoftBrush":"ControlBrush");button.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");}
+        {AppMotion.SetIsSelected(button,active);button.SetResourceReference(Control.BackgroundProperty,active?"AccentSoftBrush":"ControlBrush");button.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");}
     }
     void SizeAlbumHeader()
     {

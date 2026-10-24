@@ -11,7 +11,7 @@ public partial class MainWindow
 {
     async Task VerifyAlbumBrowserAsync(MusicLibraryView browser,string directory,Dictionary<string,object?> checks,Func<bool,Task> loadLarge)
     {
-        async Task Search(string text){browser.SearchBox.Text=text;await Task.Delay(190);UpdateLayout();}
+        async Task Search(string text){browser.SearchBox.Text=text;for(int attempt=0;attempt<100 && browser.IsFiltering;attempt++)await Task.Delay(20);UpdateLayout();}
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
         Button Card()=>Descendants<Button>(browser.AlbumShelf).First(b=>b.DataContext is MusicAlbum);
         Width=1220;Height=820;browser.ShowAlbums();await Search("创作集0 工作室0");

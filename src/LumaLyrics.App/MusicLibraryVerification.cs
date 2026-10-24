@@ -61,7 +61,7 @@ public partial class MainWindow
         musicLibrary=browser;MainPageHost.Children.Add(browser);
         Button ButtonWith(string text)=>Descendants<Button>(browser).First(b=>b.Content?.ToString()==text);
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
-        async Task Search(string text){browser.SearchBox.Text=text;await Task.Delay(200);UpdateLayout();}
+        async Task Search(string text){browser.SearchBox.Text=text;for(int attempt=0;attempt<100 && browser.IsFiltering;attempt++)await Task.Delay(20);UpdateLayout();}
         void SelectSong(string id){browser.SongList.SelectedItem=browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Single(r=>r.Song.PersistentId==id);browser.SongList.ScrollIntoView(browser.SongList.SelectedItem);UpdateLayout();}
         try
         {

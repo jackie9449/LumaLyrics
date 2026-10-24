@@ -31,7 +31,7 @@ internal static class ThemeManager
         // Give the main view an explicit palette scope while sharing the exact application
         // brushes with owned settings/dialogs, including their in-progress cover animations.
         if(applicationScope is not null)
-            foreach(string key in new[]{"TextBrush","MutedBrush","AccentBrush","AccentTextBrush","AccentSoftBrush","RaisedBrush","ControlBrush","HoverBrush","BorderBrush","GlowBrush","SecondaryGlowBrush","ScrollThumbBrush","WindowBrush","PanelBrush","ArtworkBrush","SheenBrush","PanelRadius","SurfaceSheenOpacity","AmbientOpacity"})
+            foreach(string key in new[]{"TextBrush","MutedBrush","AccentBrush","AccentTextBrush","AccentSoftBrush","RaisedBrush","ControlBrush","HoverBrush","BorderBrush","GlowBrush","SecondaryGlowBrush","ScrollThumbBrush","WindowBrush","PanelBrush","ArtworkBrush","SheenBrush","PanelRadius","SurfaceSheenOpacity","AmbientOpacity","ControlRadius","InputRadius","ItemRadius","CardRadius","InputBrush","RailBrush","PressedBrush","PrimaryFeedbackBrush","SwitchKnobBrush"})
                 applicationScope[key]=System.Windows.Application.Current.Resources[key];
     }
 
@@ -51,6 +51,15 @@ internal static class ThemeManager
         resources["PanelRadius"] = new CornerRadius(t.Radius);
         resources["SurfaceSheenOpacity"] = t.Id == "liquid" ? .16 : t.Id == "frost" ? .09 : 0d;
         resources["AmbientOpacity"] = t.Id == "liquid" ? .3 : t.Id == "frost" ? .38 : 0d;
+        resources["ControlRadius"]=new CornerRadius(t.Id=="material"?20:t.Id=="frost"?14:12);
+        resources["InputRadius"]=new CornerRadius(t.Id=="material"?16:t.Id=="frost"?12:10);
+        resources["ItemRadius"]=new CornerRadius(t.Id=="liquid"?12:16);
+        resources["CardRadius"]=new CornerRadius(t.Id=="material"?24:t.Id=="frost"?20:18);
+        ReplaceBrush(resources,"InputBrush",Solid(t.Id=="liquid"?t.WindowStart:t.Raised),animate);
+        ReplaceBrush(resources,"RailBrush",t.Id=="material"?Solid(t.Raised):Gradient(t.Control,t.WindowEnd),animate);
+        resources["PressedBrush"]=Solid(t.IsDark?"#16000000":"#12000000");
+        resources["PrimaryFeedbackBrush"]=Solid(ColorOf(t.AccentText).R>160?"#28FFFFFF":"#16000000");
+        resources["SwitchKnobBrush"]=Solid(t.Muted);
     }
 
     static void ReplaceBrush(ResourceDictionary resources,string key,Brush target,bool animate)
@@ -83,6 +92,13 @@ internal static class ThemeManager
     // Both the floating toolbar and its editor belong to the floating appearance.
     public static void ApplyOverlayResources(FrameworkElement target,OverlayAppearance appearance)
     {
+        // Floating surfaces keep their original component styles as well as their local palette.
+        AppMotion.SetEnabled(target,false);
+        if(!target.Resources.MergedDictionaries.Any(d=>d.Source?.OriginalString.Contains("UiStyles.xaml")==true))
+        {
+            target.Resources.MergedDictionaries.Add(new(){Source=new Uri("/LumaLyrics;component/SliderStyles.xaml",UriKind.Relative)});
+            target.Resources.MergedDictionaries.Add(new(){Source=new Uri("/LumaLyrics;component/UiStyles.xaml",UriKind.Relative)});
+        }
         var background=ColorOf(appearance.Background);
         bool light=(background.R*.2126+background.G*.7152+background.B*.0722)>160;
         Populate(target.Resources,AppThemes.Find(light?"frost":"liquid"));

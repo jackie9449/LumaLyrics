@@ -16,6 +16,6 @@ public partial class MainWindow
         PlaybackQueueHost.Visibility=visible?Visibility.Visible:Visibility.Collapsed;
         PlaybackQueueToggle.ToolTip=visible?"隐藏播放列表":"显示播放列表";
         AutomationProperties.SetName(PlaybackQueueToggle,visible?"隐藏播放列表":"显示播放列表");
-        ApplyPlaybackLayout();if(persist)coordinator.SaveSettings();
+        ApplyPlaybackLayout();if(persist){coordinator.SaveSettings();if(visible && PlaybackQueueHost.Child is FrameworkElement queue)AppMotion.Reveal(queue);else if(!visible)AppMotion.Reveal(LyricsScroll);}
     }
 }

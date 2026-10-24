@@ -30,6 +30,7 @@ internal sealed partial class MusicLibraryView
     {
         browseBody=body;browseFilters=filters;
         queuePanel=new(HideQueue,()=>ActiveQueueRefresh=RefreshQueueAsync(),play:playQueue,activate:activate,reorder:reorderQueue);Grid.SetRow(queuePanel,2);root.Children.Add(queuePanel);
+        AppMotion.SetRevealOnChange(queuePanel,true);
         queuePanel.PlaybackStarting+=()=>{playing?.Cancel();requests.Next();queueReading?.Cancel();queueVersions.Next();ActiveQueueRefresh=null;queuePanel.CancelLoading();};queuePanel.PlaybackStarted+=task=>ActivePlayback=task;queuePanel.PlaybackCompleted+=RefreshVisibleQueue;
         if(readQueue is not null)
         {
@@ -56,7 +57,8 @@ internal sealed partial class MusicLibraryView
     {
         browseBody.Visibility=browseFilters.Visibility=showingQueue?Visibility.Collapsed:Visibility.Visible;queuePanel.Visibility=showingQueue?Visibility.Visible:Visibility.Collapsed;
         queueTab.SetResourceReference(Control.BackgroundProperty,showingQueue?"AccentSoftBrush":"ControlBrush");queueTab.SetResourceReference(Control.ForegroundProperty,showingQueue?"AccentBrush":"MutedBrush");
-        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text="正在播放与接下来播放";playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab}){tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
+        AppMotion.SetIsSelected(queueTab,showingQueue);
+        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text="正在播放与接下来播放";playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab}){AppMotion.SetIsSelected(tab,false);tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
     }
     async Task RefreshQueueAsync()
     {

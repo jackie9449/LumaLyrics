@@ -23,7 +23,7 @@ public sealed class SettingsWindow : Window
         WindowStartupLocation=WindowStartupLocation.CenterOwner;
         FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");
-        var root=new Grid{Margin=new(28,24,28,22)};Content=root;
+        var root=new Grid{Margin=new(24,18,24,22)};ApplicationWindowFrame.SetContent(this,root);
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new StackPanel{Margin=new(0,0,0,22)};
         heading.Children.Add(Text("P R E F E R E N C E S",10,true));
@@ -38,7 +38,7 @@ public sealed class SettingsWindow : Window
         appPanel.Children.Add(Text("悬浮歌词拥有自己的外观，不会随这里的选择改变。",12));
         foreach(var theme in AppThemes.All)
         {
-            var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new(146)});row.ColumnDefinitions.Add(new());
+            var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new(112)});row.ColumnDefinitions.Add(new());
             var swatch=new Border{Height=76,CornerRadius=new(13),Background=Brush(theme.WindowStart),BorderBrush=Brush(theme.Border),BorderThickness=new(1),Margin=new(0,0,18,0)};
             var sample=new StackPanel{Margin=new(16,10,0,0)};
             sample.Children.Add(new TextBlock{Text="浮光",FontSize=20,FontWeight=FontWeights.SemiBold,Foreground=Brush(theme.Text)});
@@ -47,7 +47,7 @@ public sealed class SettingsWindow : Window
             var copy=new StackPanel{VerticalAlignment=VerticalAlignment.Center};
             copy.Children.Add(new TextBlock{Text=theme.Name,FontSize=15,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,7)});
             copy.Children.Add(Text(theme.Caption,12));Grid.SetColumn(copy,1);row.Children.Add(copy);
-            var option=new RadioButton{Content=row,Tag=theme.Id,GroupName="ApplicationTheme",Margin=new(0,10,0,0),Padding=new(12),IsChecked=AppThemes.Find(settings.UiTheme).Id==theme.Id};
+            var option=new RadioButton{Content=row,Tag=theme.Id,GroupName="ApplicationTheme",HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new(0,10,0,0),Padding=new(12),IsChecked=AppThemes.Find(settings.UiTheme).Id==theme.Id};
             option.SetResourceReference(StyleProperty,"ThemeChoice");AutomationProperties.SetName(option,theme.Name+"应用主题");
             option.Checked+=(_,_)=>changeApplicationTheme(theme.Id);
             themeChoices.Add(theme.Id,option);appPanel.Children.Add(option);
@@ -90,7 +90,7 @@ public sealed class SettingsWindow : Window
             settings.OnlineLookup=online.IsChecked==true;settings.AutoPrefetchLibrary=prefetch.IsChecked==true;
             settings.CloseToTray=close.IsChecked==true;settings.ReduceMotion=reduce.IsChecked==true;settings.FadeOnPause=fade.IsChecked==true;
             settings.GlobalOffsetMs=off;settings.ToggleHotkey=toggle.Text;settings.UnlockHotkey=unlock.Text;
-            coordinator.SettingsChanged();coordinator.SaveSettings();Close();
+            AppMotion.Configure(settings.ReduceMotion);coordinator.SettingsChanged();coordinator.SaveSettings();Close();
         });
         save.SetResourceReference(StyleProperty,"PrimaryButton");tabs.Items.Add(Tab("常规",general));
         PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab("个人资料",PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();

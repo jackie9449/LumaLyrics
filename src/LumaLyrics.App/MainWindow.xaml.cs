@@ -29,8 +29,8 @@ public partial class MainWindow : Window
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
-        store=new(dataDirectory);settings=store.Load();ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
-        InitializeComponent();DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
+        InitializeComponent();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);

@@ -23,17 +23,20 @@ public partial class MainWindow
             MainPageHost.Children.Add(musicLibrary);
         }
         LyricsPage.Visibility=Visibility.Collapsed;musicLibrary.Visibility=Visibility.Visible;SelectNavigation(true);
+        AppMotion.Reveal(musicLibrary);
         musicLibrary.ObserveArtworkProgress(coordinator.ArtworkStatus);
         await musicLibrary.EnsureLoadedAsync();musicLibrary.SetNowPlaying(coordinator.ActiveTrack,coordinator.Snapshot?.Status==LumaLyrics.Core.PlayState.Playing);
     }
     void ShowLyricsPage()
     {
         if(musicLibrary is not null)musicLibrary.Visibility=Visibility.Collapsed;LyricsPage.Visibility=Visibility.Visible;SelectNavigation(false);
+        AppMotion.Reveal(LyricsPage);
     }
     void SelectNavigation(bool library)
     {
         foreach(var (button,active) in new[]{(LyricsNav,!library),(MusicNav,library)})
         {
+            AppMotion.SetIsSelected(button,active);
             button.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");
             if(active)button.SetResourceReference(Control.BackgroundProperty,"AccentSoftBrush");else button.ClearValue(Control.BackgroundProperty);
         }
