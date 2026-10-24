@@ -63,21 +63,21 @@ public partial class MainWindow
                 a.Apply(fixture);floating.ApplyStyle();await Settle();
                 checks[key+".ratioRestoresAfterResize"]=Math.Abs(MaskRadius()-shortRadius)<.1;
 
-                double textOpacity=floating.LyricSurface.CurrentLine.Opacity;double previousMean=-1;byte previousNative=0;
+                double textOpacity=floating.LyricSurface.CurrentLine.Opacity;double previousMean=-1;float previousCompositor=0;
                 foreach(double opacity in new[]{0d,.001,.01,.05,.1})
                 {
                     var current=a with{Opacity=opacity};current.Apply(fixture);floating.ApplyStyle();await Settle();
                     string suffix=opacity.ToString("0.000",System.Globalization.CultureInfo.InvariantCulture);
-                    byte alpha=0;if(opacity>0)CornerNative.GetLayeredWindowAttributes(floating.GlassHostHandle,out _,out alpha,out _);
-                    byte expected=(byte)Math.Round(255*(a.Material=="frost"?.98:.78)*current.BackgroundEffectOpacity());
-                    checks[key+".nativeAlpha."+suffix]=opacity==0?!floating.GlassHostVisible:alpha==expected && alpha>=previousNative;
+                    float alpha=floating.GlassHostOpacity;
+                    double expected=(a.Material=="frost"?.98:.78)*current.BackgroundEffectOpacity();
+                    checks[key+".compositorOpacity."+suffix]=opacity==0?!floating.GlassHostVisible:Math.Abs(alpha-expected)<.000001 && alpha>=previousCompositor;
                     var pixels=Pixels(floating.LyricSurface.Material,out int w,out int h);
                     double sum=0;int count=0;
                     for(int y=h/3;y<h*2/3;y++)for(int x=w/3;x<w*2/3;x++){sum+=pixels[(y*w+x)*4+3];count++;}
                     double mean=sum/Math.Max(1,count);
                     checks[key+".paintAlpha."+suffix]=mean>=previousMean && (opacity==0?mean==0:opacity<=.01?mean<8:true);
                     checks[key+".textUnaffected."+suffix]=floating.LyricSurface.CurrentLine.Opacity==textOpacity && floating.LyricSurface.CurrentLine.Text==text.Current;
-                    previousMean=mean;previousNative=alpha;
+                    previousMean=mean;previousCompositor=alpha;
                 }
                 (a with{Opacity=0}).Apply(fixture);floating.ApplyStyle();await Settle();
                 checks[key+".zeroClearsAfterMaterialWasVisible"]=!floating.GlassHostVisible && floating.LyricSurface.CurrentLine.IsVisible;

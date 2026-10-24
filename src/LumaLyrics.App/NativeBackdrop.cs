@@ -30,6 +30,7 @@ internal sealed class NativeBackdrop : IDisposable
     internal bool HostVisible=>host?.IsVisible==true;
     internal bool HostInputTransparent=>host?.IsInputTransparent==true;
     internal nint HostHandle=>host?.Handle??0;
+    internal float HostOpacity=>HostVisible?host?.Opacity??0:0;
     internal long GeometryUpdates=>host?.GeometryUpdates??0;
     internal long PositionUpdates=>host?.PositionUpdates??0;
     internal long RegionUpdates {get;private set;}

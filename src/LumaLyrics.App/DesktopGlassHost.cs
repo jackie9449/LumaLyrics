@@ -29,12 +29,13 @@ internal sealed class DesktopGlassHost : IDisposable
     (int Width,int Height,int RadiusX,int RadiusY) regionSize;
     (int Width,int Height,float RadiusX,float RadiusY) visualSize;
     (int Left,int Top,int Width,int Height)? placement;
-    byte opacity=255;
+    float opacity=1;
     internal long GeometryUpdates {get;private set;}
     internal long PositionUpdates {get;private set;}
     public bool IsVisible=>handle!=0 && IsWindowVisible(handle);
     internal bool IsInputTransparent=>handle!=0 && (GetWindowLongPtr(handle,-20)&0x80020)==0x80020;
     internal nint Handle=>handle;
+    internal float Opacity=>surface?.Opacity??0;
     public DesktopGlassHost(Window foreground)=>this.foreground=foreground;
 
     void Create()
@@ -52,7 +53,12 @@ internal sealed class DesktopGlassHost : IDisposable
             if(RegisterClass(ref cls)==0 && Marshal.GetLastWin32Error()!=1410)throw new Win32Exception();
             registered=true;
         }
-        handle=CreateWindowEx(0x080800A0,ClassName,"LumaLyrics glass substrate",0x80000000,0,0,1,1,0,0,GetModuleHandle(null),0);
+        // Render through the compositor, without a legacy GDI redirection bitmap. Keep
+        // WS_EX_LAYERED solely for its documented WS_EX_TRANSPARENT input behavior.
+        // Sharing the foreground's owner keeps both siblings above it after hide/show,
+        // without making the substrate an owned window above the sharp lyric text.
+        var owner=foreground.Owner is { } ownedBy?NativeWindow.Handle(ownedBy):0;
+        handle=CreateWindowEx(0x082800A0,ClassName,"LumaLyrics glass substrate",0x80000000,0,0,1,1,owner,0,GetModuleHandle(null),0);
         if(handle==0)throw new Win32Exception();
         if(!SetLayeredWindowAttributes(handle,0,255,2))throw new Win32Exception();
         int enabled=1;
@@ -88,10 +94,10 @@ internal sealed class DesktopGlassHost : IDisposable
         {
             GeometryUpdates++;surface!.Size=geometry!.Size=new Vector2(width,height);geometry.CornerRadius=new(rx,ry);visualSize=visual;
         }
-        // Constant window alpha blends the blurred substrate with the desktop. Sprite alpha
-        // on a legacy layered HWND would instead expose its black redirection background.
-        byte nextOpacity=(byte)Math.Round(255*Math.Clamp((appearance.Material=="frost"?.98:.78)*appearance.BackgroundEffectOpacity()*foreground.Opacity,0,1));
-        if(nextOpacity!=opacity){if(!SetLayeredWindowAttributes(handle,0,nextOpacity,2))throw new Win32Exception();opacity=nextOpacity;}
+        // The native layered alpha stays 255. Combining its fade with a host backdrop
+        // can expose the legacy black surface; fade the compositor visual instead.
+        float nextOpacity=(float)Math.Clamp((appearance.Material=="frost"?.98:.78)*appearance.BackgroundEffectOpacity()*foreground.Opacity,0,1);
+        if(nextOpacity!=opacity){surface!.Opacity=nextOpacity;opacity=nextOpacity;}
         var size=(width,height,(int)Math.Ceiling(rx),(int)Math.Ceiling(ry));
         if(regionSize!=size)
         {

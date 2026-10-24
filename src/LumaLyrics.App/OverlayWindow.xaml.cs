@@ -26,6 +26,7 @@ public partial class OverlayWindow : Window
     internal bool GlassHostVisible=>backdrop.HostVisible;
     internal bool GlassHostInputTransparent=>backdrop.HostInputTransparent;
     internal nint GlassHostHandle=>backdrop.HostHandle;
+    internal float GlassHostOpacity=>backdrop.HostOpacity;
     internal (long Samples,long Geometry,long Regions,long Positions) MovementWork=>(OverlayAmbientContrast.SampleCount,backdrop.GeometryUpdates,backdrop.RegionUpdates,backdrop.PositionUpdates);
     internal bool InteractiveMove=>interactiveMove;
     readonly DispatcherTimer toolbarDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};

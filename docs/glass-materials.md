@@ -1,4 +1,4 @@
-# 玻璃材质与实时外观编辑 · 0.10.1
+# 玻璃材质与实时外观编辑 · 0.16.1
 
 本次重制参考 Apple 官方的 [Materials](https://developer.apple.com/design/human-interface-guidelines/materials) 与 WWDC25 [Meet Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)。液态玻璃强调随形高光、透镜般的厚度感、环境融合及清晰的内容层次；传统毛玻璃侧重散射与柔和扩散。材质应随交互轻微响应，并兼顾文字可读性、透明效果与减少动画偏好。
 
@@ -10,6 +10,8 @@
 两种材质在 Windows 上以独立的 Windows Composition 背景层配合清晰的 WPF 文字层实现。背景层拥有圆角几何裁切，始终位于歌词下方、不会激活或拦截点击；移动、缩放、DPI、隐藏、暂停淡出和纯音乐状态与歌词同步。系统背景柔化不可用或系统关闭透明效果时保留半透明回退。Windows 11 使用官方 `DWMWA_USE_HOSTBACKDROPBRUSH`，旧版本保留兼容路径。
 
 这是针对 Windows 的原创实现，参考 Apple 的设计原则；没有调用 Apple 的专有渲染器，也没有完整复现其物理折射、形变及平台动态系统。预览场景与文档壁纸均为原创矢量绘制，不包含 Apple 素材或个人封面。
+
+0.16.1 修复玻璃背景偶发变黑：原生背景窗口使用 `WS_EX_NOREDIRECTIONBITMAP`，分层窗口的原生 alpha 固定为 255，以保留点击穿透；背景强度与窗口淡出都交由合成视觉层的浮点透明度处理。背景层与歌词窗口共享同一个 owner，避免隐藏后再显示时被 owner 遮住。[连续画面、淡出、焦点及命中测试记录](screenshots-ui-v0161/README.md)。
 
 ## 调整与字体预览
 
