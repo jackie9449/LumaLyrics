@@ -262,10 +262,16 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         var token=lookup.Token;var serial=requests.Next();foregroundLookupActive=true;
         try
         {
-            var results=await manualProvider.LookupAsync(track,token);
+            var results=manualProvider is IManualLyricsSearch search?await search.SearchManualAsync(track,token):await manualProvider.LookupAsync(track,token);
             if(token.IsCancellationRequested || disposed || !requests.IsCurrent(serial))return null;
             if(Snapshot is null)SetManualTrack(track);
-            Candidates=results;LyricsStatus=$"找到 {results.Count} 个候选，请确认版本";Updated?.Invoke();return results;
+            Candidates=results;
+            var unavailable=(results as LyricsLookupResult)?.UnavailableSources??[];
+            int synced=results.Count(c=>!c.Instrumental && !string.IsNullOrWhiteSpace(c.SyncedLyrics));
+            int plain=results.Count(c=>!c.Instrumental && string.IsNullOrWhiteSpace(c.SyncedLyrics));
+            LyricsStatus=results.Count==0?"未找到候选，可只填歌名或简化歌手名重试。":$"找到 {results.Count} 个候选：同步 {synced} · 静态 {plain} · 纯音乐 {results.Count(c=>c.Instrumental)}。请选择录音版本。";
+            if(unavailable.Count>0)LyricsStatus+=" 部分来源暂不可用："+string.Join("、",unavailable)+"。可稍后重试。";
+            Updated?.Invoke();return results;
         }
         catch(OperationCanceledException) { return null; }
         catch(Exception e) { if(!token.IsCancellationRequested && requests.IsCurrent(serial) && !disposed){LyricsStatus=e.Message;Updated?.Invoke();}return null; }

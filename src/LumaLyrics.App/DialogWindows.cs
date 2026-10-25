@@ -75,14 +75,14 @@ public sealed class ImportWindow : Window
 }
 public sealed class CandidateWindow : Window
 {
-    readonly PlaybackCoordinator coordinator;Track? target;readonly PlaybackSnapshot? playbackTarget;
+    readonly PlaybackCoordinator coordinator;Track? target,searchQuery;readonly PlaybackSnapshot? playbackTarget;
     readonly ListBox list;readonly TextBox preview;readonly TextBlock status,targetLabel;readonly Button choose;
     readonly CancellationTokenSource searchLifetime=new();long searchVersion;bool searching,closed;
     public CandidateWindow(PlaybackCoordinator coordinator)
-        : this(coordinator,DialogUi.ManualTrack,(owner,message)=>MessageBox.Show(owner,message)) { }
+        : this(coordinator,owner=>LyricsSearchWindow.Prompt(owner,((CandidateWindow)owner).searchQuery),(owner,message)=>MessageBox.Show(owner,message)) { }
     internal CandidateWindow(PlaybackCoordinator coordinator,Func<Window,Track?> manualTrack,Action<Window,string> notify)
     {
-        this.coordinator=coordinator;target=coordinator.ActiveTrack;playbackTarget=coordinator.Snapshot;Title="浮光歌词 · 更换歌词";
+        this.coordinator=coordinator;target=coordinator.ActiveTrack;searchQuery=target;playbackTarget=coordinator.Snapshot;Title="浮光歌词 · 更换歌词";
         var p=DialogUi.Panel(this,"选择适合这首歌的版本","手动搜索只改变搜索条件，所选歌词直接应用到绑定目标。确认后锁定绑定，自动查询不会覆盖你的选择。");
         targetLabel=new TextBlock{Text=TargetText(),TextWrapping=TextWrapping.Wrap};p.Children.Add(targetLabel);
         status=new TextBlock{TextWrapping=TextWrapping.Wrap};p.Children.Add(status);
@@ -90,6 +90,7 @@ public sealed class CandidateWindow : Window
         {
             if(!coordinator.Settings.OnlineLookup){notify(this,"请先在设置中开启联网查词。");return;}
             var query=manualTrack(this);if(query is null || closed)return;
+            searchQuery=query;
             // Provider metadata is editable; the live song's binding identity is not.
             if(playbackTarget is null)target=query;
             targetLabel.Text=TargetText();var version=++searchVersion;searching=true;

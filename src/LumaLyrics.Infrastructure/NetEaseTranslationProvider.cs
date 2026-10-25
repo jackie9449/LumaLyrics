@@ -17,7 +17,7 @@ public interface ITranslationProvider
     Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track track,CancellationToken token);
 }
 
-public sealed class NetEaseTranslationProvider : ITranslationProvider,IDisposable
+public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IManualLyricsSearch,IDisposable
 {
     readonly HttpClient client;readonly SemaphoreSlim gate=new(1,1);readonly TimeSpan interval;DateTimeOffset next;
     public NetEaseTranslationProvider(HttpMessageHandler? handler=null,TimeSpan? minimumInterval=null)

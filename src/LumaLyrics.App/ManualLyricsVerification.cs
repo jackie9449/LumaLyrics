@@ -23,14 +23,14 @@ public partial class MainWindow
             DateTimeOffset.UtcNow,DateTimeOffset.UtcNow,Stopwatch.GetTimestamp(),PositionQuality.Reliable);
         subject.SetManualLyricsVerificationSnapshot(snapshot);
 
-        static Button FindButton(CandidateWindow dialog,string label)=>Descendants<Button>(dialog).Single(b=>b.Content?.ToString()==label);
-        static void Click(CandidateWindow dialog,string label)
+        static Button FindButton(Window dialog,string label)=>Descendants<Button>(dialog).Single(b=>b.Content?.ToString()==label);
+        static void Click(Window dialog,string label)
         {
             var button=FindButton(dialog,label);
             if(!button.IsEnabled)throw new InvalidOperationException("Verification attempted a disabled button: "+label);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         }
-        async Task ExerciseAsync(CandidateWindow dialog,Func<Task> exercise)
+        async Task ExerciseAsync(Window dialog,Func<Task> exercise)
         {
             var finished=new TaskCompletionSource();
             _=Dispatcher.BeginInvoke(async () =>
@@ -42,6 +42,39 @@ public partial class MainWindow
         }
 
         subject.Import(playback,"[00:00]旧的手动原创文字","Previous manual fixture",false);
+
+        var editor=new LyricsSearchWindow(this,playback);
+        await ExerciseAsync(editor,async () =>
+        {
+            checks["manualLyrics.searchFormPrefillsCurrentTrack"]=editor.SongTitle.Text==playback.Title && editor.Artist.Text==playback.Artist
+                && editor.Album.Text==playback.Album && editor.Duration.Text=="96";
+            checks["manualLyrics.searchFormSupportsEnter"]=FindButton(editor,"搜索").IsDefault;
+            editor.SongTitle.Clear();Click(editor,"搜索");
+            checks["manualLyrics.searchFormRejectsEmptyTitle"]=editor.Query is null && editor.IsVisible;
+            editor.SongTitle.Text="原创关键词";editor.Artist.Clear();editor.Album.Clear();editor.Duration.Clear();
+            await Task.Delay(220);VisualVerification.Save(editor,Path.Combine(directory,"manual-search-form.png"));
+            Click(editor,"搜索");
+            checks["manualLyrics.searchFormAllowsTitleOnly"]=editor.Query is{Title:"原创关键词",Artist:"",Album:"",DurationMs:null};
+        });
+
+        var prompted=new CandidateWindow(subject){Owner=this};
+        await ExerciseAsync(prompted,() =>
+        {
+            for(int attempt=0;attempt<2;attempt++)
+            {
+                int currentAttempt=attempt;
+                _=Dispatcher.BeginInvoke(() =>
+                {
+                    var search=Application.Current.Windows.OfType<LyricsSearchWindow>().Single();
+                    checks[$"manualLyrics.searchPrompt.{currentAttempt}.prefill"]=search.SongTitle.Text==(currentAttempt==0?playback.Title:"重新搜索的原创关键词")
+                        && search.Artist.Text==(currentAttempt==0?playback.Artist:"");
+                    search.SongTitle.Text="重新搜索的原创关键词";search.Artist.Clear();search.Album.Clear();search.Duration.Clear();Click(search,"搜索");
+                });
+                Click(prompted,"手动填写歌名 / 歌手搜索");
+            }
+            checks["manualLyrics.searchUsesDedicatedProvider"]=provider.ManualCalls==2 && provider.AutomaticCalls==0;
+            return Task.CompletedTask;
+        });
 
         foreach(var (name,query) in new[]
         {
@@ -177,13 +210,36 @@ public partial class MainWindow
             checks["manualLyrics.failedSearchCannotReusePreviousResults"]=!FindButton(failureDialog,"使用所选歌词").IsEnabled && Descendants<ListBox>(failureDialog).Single().Items.Count==0;
             return Task.CompletedTask;
         });
+
+        provider.Handler=(_,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(new LyricsLookupResult([candidate],["LRCLIB（503）"]));
+        var partialDialog=new CandidateWindow(subject,_=>playback,(_,_)=>{}){Owner=this};
+        await ExerciseAsync(partialDialog,() =>
+        {
+            Click(partialDialog,"手动填写歌名 / 歌手搜索");
+            checks["manualLyrics.partialFailureKeepsCandidates"]=Descendants<ListBox>(partialDialog).Single().Items.Count==1;
+            checks["manualLyrics.partialFailureExplained"]=subject.LyricsStatus.Contains("部分来源暂不可用") && subject.LyricsStatus.Contains("503") && subject.LyricsStatus.Contains("同步 1");
+            return Task.CompletedTask;
+        });
+        provider.Handler=(_,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(new LyricsLookupResult([],["LRCLIB（503）","NetEase（429）"]));
+        await subject.LookupManualAsync(playback);
+        checks["manualLyrics.sourceOutageIsNotReportedAsOrdinaryNoMatch"]=subject.LyricsStatus.Contains("503") && subject.LyricsStatus.Contains("429") && subject.LyricsStatus.Contains("暂不可用");
     }
 
-    sealed class ManualLyricsFixtureProvider(LyricsCandidate candidate):ILyricsProvider
+    sealed class ManualLyricsFixtureProvider(LyricsCandidate candidate):ILyricsProvider,IManualLyricsSearch
     {
         public Track? LastQuery {get;private set;}
+        public int AutomaticCalls {get;private set;}
+        public int ManualCalls {get;private set;}
         public Func<Track,CancellationToken,Task<IReadOnlyList<LyricsCandidate>>>? Handler {get;set;}
         public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)
+        {
+            AutomaticCalls++;return Search(track,token);
+        }
+        public Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track track,CancellationToken token)
+        {
+            ManualCalls++;return Search(track,token);
+        }
+        Task<IReadOnlyList<LyricsCandidate>> Search(Track track,CancellationToken token)
         {
             LastQuery=track;return Handler?.Invoke(track,token)??Task.FromResult<IReadOnlyList<LyricsCandidate>>([candidate]);
         }

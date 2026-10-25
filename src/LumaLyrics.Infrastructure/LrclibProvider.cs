@@ -4,7 +4,7 @@ using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
 public sealed class LyricsProviderException(string message,int? statusCode=null) : Exception(message){public int? StatusCode {get;}=statusCode;}
-public sealed class LrclibProvider : ILyricsProvider, IDisposable
+public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearch, IDisposable
 {
     readonly HttpClient client;
     readonly SemaphoreSlim gate = new(1);

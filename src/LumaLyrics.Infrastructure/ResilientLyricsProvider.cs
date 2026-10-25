@@ -12,7 +12,7 @@ public sealed class LyricsLookupResult(IEnumerable<LyricsCandidate> candidates,I
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
 }
 
-public sealed class ResilientLyricsProvider:ILyricsProvider,IDisposable
+public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,IDisposable
 {
     readonly ILyricsProvider primary;
     readonly ITranslationProvider secondary;
@@ -40,5 +40,26 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IDisposable
         return new LyricsLookupResult(found.DistinctBy(c=>(c.ProviderName,c.Id)),unavailable);
     }
     static string Diagnostic(string source,Exception error)=>error is LyricsProviderException{StatusCode:{ } code}?$"{source}（{code}）":source;
+    public async Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if(ManualLyricsSearch.Queries(query).Count==0)return [];
+        async Task<IReadOnlyList<LyricsCandidate>> CaptureAsync(string source,Func<Task<IReadOnlyList<LyricsCandidate>>> search)
+        {
+            try{return await search();}
+            catch(Exception ex) when(ex is LyricsProviderException or HttpRequestException)
+            {return new LyricsLookupResult([], [ManualLyricsSearch.Unavailable(source,ex)]);}
+        }
+        async Task<IReadOnlyList<LyricsCandidate>> SecondaryAsync()=>secondary is IManualLyricsSearch search
+            ?await search.SearchManualAsync(query,token):(await secondary.LookupAsync(query,token)).Select(c=>c.OriginalCandidate).ToArray();
+        var tasks=new[]
+        {
+            CaptureAsync("LRCLIB",()=>primary is IManualLyricsSearch search?search.SearchManualAsync(query,token):primary.LookupAsync(query,token)),
+            CaptureAsync("NetEase",SecondaryAsync)
+        };
+        var results=await Task.WhenAll(tasks);token.ThrowIfCancellationRequested();
+        return new LyricsLookupResult(ManualLyricsSearch.Candidates(query,results.SelectMany(r=>r)),
+            results.OfType<LyricsLookupResult>().SelectMany(r=>r.UnavailableSources));
+    }
     public void Dispose(){(primary as IDisposable)?.Dispose();(secondary as IDisposable)?.Dispose();}
 }

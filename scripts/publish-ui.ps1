@@ -1,7 +1,9 @@
-param([ValidateSet('win-x64')][string]$Runtime='win-x64',[switch]$Release)
+param([ValidateSet('win-x64')][string]$Runtime='win-x64',[switch]$Release,[ValidatePattern('^[a-z0-9]+(?:-[a-z0-9]+)*$')][ValidateLength(1,40)][string]$PreviewLabel)
 . "$PSScriptRoot/common.ps1"
+if($Release -and $PreviewLabel){throw 'PreviewLabel is only available for preview packages.'}
 $releaseVersion = ([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
 $packageName = if($Release){"LumaLyrics-$releaseVersion-portable-$Runtime"}else{"LumaLyrics-$releaseVersion-ui-preview-$Runtime"}
+if($PreviewLabel){$packageName="LumaLyrics-$releaseVersion-ui-preview-$PreviewLabel-$Runtime"}
 $destination = Join-Path $projectRoot "artifacts/$packageName"
 Invoke-Dotnet publish src/LumaLyrics.App -c Release -r $Runtime --self-contained true '-p:PublishSingleFile=false' '-p:PublishTrimmed=false' --no-restore -o $destination
 $probeDestination=Join-Path $projectRoot ".tools/publish-probe-$releaseVersion"
