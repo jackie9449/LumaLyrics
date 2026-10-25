@@ -9,6 +9,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
 {
     readonly Dispatcher dispatcher; readonly SettingsStore store;
     readonly ResilientLyricsProvider provider = new(); readonly LrcParser parser = new();
+    readonly ILyricsProvider manualProvider;
     readonly AppleOriginalLyricsReader appleOriginals=new();
     readonly LyricsRepository repository; readonly PlaybackClock clock = new();
     CancellationTokenSource? lookup; readonly RequestVersion requests=new(); bool disposed;
@@ -33,8 +34,11 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public event Action? Updated;
     public event Action<byte[]?>? ArtworkChanged;
     public PlaybackCoordinator(Dispatcher dispatcher, SettingsStore store, AppSettings settings)
+        : this(dispatcher,store,settings,null) { }
+    internal PlaybackCoordinator(Dispatcher dispatcher, SettingsStore store, AppSettings settings,ILyricsProvider? manualProvider)
     {
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
+        this.manualProvider=manualProvider??provider;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
         translations=new(store.Root);TranslationProgress=translations.Progress();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
@@ -252,12 +256,20 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         if (Binding is null) return; ms = Math.Clamp(ms,-30000,30000); repository.SetOffset(Binding.Id,ms); Binding = Binding with { OffsetMs=ms }; Updated?.Invoke();
     }
     public async Task RestoreAutoAsync() { if (Snapshot is null) return; repository.RestoreAutomatic(Snapshot.Track); Binding=null; Document=null; await LookupAsync(true); }
-    public async Task LookupManualAsync(Track track)
+    public async Task<IReadOnlyList<LyricsCandidate>?> LookupManualAsync(Track track,CancellationToken cancellationToken=default)
     {
-        lookup?.Cancel();lookup=new();var token=lookup.Token;var serial=requests.Next();
-        try { var results=await provider.LookupAsync(track,token);if(token.IsCancellationRequested || disposed || !requests.IsCurrent(serial))return;if(Snapshot is null)SetManualTrack(track);else ManualTrack=track;Candidates=results;LyricsStatus=$"找到 {results.Count} 个候选，请确认版本";Updated?.Invoke(); }
-        catch(OperationCanceledException) { }
-        catch(Exception e) { if(requests.IsCurrent(serial) && !disposed){LyricsStatus=e.Message;Updated?.Invoke();} }
+        lookup?.Cancel();lookup?.Dispose();lookup=CancellationTokenSource.CreateLinkedTokenSource(cancellationToken,lifetime.Token);
+        var token=lookup.Token;var serial=requests.Next();foregroundLookupActive=true;
+        try
+        {
+            var results=await manualProvider.LookupAsync(track,token);
+            if(token.IsCancellationRequested || disposed || !requests.IsCurrent(serial))return null;
+            if(Snapshot is null)SetManualTrack(track);
+            Candidates=results;LyricsStatus=$"找到 {results.Count} 个候选，请确认版本";Updated?.Invoke();return results;
+        }
+        catch(OperationCanceledException) { return null; }
+        catch(Exception e) { if(!token.IsCancellationRequested && requests.IsCurrent(serial) && !disposed){LyricsStatus=e.Message;Updated?.Invoke();}return null; }
+        finally{if(requests.IsCurrent(serial))foregroundLookupActive=false;}
     }
     public void ClearCache()
     {
