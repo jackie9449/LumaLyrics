@@ -1,0 +1,16 @@
+{
+  "InstallSucceeded": true,
+  "PerUserRegistration": true,
+  "DesktopNameAndTarget": true,
+  "StartMenuShortcut": true,
+  "AllPayloadFilesMatch": true,
+  "InstalledFileCount": 815,
+  "ReinstallPreservesPersonalData": true,
+  "LauncherExitSucceeded": true,
+  "InstalledUiChecks": 25,
+  "InstalledUiAllPassed": true,
+  "UninstallSucceeded": true,
+  "UninstallRemovesProgramAndRegistration": true,
+  "UninstallRemovesShortcuts": true,
+  "UninstallPreservesPersonalData": true
+}

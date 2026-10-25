@@ -1,0 +1,7 @@
+{
+  "Stage": "AlbumArtworkVerification.Search",
+  "Error": "Sequence contains more than one element",
+  "Completed": false,
+  "Observation": "The fixture waited a fixed 180 ms before requiring one album; the debounced filter had not produced the required shelf.",
+  "Correction": "Wait up to two seconds while MusicLibraryView.IsFiltering, as the existing library verification helper does. No product filtering or assertions changed."
+}

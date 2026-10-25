@@ -32,7 +32,7 @@ $assets=@(foreach($file in @($archiveFile,$installerFile))
     [pscustomobject]@{File=[IO.Path]::GetFileName($file);Bytes=(Get-Item -LiteralPath $file).Length;Sha256=$hash}
 })
 $versions=@(foreach($file in @((Join-Path $package 'LumaLyrics.dll'),(Join-Path $package '浮光歌词.exe'),$installerFile))
-{[pscustomobject]@{File=[IO.Path]::GetFileName($file);Version=(Get-Item -LiteralPath $file).VersionInfo.FileVersion}})
+{[pscustomobject]@{File=[IO.Path]::GetFileName($file);Version=(Get-Item -LiteralPath $file).VersionInfo.FileVersion.Trim()}})
 if(@($versions.Version | Select-Object -Unique).Count -ne 1){throw 'Application, launcher and installer versions differ.'}
 $result=[pscustomobject]@{EveryZipFileMatched=$true;Files=$count;UncompressedBytes=$bytes;AssetSidecarsMatched=$true;Versions=$versions;Assets=$assets}
 if($Report){$result|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $Report -Encoding utf8}

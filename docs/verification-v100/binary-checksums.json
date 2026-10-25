@@ -1,0 +1,26 @@
+[
+  {
+    "File": "LumaLyrics.dll",
+    "Sha256": "71249ce8dd237708479db8f1745de3b0d3d50fba26b96381a8d603ea3a5ec3d2"
+  },
+  {
+    "File": "LumaLyrics.Core.dll",
+    "Sha256": "a255428bf853010cee63698f601611969c7341330294f79034f58d2d6fa1b155"
+  },
+  {
+    "File": "LumaLyrics.Infrastructure.dll",
+    "Sha256": "8f0ebcc10d5948c1470f61a13a19546896d2e16f6c7cda5e23cfd8dbde5395bb"
+  },
+  {
+    "File": "LumaLyrics.Windows.dll",
+    "Sha256": "ecef65774269f9449950c2b6007783c0b6037e4d1a71a6cfcb36776c0c3b730b"
+  },
+  {
+    "File": "LumaLyrics.Probe.dll",
+    "Sha256": "1665f6d9da50346d29565b673d0dca20db04ead468fced648135d0be05d6580c"
+  },
+  {
+    "File": "浮光歌词.exe",
+    "Sha256": "ac1336467e099dc1c0141360562a02a5ea82d2ce27cbc096d0c0df5e0d122431"
+  }
+]
