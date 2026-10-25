@@ -21,6 +21,10 @@ public partial class MainWindow
     async Task VerifyNativeQueueStructureAsync(Dictionary<string,object?> checks)
     {
         var content=new StackPanel();
+        var queueToggle=new ToggleButton{Content="队列",IsChecked=false};AutomationProperties.SetAutomationId(queueToggle,"PlayQueueToggleButton");content.Children.Add(queueToggle);
+        var lyricsToggle=new ToggleButton{Content="歌词",IsChecked=true};AutomationProperties.SetAutomationId(lyricsToggle,"LyricsToggleButton");content.Children.Add(lyricsToggle);
+        var historyToggle=new ToggleButton{Content="历史记录",IsChecked=false};content.Children.Add(historyToggle);
+        int toggleChanges=0;foreach(var toggle in new[]{queueToggle,lyricsToggle,historyToggle}){toggle.Checked+=(_,_)=>toggleChanges++;toggle.Unchecked+=(_,_)=>toggleChanges++;}
         foreach(string name in new[]{"微光之间","浮光工作室 — 原创测试"}){var text=new TextBlock{Text=name};AutomationProperties.SetAutomationId(text,"ScrollingText");content.Children.Add(text);}
         ListBox List(string id,NativeQueueFixtureRow[] rows)
         {
@@ -31,12 +35,24 @@ public partial class MainWindow
         }
         List("PlayQueueListViewManual",[new("夜航","浮光工作室 — 原创测试","3:00"),new("夜航","浮光工作室 — 原创测试","3:00")]);
         var automatic=List("PlayQueueListView",Enumerable.Range(0,70).Select(i=>new NativeQueueFixtureRow("原创片段 "+i,"浮光工作室 — 创作集","2:00")).ToArray());
-        var window=new Window{Owner=this,Title="浮光歌词 · 原创队列结构回归",Width=450,Height=380,Content=content,ShowInTaskbar=false};window.Show();
+        var window=new Window{Owner=this,Title="浮光歌词 · 原创队列结构回归",Width=450,Height=560,Content=content,ShowInTaskbar=false};window.Show();
         try
         {
             await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);nint handle=NativeWindow.Handle(window);
             checks["nativeQueue.fixtureActuallyVirtualizes"]=Descendants<ListBoxItem>(automatic).Count()<70;
             using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(18));
+            Task<LumaLyrics.Infrastructure.MusicQueueSnapshot> Passive()=>Task.Run(()=>
+            {
+                using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
+                return AppleMusicLibraryHandoff.ReadQueueSurface(automation,automation.FromHandle(handle),timeout.Token);
+            },timeout.Token);
+            int beforeChanges=toggleChanges;var closed=await Passive();
+            checks["nativeQueue.passiveReadDoesNotOpenQueueOrCloseLyrics"]=!closed.Available && queueToggle.IsChecked==false && lyricsToggle.IsChecked==true && toggleChanges==beforeChanges;
+            queueToggle.IsChecked=true;historyToggle.IsChecked=true;window.UpdateLayout();beforeChanges=toggleChanges;var history=await Passive();
+            checks["nativeQueue.passiveReadPreservesHistorySelection"]=!history.Available && historyToggle.IsChecked==true && toggleChanges==beforeChanges;
+            historyToggle.IsChecked=false;automatic.ScrollIntoView(automatic.Items[45]);window.UpdateLayout();
+            var scroll=Descendants<ScrollViewer>(automatic).First();double offset=scroll.VerticalOffset;beforeChanges=toggleChanges;var passive=await Passive();
+            checks["nativeQueue.passiveReadNeverRealizesOrScrollsRows"]=Math.Abs(scroll.VerticalOffset-offset)<.01 && toggleChanges==beforeChanges && passive.Available;
             var snapshot=await Task.Run(()=>
             {
                 using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
@@ -45,6 +61,8 @@ public partial class MainWindow
             },timeout.Token);
             checks["nativeQueue.exposedEntries"]=snapshot.Upcoming.Count;
             checks["nativeQueue.manualEntries"]=snapshot.Upcoming.Count(e=>e.Inserted);
+            checks["nativeQueue.incompleteMetadataEntries"]=snapshot.Upcoming.Count(e=>!e.MetadataComplete);
+            checks["nativeQueue.lastCapturedTitle"]=snapshot.Upcoming.LastOrDefault()?.Track.Title;
             checks["nativeQueue.bothNativeSectionsIncluded"]=snapshot.Available && snapshot.Upcoming.Count==72;
             checks["nativeQueue.manualBeforeOriginalQueue"]=snapshot.Upcoming.Take(2).All(e=>e.Inserted && e.Track.Title=="夜航") && snapshot.Upcoming.Skip(2).All(e=>!e.Inserted);
             checks["nativeQueue.repeatedInsertionsRetained"]=snapshot.Upcoming.Take(2).Select(e=>e.Track.Title).SequenceEqual(new[]{"夜航","夜航"});

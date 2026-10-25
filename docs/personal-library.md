@@ -23,6 +23,7 @@
   lyrics/                UTF-8 LRC，以及手动保留的 TXT
   covers/                原始 JPEG / PNG，相同图片只保存一份
   translations/          中文译文 JSON，包含原文哈希、行号、来源和校对状态
+  originals/             已采集 Apple Music TTML 的可读来源 JSON（0.17.0 起）
   state/                 词库、封面映射、设置与恢复信息
   personal-library.json  曲目对应、来源、偏移、尺寸和文件校验
   README.md
@@ -34,6 +35,8 @@
 `state/` 还保留历史候选与导入队列，用于恢复既有状态；这些记录不代表全部歌词已准确，也不表示已经 Apple Music 逐首核对。手动偏移和全局偏移独立保留，导出的 LRC 原文不会额外写入重复偏移。个人校对附注若存在，也会一并保留。网络响应日志、运行锁、进程记录、Apple 账号、音频和原始 Apple Music 资料库文件不进入个人备份。
 
 0.10.0 的 `state/translations.db` 保留中文译文与准备队列。AI 译稿的待校对标记一并导出和恢复；可读译文记录在 `translations/`，不修改原词。旧的无译文备份仍可在新版恢复；含译文的备份需由 0.10.0 或更新版本读取。详见[中文译文指南](chinese-translations.md)。
+
+0.17.0 的 `originals/` 从同一歌词数据库快照导出已采集的 TTML、原词与 TTML 哈希、录音元数据和获取方式；来源记录仍保留在数据库中。包含此类记录的备份需由 0.17.0 或更新版本恢复。它是自动核对记录，不代表人工语义校对。[原词获取说明](apple-original-lyrics.md)。
 
 ## 恢复与更换存储位置
 

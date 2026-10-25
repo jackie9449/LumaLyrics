@@ -58,7 +58,7 @@ internal static partial class AppleMusicLibraryHandoff
         {
             using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
             if(process is null)return "请先打开并登录 Apple Music，浮光即可从音乐库选歌。";
-            context.Capture(process);nint handle=process.MainWindowHandle;bool minimized=context.Window?.WasMinimized==true;
+            context.Capture(process,token);nint handle=process.MainWindowHandle;bool minimized=context.Window?.WasMinimized==true;
             trace?.Invoke("window",new{process.Id,minimized});
             if(WaitForNative(()=>!IsIconic(handle)?context:null,TimeSpan.FromSeconds(15),token) is null)return "Apple Music 的窗口尚未响应，请稍后重试。";
             {

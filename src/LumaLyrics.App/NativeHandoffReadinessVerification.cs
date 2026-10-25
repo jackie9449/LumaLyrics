@@ -44,6 +44,15 @@ public partial class MainWindow
         {
             WindowState=WindowState.Normal;await Task.Delay(80);using var process=Process.GetCurrentProcess();
             var old=new AppleMusicLibraryHandoff.HandoffContext();old.Capture(process);var current=new AppleMusicLibraryHandoff.HandoffContext();current.Capture(process);
+            long owner=current.Version;current.Capture(process);checks["handoff.confirmationReadsRetainWindowOwner"]=current.Version==owner;
+            bool staleCapture=false;try{old.Capture(process);}catch(OperationCanceledException){staleCapture=true;}
+            checks["handoff.staleConfirmationCannotReacquireWindow"]=staleCapture && current.Version==owner;
+            using(var stopped=new CancellationTokenSource())
+            {
+                stopped.Cancel();var cancelledContext=new AppleMusicLibraryHandoff.HandoffContext();bool rejected=false;
+                try{cancelledContext.Capture(process,stopped.Token);}catch(OperationCanceledException){rejected=true;}
+                checks["handoff.cancelledCaptureCannotClaimWindow"]=rejected && cancelledContext.Window is null;
+            }
             bool stale=await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(old,true);
             checks["handoff.staleCompletionCannotMinimizeWindow"]=!stale && WindowState==WindowState.Normal;
             bool failed=await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(current,false);

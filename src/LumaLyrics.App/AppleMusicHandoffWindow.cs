@@ -15,12 +15,16 @@ internal static partial class AppleMusicLibraryHandoff
         internal HandoffWindow? Window;
         internal long Version;
         internal volatile bool CommandAttempted;
-        internal void Capture(Process process)
+        internal void Capture(Process process,CancellationToken token=default)
         {
             lock(windowStateGate)
             {
-                if(Window is null || Window.ProcessId!=process.Id)Window=new(process.MainWindowHandle,process.Id,IsIconic(process.MainWindowHandle));
-                Version=windowOwners.Next();
+                token.ThrowIfCancellationRequested();
+                if(Window is not null && !windowOwners.IsCurrent(Version))throw new OperationCanceledException("A newer native operation owns this window.",token);
+                if(Window is null || Window.ProcessId!=process.Id)
+                {
+                    Window=new(process.MainWindowHandle,process.Id,IsIconic(process.MainWindowHandle));Version=windowOwners.Next();
+                }
                 if(IsIconic(Window.Handle))ShowWindowAsync(Window.Handle,4);
             }
         }

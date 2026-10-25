@@ -65,6 +65,7 @@ public static class PersonalLibraryArchive
             progress?.Report("正在创建一致的资料库快照，原资料保持可用…");var manifest=new PersonalLibraryManifest();
             PersonalLibrarySnapshot.Export(dataRoot,staging,manifest,token,progress);
             File.WriteAllText(Path.Combine(staging,"README.md"),"# 浮光歌词个人资料\n\n这是私人备份，与软件安装包分别保存。lyrics/ 中是已通过自动检查或手动保留的歌词，covers/ 中是原始图片，translations/ 中是可阅读的中文译文 JSON（包含原词哈希、逐行编号与来源）；曲目对应关系、来源和校准记录见 personal-library.json。纯音乐没有歌词文件，缺失或待核歌词不生成文件。state/ 保留数据库快照、手动绑定、设置和待导入队列，其中的历史候选不代表全部准确或已由 Apple 核对。译文的原文及逐行对应检查不等于语义已经人工逐首校对。\n\n在新版浮光歌词“设置 → 个人资料”中恢复到一个新目录；不会覆盖已有资料。备份后新增的下载需要再次导出。包含 translations.db 的备份请使用 0.10.0 或更新版本恢复。\n",new UTF8Encoding(false));
+            File.AppendAllText(Path.Combine(staging,"README.md"),"\n0.17.0 起，originals/ 包含本机 Apple Music TTML 原词来源 JSON：完整 TTML、录音元数据、时间模型与原词哈希；它来自同一歌词数据库快照，不代表人工语义校对。包含此目录的备份需由 0.17.0 或更新版本恢复。\n",new UTF8Encoding(false));
             AddFile(staging,"README.md","readme",manifest);
             DataDirectoryConfiguration.ProtectFromGit(staging);AddFile(staging,".gitignore","metadata",manifest);
             File.WriteAllText(Path.Combine(staging,PersonalLibraryManifest.FileName),JsonSerializer.Serialize(manifest,Json),new UTF8Encoding(false));
@@ -85,6 +86,7 @@ public static class PersonalLibraryArchive
                 "state"=>StateFiles.Contains(file.Path),
                 "lyric"=>file.Path.StartsWith("lyrics/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".lrc" or ".txt",
                 "translation"=>file.Path.StartsWith("translations/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
+                "original"=>file.Path.StartsWith("originals/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
                 "review"=>file.Path.Split('/') is ["lyrics-review",{Length:>0},"review.json" or "capture.png"],
                 "cover"=>file.Path.StartsWith("covers/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".png" or ".jpg",
                 "readme"=>file.Path=="README.md","metadata"=>file.Path==".gitignore",_=>false
@@ -117,6 +119,12 @@ public static class PersonalLibraryArchive
         PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/lyrics.db"),true);
         if(files.ContainsKey("state/artwork.db"))PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/artwork.db"),false);
         if(files.ContainsKey("state/translations.db"))TranslationRepository.CheckDatabase(AssetPath(root,"state/translations.db"));
+        foreach(var original in manifest.Files.Where(f=>f.Kind=="original"))
+        {
+            if(original.Bytes>16*1024*1024)throw new InvalidDataException("原词来源文件过大。");
+            var record=AppleOriginalProvenance.Validate(File.ReadAllText(AssetPath(root,original.Path)));
+            if(Path.GetFileNameWithoutExtension(original.Path)!=AppleOriginalProvenance.Key(record))throw new InvalidDataException("原词来源文件名与录音身份不一致。");
+        }
         foreach(var translation in manifest.Files.Where(f=>f.Kind=="translation"))
         {
             string path=AssetPath(root,translation.Path);if(translation.Bytes>4*1024*1024)throw new InvalidDataException("中文译文文件过大。");

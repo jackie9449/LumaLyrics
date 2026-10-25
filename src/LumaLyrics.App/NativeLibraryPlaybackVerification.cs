@@ -30,6 +30,7 @@ public partial class MainWindow
         }
         string? Argument(string name){int index=Array.IndexOf(args,name);return index>=0 && index+1<args.Length?args[index+1]:null;}
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        if(args.Contains("--native-verify-passive")){await VerifyPassiveNativeAsync(directory,args.Contains("--native-acquire-original"),timeout.Token);return;}
         if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
         if(args.Contains("--native-start-visible"))Trace("preparedVisible",new{visible=await AppleMusicLibraryHandoff.PrepareVisibleVerificationAsync(timeout.Token)});
         Trace("initial",await Task.Run(AppleMusicLibraryHandoff.Inspect,timeout.Token).WaitAsync(TimeSpan.FromSeconds(12),timeout.Token));

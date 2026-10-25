@@ -97,6 +97,17 @@ internal static class PersonalLibrarySnapshot
                 lyric=$"lyrics/{name}-{id}."+(plain?"txt":"lrc");Directory.CreateDirectory(Path.Combine(staging,"lyrics"));
                 File.WriteAllText(PersonalLibraryArchive.AssetPath(staging,lyric),bound.Raw,new UTF8Encoding(false));PersonalLibraryArchive.AddFile(staging,lyric,"lyric",manifest);
             }
+            if(bound?.ProviderJson is { } provenance && bound.Source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal))
+            {
+                var original=AppleOriginalProvenance.Validate(provenance,bound.Raw);
+                string relative="originals/"+AppleOriginalProvenance.Key(original)+".json";
+                string destination=PersonalLibraryArchive.AssetPath(staging,relative);
+                if(!File.Exists(destination))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);File.WriteAllText(destination,provenance,new UTF8Encoding(false));
+                    PersonalLibraryArchive.AddFile(staging,relative,"original",manifest);
+                }
+            }
             var exact=artworkRows.FirstOrDefault(a=>a.Source==row.Source && a.PersistentId==row.PersistentId);
             var possible=exact is not null?[exact.ImageKey]:artworkRows.Where(a=>Matches(a.Track,row.Track)).Select(a=>a.ImageKey).Distinct().ToArray();
             string? cover=possible.Length==1?manifest.Images.FirstOrDefault(i=>i.ImageKey==possible[0])?.Path:null;

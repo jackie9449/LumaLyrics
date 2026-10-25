@@ -44,7 +44,7 @@ internal static partial class AppleMusicLibraryHandoff
         {
             using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
             if(process is null)return "请先打开并登录 Apple Music，再选择播放列表中的歌曲。";
-            token.ThrowIfCancellationRequested();context.Capture(process);
+            token.ThrowIfCancellationRequested();context.Capture(process,token);
             if(WaitForNative(()=>!IsIconic(process.MainWindowHandle)?context:null,TimeSpan.FromSeconds(15),token) is null)return "Apple Music 的窗口尚未响应，请稍后重试。";
             using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
             var root=automation.FromHandle(process.MainWindowHandle);var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayQueueToggleButton"));

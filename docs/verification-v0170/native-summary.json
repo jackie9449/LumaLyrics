@@ -1,0 +1,32 @@
+{
+  "version": "0.17.0",
+  "scope": "One live recording; private source text, metadata and hashes excluded",
+  "minimized": {
+    "reads": 12,
+    "remainedMinimized": true,
+    "nativePreferencesRetained": true,
+    "didNotActivate": true,
+    "playStateRetained": true,
+    "recordingRetained": true
+  },
+  "visibleLyrics": {
+    "reads": 12,
+    "queueBefore": "Off",
+    "queueAfter": "Off",
+    "lyricsBefore": "On",
+    "lyricsAfter": "On",
+    "nativePreferencesRetained": true,
+    "didNotActivate": true,
+    "originalAcquired": true,
+    "originalLines": 44,
+    "timingModel": "apple-absolute-section",
+    "playStateRetained": true,
+    "recordingRetained": true
+  },
+  "finalPackagedAcquisitionCheck": {
+    "outcome": "UIA timeout at initial native root observation; acquisition not reached",
+    "packagedAttempts": 2,
+    "sourceControlOutcome": "same initial UIA timeout",
+    "privateReportsExcluded": true
+  }
+}

@@ -36,3 +36,6 @@ data-location.json
 **/lyrics-review/
 **/ocr-models/
 translation-*.json
+native-ttml*.json
+apple-original*.json
+**/originals/*.json

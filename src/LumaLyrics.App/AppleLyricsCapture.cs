@@ -25,7 +25,7 @@ internal static partial class AppleMusicLibraryHandoff
         try
         {
             using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0)??throw new InvalidOperationException("请先打开 Apple Music，并选择需要校对的歌曲。");
-            context.Capture(process);handle=process.MainWindowHandle;
+            context.Capture(process,token);handle=process.MainWindowHandle;
             if(WaitForNative(()=>!IsIconic(handle)?process:null,TimeSpan.FromSeconds(8),token) is null)throw new InvalidOperationException("Apple Music 的窗口尚未就绪。");
             using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
             bool SameRecording()=>QueueCurrent(root) is { } actual && MusicLibraryPlayback.IsRequestedRecording(track,actual);

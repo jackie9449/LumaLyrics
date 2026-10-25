@@ -40,7 +40,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         {
             while(true)
             {
-                var queue=await ReadQueueAsync(timeout.Token);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);var current=coordinator.Source.Latest;
+                var queue=await AppleMusicLibraryHandoff.ReadQueueAsync(timeout.Token,trace,context);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);var current=coordinator.Source.Latest;
                 if(MusicPlaybackQueue.ConfirmsMove(move,queue) && current is not null && current.Status==before.Status && MusicLibraryPlayback.IsRequestedRecording(before.Track,current.Track))return new(true,"已调整播放顺序，当前歌曲继续播放");
                 await Task.Delay(250,timeout.Token);
             }
@@ -68,7 +68,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
     }
     internal Task<LibraryPlayResult> InsertNextAsync(MusicLibrarySong song,CancellationToken token)=>RunCommandAsync(async context=>
     {
-        var before=await ReadQueueAsync(token);
+        var before=await AppleMusicLibraryHandoff.ReadQueueAsync(token,trace,context);
         string? failure=await AppleMusicLibraryHandoff.InsertNextAsync(song,token,context,trace);
         if(failure is not null)return new(false,failure);
         using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(token);confirmation.CancelAfter(TimeSpan.FromSeconds(30));
@@ -78,7 +78,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
             {
                 // The menu closes before the native manual-queue list finishes updating.
                 // Retry reads only; never send the insertion a second time.
-                await Task.Delay(250,confirmation.Token);var queue=await ReadQueueAsync(confirmation.Token);
+                await Task.Delay(250,confirmation.Token);var queue=await AppleMusicLibraryHandoff.ReadQueueAsync(confirmation.Token,trace,context);
                 if(MusicPlaybackQueue.ConfirmsInsertion(song,before,queue))
                     return new(true,"已插播 · "+song.Title+" · 将在当前歌曲结束后播放");
             }
@@ -111,7 +111,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         {
             while(true)
             {
-                var after=await ReadQueueAsync(confirmation.Token);
+                var after=await AppleMusicLibraryHandoff.ReadQueueAsync(confirmation.Token,trace,context);
                 if(MusicPlaybackQueue.ConfirmsJump(selection,after))return playback;
                 await Task.Delay(250,confirmation.Token);
             }

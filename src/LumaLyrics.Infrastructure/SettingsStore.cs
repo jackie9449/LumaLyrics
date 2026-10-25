@@ -7,6 +7,7 @@ public sealed class AppSettings
     public string UiTheme { get; set; } = AppThemes.Default;
     public bool ShowPlaybackQueue { get; set; } = true;
     public bool OnlineLookup { get; set; } = true;
+    public bool AppleMusicOriginalLyrics {get;set;}=true;
     public bool AutoPrefetchLibrary { get; set; } = true;
     public bool ShowChineseTranslation { get; set; }
     public bool OverlayShowChineseTranslation { get; set; }

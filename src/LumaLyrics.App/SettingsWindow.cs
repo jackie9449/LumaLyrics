@@ -69,7 +69,13 @@ public sealed class SettingsWindow : Window
 
         var general=new StackPanel();
         general.Children.Add(Text("常规选项修改后，点击下方“保存常规设置”。",12));
-        var online=DialogUi.Check(general,"联网查词（原词：LRCLIB；译文准备：网易云音乐公开接口）",settings.OnlineLookup);
+        var nativeOriginal=DialogUi.Check(general,"优先获取 Apple Music 已加载的原语言歌词（本机只读）",settings.AppleMusicOriginalLyrics);
+        general.Children.Add(Text("先在 Apple Music 展开当前歌曲的动态歌词，再重新查词。只接收可核对的时间轴；后台不会打开原生窗口或歌词面板。已有可靠缓存与手动绑定优先保留。",12));
+        var nativeStatus=Text(coordinator.AppleOriginalStatus,12);general.Children.Add(nativeStatus);
+        void RefreshNativeStatus()=>nativeStatus.Text=coordinator.AppleOriginalStatus;
+        coordinator.Updated+=RefreshNativeStatus;Closed+=(_,_)=>coordinator.Updated-=RefreshNativeStatus;
+        DialogUi.Button(general,"重新查找当前歌曲原词",async()=>await coordinator.LookupAsync(true));
+        var online=DialogUi.Check(general,"联网查词（原词：LRCLIB / 网易云；译文准备：网易云公开接口）",settings.OnlineLookup);
         var prefetch=DialogUi.Check(general,"后台预缓存 Apple Music 全部资料库（自动断点继续）",settings.AutoPrefetchLibrary);
         var close=DialogUi.Check(general,"关闭主窗口后继续在托盘运行",settings.CloseToTray);
         var reduce=DialogUi.Check(general,"减少界面动画（含歌词切换）",settings.ReduceMotion);
@@ -85,7 +91,7 @@ public sealed class SettingsWindow : Window
             // Only write the startup preference when the user actually changed it.
             try{if((startup.IsChecked==true)!=originalStartup)SetStartup(startup.IsChecked==true);}
             catch(Exception ex){MessageBox.Show(this,"开机启动保存失败："+ex.Message);return;}
-            settings.OnlineLookup=online.IsChecked==true;settings.AutoPrefetchLibrary=prefetch.IsChecked==true;
+            settings.AppleMusicOriginalLyrics=nativeOriginal.IsChecked==true;settings.OnlineLookup=online.IsChecked==true;settings.AutoPrefetchLibrary=prefetch.IsChecked==true;
             settings.CloseToTray=close.IsChecked==true;settings.ReduceMotion=reduce.IsChecked==true;settings.FadeOnPause=fade.IsChecked==true;
             settings.GlobalOffsetMs=off;settings.ToggleHotkey=toggle.Text;settings.UnlockHotkey=unlock.Text;
             AppMotion.Configure(settings.ReduceMotion);coordinator.SettingsChanged();coordinator.SaveSettings();Close();
@@ -134,6 +140,7 @@ public sealed class SettingsWindow : Window
     }
     internal void SelectApplicationTheme(string id)=>themeChoices[AppThemes.Find(id).Id].IsChecked=true;
     internal void SelectApplicationTab()=>tabs.SelectedIndex=0;
+    internal void SelectGeneralTab()=>tabs.SelectedIndex=2;
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
     internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
     internal void SelectTranslationTab()=>tabs.SelectedIndex=4;

@@ -87,7 +87,16 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
         {
             try
             {
-                using var json=System.Text.Json.JsonDocument.Parse(binding.ProviderJson);var original=LrclibProvider.Parse(json.RootElement);
+                using var json=System.Text.Json.JsonDocument.Parse(binding.ProviderJson);
+                if(json.RootElement.TryGetProperty("provider",out var native) && native.GetString()=="Apple Music")
+                {
+                    var saved=AppleOriginalProvenance.Validate(binding.ProviderJson,binding.Raw);
+                    var expected=TrackMetadata.FromAppleSession(track);
+                    return !binding.Instrumental && !binding.Plain && expected.Fingerprint==saved.Track.Fingerprint
+                        && expected.DurationMs is { } duration && Math.Abs(duration-saved.Track.DurationMs!.Value)<=1000
+                        && AutomaticLyricsMatcher.Assess(new(0,saved.Track,binding.Raw,null,false)).Accepted;
+                }
+                var original=LrclibProvider.Parse(json.RootElement);
                 if(json.RootElement.TryGetProperty("Provider",out var source) && source.GetString()=="NetEase")
                 {
                     var saved=System.Text.Json.JsonSerializer.Deserialize<NetEaseOriginal>(binding.ProviderJson);
@@ -100,7 +109,7 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                 var candidate=original with{SyncedLyrics=binding.Plain?null:binding.Raw};
                 return AutomaticLyricsMatcher.Select(track,[candidate]) is not null;
             }
-            catch(Exception e) when(e is System.Text.Json.JsonException or InvalidOperationException){return false;}
+            catch(Exception e) when(e is System.Text.Json.JsonException or InvalidOperationException or InvalidDataException or System.Xml.XmlException){return false;}
         }
         return AutomaticLyricsMatcher.Assess(new(0,track,binding.Plain?null:binding.Raw,binding.Plain?binding.Raw:null,binding.Instrumental)).Accepted;
     }

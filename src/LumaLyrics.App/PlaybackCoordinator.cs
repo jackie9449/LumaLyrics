@@ -9,6 +9,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
 {
     readonly Dispatcher dispatcher; readonly SettingsStore store;
     readonly ResilientLyricsProvider provider = new(); readonly LrcParser parser = new();
+    readonly AppleOriginalLyricsReader appleOriginals=new();
     readonly LyricsRepository repository; readonly PlaybackClock clock = new();
     CancellationTokenSource? lookup; readonly RequestVersion requests=new(); bool disposed;
     readonly CancellationTokenSource lifetime=new();CancellationTokenSource? libraryCancellation;Task? libraryTask,libraryMonitor;
@@ -28,6 +29,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public LyricsBinding? Binding { get; private set; }
     public IReadOnlyList<LyricsCandidate> Candidates { get; private set; } = [];
     public string LyricsStatus { get; private set; } = "播放后会自动查找歌词";
+    public string AppleOriginalStatus {get;private set;}="只读取已展开的 Apple Music 动态歌词；不会自动打开原生窗口或面板。";
     public event Action? Updated;
     public event Action<byte[]?>? ArtworkChanged;
     public PlaybackCoordinator(Dispatcher dispatcher, SettingsStore store, AppSettings settings)
@@ -178,15 +180,29 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         lookup?.Cancel(); lookup?.Dispose(); lookup = new(); var token = lookup.Token;
         var serial = requests.Next(); var s = Snapshot;
         if (s is null || string.IsNullOrWhiteSpace(s.Track.Title)) return;
-        bool Current() => !disposed && !token.IsCancellationRequested && requests.IsCurrent(serial) && Snapshot?.Generation == s.Generation && Snapshot?.Revision == s.Revision;
+        bool Current() => !disposed && !token.IsCancellationRequested && requests.IsCurrent(serial) && Snapshot?.SessionId==s.SessionId && Snapshot?.Generation == s.Generation && Snapshot?.Revision == s.Revision && Source.Latest is { } latest && latest.SessionId==s.SessionId && latest.Generation==s.Generation && latest.Revision==s.Revision;
         try
         {
+            if(repository.Find(s.Track) is {Manual:true} locked){AppleOriginalStatus="已保留当前歌曲的手动歌词绑定。";Apply(locked);return;}
             if (!force)
             {
                 var cached = repository.Find(s.Track);
                 if (cached is not null && (cached.Manual || LibraryPrefetcher.QualityOf(cached,s.Track))) { Apply(cached); return; }
             }
-            if (!Settings.OnlineLookup) { LyricsStatus = "联网查词已关闭，可导入本地歌词"; Updated?.Invoke(); return; }
+            foregroundLookupActive=true;
+            if(Settings.AppleMusicOriginalLyrics)
+            {
+                AppleOriginalStatus="正在检查 Apple Music 已加载的原词…";Updated?.Invoke();
+                var native=await appleOriginals.ReadAsync(s,()=>Source.Latest,token);
+                if(!Current())return;
+                if(native is not null)
+                {
+                    AppleOriginalStatus="已取得 Apple Music 原词，录音、文字及时间范围检查通过。";
+                    Apply(repository.Save(s.Track,native.Lyrics.Lrc,"Apple Music · 本机 TTML · 自动检查",false,providerJson:native.Provenance));return;
+                }
+                AppleOriginalStatus="当前未取得可核对的 TTML。可在 Apple Music 展开动态歌词后重新查词；自动读取不会弹出窗口。";
+            }
+            if (!Settings.OnlineLookup) { LyricsStatus = "未取得可核对的本机原词；联网查词已关闭，可导入本地歌词"; Updated?.Invoke(); return; }
             if (!force && repository.HasFailure(s.Track)) { LyricsStatus = "暂未找到可靠歌词，后台稍后自动重试"; Updated?.Invoke(); return; }
             LyricsStatus = "正在查找歌词…"; Updated?.Invoke();
             foregroundLookupActive=true;

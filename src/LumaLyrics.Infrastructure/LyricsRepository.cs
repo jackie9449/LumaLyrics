@@ -74,6 +74,8 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     {
         track=TrackMetadata.FromAppleSession(track);
         var current = Find(track); if (current?.Manual == true && !manual) return current;
+        if(!manual && current is not null && current.Source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal)
+            && !source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal) && LibraryPrefetcher.QualityOf(current,track))return current;
         using var tx = db.BeginTransaction();
         string trackId = FindTrack(track) ?? Guid.NewGuid().ToString("N");
         Execute("INSERT INTO Tracks VALUES($id,$f,$t,$a,$al,$d) ON CONFLICT(Id) DO UPDATE SET Duration=COALESCE(excluded.Duration,Tracks.Duration)", ("$id", trackId), ("$f", track.Fingerprint), ("$t", track.Title), ("$a", track.Artist), ("$al", track.Album), ("$d", track.DurationMs));
