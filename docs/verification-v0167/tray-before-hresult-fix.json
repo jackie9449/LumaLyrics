@@ -1,0 +1,17 @@
+{
+  "tray.embeddedLogoPresent": true,
+  "tray.ownsEmbeddedIconInsteadOfHostIcon": true,
+  "tray.windowIconDecodedAndFrozen": true,
+  "tray.nativeIconMatchesEmbeddedLogo": true,
+  "tray.logoHasVisibleInkAndTransparentCorners": true,
+  "tray.logoVisibleOnLightAndDarkBackgrounds": true,
+  "tray.nativeIdentifierAvailable": true,
+  "tray.shellHasRegisteredIconRectangle": false,
+  "tray.recoveryAndAppearanceCommandsPresent": true,
+  "tray.closeHidesWindowAndKeepsRecovery": false,
+  "tray.openMenuCommandRestoresWindow": true,
+  "tray.doubleClickHandlerRestoresMinimizedWindow": true,
+  "tray.disposalClearsOwnedResources": true,
+  "tray.disposalRemovesShellRegistration": true,
+  "tray.recreatedIconRegistersAndRecovers": false
+}

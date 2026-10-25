@@ -53,10 +53,12 @@ Copy-Item -LiteralPath docs/screenshots-ui-v0162 -Destination $guide -Recurse -F
 Copy-Item -LiteralPath docs/screenshots-ui-v0164 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v0165 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v0166 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/screenshots-ui-v0167 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0163 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0164 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0165 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0166 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-v0167 -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force

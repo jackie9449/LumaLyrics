@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     readonly PlaybackQueueSidebar playbackSidebar;
     readonly OverlayWindow overlay; readonly DispatcherTimer timer;
     Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceEditor? appearanceWindow;
+    System.Drawing.Icon? trayIcon;
     SettingsWindow? settingsWindow;
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
@@ -30,7 +31,7 @@ public partial class MainWindow : Window
     public MainWindow(string? dataDirectory=null)
     {
         store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
-        InitializeComponent();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
         overlay=new(this,vm,settings);
@@ -102,17 +103,26 @@ public partial class MainWindow : Window
     }
     void SetupTray()
     {
+        DisposeTray();
         try
         {
-            var menu=new Forms.ContextMenuStrip();
+            trayIcon=ApplicationIcon.CreateTrayIcon();
+            tray=new Forms.NotifyIcon{Icon=trayIcon,Text="浮光歌词 LumaLyrics",ContextMenuStrip=new()};
+            var menu=tray.ContextMenuStrip;
             void Item(string text,Action action)=>menu.Items.Add(text,null,(_,_)=>Dispatcher.Invoke(action));
             Item("打开浮光歌词",Restore);Item("显示 / 隐藏歌词",ToggleOverlay);Item("解锁歌词",()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);});Item("恢复默认位置",()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.ResetPosition();});
             Item("桌面歌词外观…",()=>ShowAppearance());
             menu.Items.Add(new Forms.ToolStripSeparator());Item("退出",()=>_=QuitAsync());
-            tray=new Forms.NotifyIcon{Icon=System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? System.Drawing.SystemIcons.Application,Text="浮光歌词 LumaLyrics",ContextMenuStrip=menu,Visible=true};
             tray.DoubleClick+=(_,_)=>Dispatcher.Invoke(Restore);
+            tray.Visible=true;
         }
-        catch(Exception ex) {store.Log("Tray: "+ex.Message);vm.Status="托盘不可用，关闭窗口将退出";}
+        catch(Exception ex) {DisposeTray();store.Log("Tray: "+ex.Message);vm.Status="托盘不可用，关闭窗口将退出";}
+    }
+    void DisposeTray()
+    {
+        var previous=tray;tray=null;
+        if(previous is not null){previous.Visible=false;var menu=previous.ContextMenuStrip;previous.Dispose();menu?.Dispose();}
+        trayIcon?.Dispose();trayIcon=null;
     }
     void RegisterHotkeys() { hotkeyError=hotkeys?.Register(settings.ToggleHotkey,settings.UnlockHotkey);if(!string.IsNullOrEmpty(hotkeyError) && !Environment.GetCommandLineArgs().Contains("--capture-dir"))MessageBox.Show(this,hotkeyError+"。仍可通过托盘解锁。","快捷键提示"); }
     void Update()
@@ -297,7 +307,7 @@ public partial class MainWindow : Window
     void OnClosing(object? s,CancelEventArgs e) {if(quitting)return;e.Cancel=true;if(settings.CloseToTray && CanRecoverOverlay){Hide();coordinator.SaveSettings();}else _=QuitAsync();}
     public async Task QuitAsync()
     {
-        if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();tray?.Dispose();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
+        if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();DisposeTray();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
         playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)
