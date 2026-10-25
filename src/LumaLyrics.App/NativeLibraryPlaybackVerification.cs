@@ -12,7 +12,7 @@ public partial class MainWindow
     // stay in the isolated directory selected by the caller, never in software docs.
     async Task VerifyNativeLibraryPlaybackAsync(string directory,string[] args)
     {
-        Directory.CreateDirectory(directory);string traceFile=Path.Combine(directory,"native-playback.jsonl");var traceGate=new object();
+        PersonalLibraryArchive.EnsureOutsideSoftware(directory);Directory.CreateDirectory(directory);string traceFile=Path.Combine(directory,"native-playback.jsonl");var traceGate=new object();
         void Trace(string stage,object? value)
         {
             if(stage=="lyricCaptureImage" && value is byte[] png){File.WriteAllBytes(Path.Combine(directory,"native-capture.png"),png);return;}
@@ -30,6 +30,7 @@ public partial class MainWindow
         }
         string? Argument(string name){int index=Array.IndexOf(args,name);return index>=0 && index+1<args.Length?args[index+1]:null;}
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        if(args.Contains("--native-probe-read-safety")){await VerifyNativeReadSafetyAsync(directory,Argument("--native-safety-mode")??"anchors",timeout.Token);return;}
         if(args.Contains("--native-verify-passive")){await VerifyPassiveNativeAsync(directory,args.Contains("--native-acquire-original"),timeout.Token);return;}
         if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
         if(args.Contains("--native-start-visible"))Trace("preparedVisible",new{visible=await AppleMusicLibraryHandoff.PrepareVisibleVerificationAsync(timeout.Token)});

@@ -15,36 +15,19 @@ internal static partial class AppleMusicLibraryHandoff
     // Unlike the explicit OCR review command, this path never changes native UI state.
     internal static async Task<AppleOriginalAnchors?> ReadOriginalAnchorsAsync(Track expected,CancellationToken token)
     {
-        var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(5));var nativeToken=bounded.Token;
-        var worker=Task.Run<AppleOriginalAnchors?>(()=>
-            {
-                if(!gate.Wait(TimeSpan.FromSeconds(1),nativeToken))return null;
-                try
+        return await ReadPassiveAsync<AppleOriginalAnchors?>((process,automation,nativeToken)=>
                 {
-                    nativeToken.ThrowIfCancellationRequested();
-                    using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
-                    if(process is null || IsIconic(process.MainWindowHandle))return null;
-                    using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(1)};
                     var root=automation.FromHandle(process.MainWindowHandle);
-                    if(QueueCurrent(root) is not { } actual || !MusicLibraryPlayback.IsRequestedRecording(expected,actual))return null;
-                    var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("LyricsToggleButton"));
+                    var surface=NativeSurfaceTree.Read(root,nativeToken).ToArray();
+                    if(CurrentFromSurface(surface) is not { } actual || !MusicLibraryPlayback.IsRequestedRecording(expected,actual))return null;
+                    var toggle=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="LyricsToggleButton");
                     if(toggle?.Patterns.Toggle.IsSupported!=true || toggle.Patterns.Toggle.Pattern.ToggleState.Value!=ToggleState.On)return null;
-                    var panes=root.FindAllDescendants(cf=>cf.ByAutomationId("TimeBasedLyrics"));if(panes.Length!=1)return null;
-                    var lines=panes[0].FindAllChildren(cf=>cf.ByControlType(ControlType.Group)).Select(Name).Where(s=>s.Length>0).Take(500).ToArray();
+                    var panes=surface.Where(e=>e.Properties.AutomationId.ValueOrDefault=="TimeBasedLyrics").ToArray();if(panes.Length!=1)return null;
+                    var lines=NativeSurfaceTree.Children(panes[0],nativeToken,500).Where(e=>e.ControlType==ControlType.Group).Select(Name).Where(s=>s.Length>0).ToArray();
                     nativeToken.ThrowIfCancellationRequested();
                     if(IsIconic(process.MainWindowHandle) || QueueCurrent(root) is not { } after || !MusicLibraryPlayback.IsRequestedRecording(expected,after))return null;
                     return new AppleOriginalAnchors(process.Id,process.StartTime.ToUniversalTime().Ticks,lines);
-                }
-                finally{gate.Release();}
-            },nativeToken);
-        try{return await worker.WaitAsync(TimeSpan.FromSeconds(6),token);}
-        catch(OperationCanceledException) when(!token.IsCancellationRequested){return null;}
-        catch(Exception ex) when(ex is TimeoutException or InvalidOperationException or COMException or System.ComponentModel.Win32Exception or FlaUI.Core.Exceptions.FlaUIException){return null;}
-        finally
-        {
-            bounded.Cancel();if(worker.IsCompleted)bounded.Dispose();
-            else _=worker.ContinueWith(t=>{_=t.Exception;bounded.Dispose();},TaskScheduler.Default);
-        }
+                },null,TimeSpan.FromSeconds(5),token);
     }
 }
 

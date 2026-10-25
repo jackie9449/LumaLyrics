@@ -11,24 +11,23 @@ namespace LumaLyrics.App;
 internal sealed record PassiveNativeState(bool Running,bool Minimized,long Window,long Foreground,string? Queue,string? Lyrics);
 internal static partial class AppleMusicLibraryHandoff
 {
-    internal static Task<PassiveNativeState> ObservePassiveStateAsync(CancellationToken token)=>Task.Run(()=>
+    internal static async Task<PassiveNativeState> ObservePassiveStateAsync(CancellationToken token)
     {
-        gate.Wait(token);
-        try
+        using var selected=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
+        if(selected is null)return new(false,false,0,QueueForegroundWindow(),null,null);
+        var unavailable=new PassiveNativeState(true,IsIconic(selected.MainWindowHandle),selected.MainWindowHandle,QueueForegroundWindow(),null,null);
+        return await ReadPassiveAsync((process,automation,nativeToken)=>
         {
-            using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
-            if(process is null)return new PassiveNativeState(false,false,0,QueueForegroundWindow(),null,null);
             nint handle=process.MainWindowHandle;bool minimized=IsIconic(handle);string? queue=null,lyrics=null;
             if(!minimized)
             {
-                using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(1)};var root=automation.FromHandle(handle);
-                string? State(string id){var element=root.FindFirstDescendant(cf=>cf.ByAutomationId(id));return element?.Patterns.Toggle.IsSupported==true?element.Patterns.Toggle.Pattern.ToggleState.Value.ToString():null;}
+                var surface=NativeSurfaceTree.Read(automation.FromHandle(handle),nativeToken).ToArray();
+                string? State(string id){var element=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault==id);return element?.Patterns.Toggle.IsSupported==true?element.Patterns.Toggle.Pattern.ToggleState.Value.ToString():null;}
                 queue=State("PlayQueueToggleButton");lyrics=State("LyricsToggleButton");
             }
             return new PassiveNativeState(true,minimized,handle,QueueForegroundWindow(),queue,lyrics);
-        }
-        finally{gate.Release();}
-    },token);
+        },unavailable,TimeSpan.FromSeconds(5),token);
+    }
 }
 
 public partial class MainWindow

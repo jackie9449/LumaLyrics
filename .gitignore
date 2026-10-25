@@ -37,5 +37,8 @@ data-location.json
 **/ocr-models/
 translation-*.json
 native-ttml*.json
+native-read-safety*.json
+native-memory-safety*.json
+native-hang*.json
 apple-original*.json
 **/originals/*.json

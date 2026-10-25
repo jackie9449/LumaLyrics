@@ -11,6 +11,7 @@ try {
     $cases+=@('review.json','native-ocr.json','native-lyrics.png','coverage-audit.json','lyrics-review.json','ocr-result.json')
     $cases+=@('own.ttml','native-ttml.json','apple-original.json')
     $cases+=@('originals/source.json')
+    $cases+=@('native-read-safety.json','native-memory-safety.json','native-hang.json')
     foreach($name in $cases){
         $fixtureFile=Join-Path $fixtureRoot $name
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($fixtureFile)) | Out-Null

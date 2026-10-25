@@ -30,5 +30,5 @@ public partial class App : System.Windows.Application
         if((e.Args.Contains("--verify-import")||e.Args.Contains("--capture-dir")||e.Args.Contains("--verify-ui")||e.Args.Contains("--verify-native-library-playback")) && dataArg<0){MessageBox.Show("验证模式必须通过 --data-dir 使用独立数据目录。");Shutdown();return;}
         var window = new MainWindow(dataDirectory); MainWindow = window; window.Show();
     }
-    protected override void OnExit(ExitEventArgs e) { mutex?.Dispose(); base.OnExit(e); }
+    protected override void OnExit(ExitEventArgs e) { AppleMusicLibraryHandoff.StopPassiveReads();mutex?.Dispose(); base.OnExit(e); }
 }

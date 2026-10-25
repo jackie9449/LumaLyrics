@@ -10,6 +10,10 @@
 
 本机通道需要客户端已加载当前动态歌词、原生文字可读、足够多的独特文本能够对应。窗口最小化、歌词面板关闭、资料不足或客户端不兼容时放弃本次本机采集，继续使用已有缓存或联网来源；不会自动展开 Apple Music、歌词或队列。它不是 Apple 官方全资料库歌词接口，也不能保证每首歌都可取得。
 
+0.17.1 起，原生文字与自动队列读取共用一个无窗口 MTA 线程及同一条 UI Automation 连接，每次只允许一个实际读取在途。取消或超时返回不等于底层 RPC 已终止：在它真正结束前不再提交新的自动读取；读取超时或检测到窗口不响应后，暂停该进程生命周期内的自动读取，重新启动 Apple Music 后才允许恢复。不会自动强制结束客户端，已有缓存和联网来源继续可用。
+
+播放栏、歌词及队列容器采用受限表层遍历，跳过歌曲列表、虚拟行和歌词正文子树，最多 512 个节点、24 层、4 秒；定位唯一歌词容器后才读取最多 500 个直属节点。超过限制按不可用处理，不退回全窗口递归搜索。这些限制约束浮光的工作量，无法强行取消 Apple Music 内部已经阻塞的原生调用，不能承诺解决所有客户端卡死。
+
 ## 核对与存储
 
 1. 记录当前 Apple Music 媒体会话、代次、录音版本及完整歌曲元数据。只读检查已展开的原生动态歌词，同时核对客户端当前歌曲的标题、艺人和专辑。
@@ -27,3 +31,5 @@
 主动选歌、专辑播放、插播和队列排序仍可在各自请求内短暂使用原生界面。操作和确认共用请求取消与窗口归属，恢复面板偏好；实际确认成功后才最小化 Apple Music。主动操作的确认读取与自动刷新分开，避免修复弹窗时破坏队列确认。
 
 实现依据：[TTML 时间模型](https://www.w3.org/TR/2018/REC-ttml2-20181108/)、[VirtualQueryEx](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex)。核对原生文字不等于取得不可变的服务端录音 ID，文字完全相同、时间轴不明的版本仍需谨慎；不把自动检查称为人工逐首校对。
+
+原生读取的线程归属参考 [Microsoft UI Automation 线程说明](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-threading)。开发诊断 `--probe-native-memory-safety <外部报告目录>` 只测内存扫描；应用的 `--verify-native-library-playback <外部报告目录> --native-probe-read-safety --native-safety-mode anchors|anchors-repeat|memory|queue|original|combined-repeat` 需要同时指定独立的 `--data-dir`。真实文字、歌曲元数据和报告仅保存在软件目录之外，不能提交或混入软件包。

@@ -1,0 +1,11 @@
+{
+  "Mode": "combined-repeat",
+  "QueueReads": 12,
+  "NativeTextLines": 44,
+  "AcceptedOriginals": 0,
+  "ResponseSamples": 30,
+  "AllResponsive": true,
+  "FinalResponding": true,
+  "RecordingRetained": true,
+  "AfterObservationSeconds": 15
+}

@@ -11,6 +11,8 @@ internal static partial class AppleMusicLibraryHandoff
 {
     internal static async Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token,Action<string,object?>? trace=null,HandoffContext? command=null)
     {
+        if(command is null)return await ReadPassiveAsync((process,automation,nativeToken)=>ReadQueueSurface(automation,automation.FromHandle(process.MainWindowHandle),nativeToken,trace),
+            MusicQueueSnapshot.Unavailable("Apple Music 暂不可读；超时后暂停自动读取，重新启动客户端可恢复。"),TimeSpan.FromSeconds(18),token);
         var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(18));
         var worker=Task.Run(()=>ReadQueue(bounded.Token,trace,command),bounded.Token);
         try{return await worker.WaitAsync(TimeSpan.FromSeconds(19),token);}
@@ -40,11 +42,12 @@ internal static partial class AppleMusicLibraryHandoff
     }
     internal static MusicQueueSnapshot ReadQueueSurface(UIA3Automation automation,AutomationElement root,CancellationToken token,Action<string,object?>? trace=null,bool allowPanelChanges=false)
     {
-            var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayQueueToggleButton"));
+            var surface=NativeSurfaceTree.Read(root,token).ToArray();
+            var toggle=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="PlayQueueToggleButton");
             if(toggle?.Patterns.Toggle.IsSupported!=true)return MusicQueueSnapshot.Unavailable("当前 Apple Music 版本未提供可读取的播放列表。");
             bool opened=toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;AutomationElement? history=null;bool restoreHistory=false;
             if(!allowPanelChanges && !opened)return MusicQueueSnapshot.Unavailable("Apple Music 的待播清单未展开；自动刷新不会打开原生面板。");
-            var lyrics=root.FindFirstDescendant(cf=>cf.ByAutomationId("LyricsToggleButton"));bool lyricsOn=lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
+            var lyrics=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="LyricsToggleButton");bool lyricsOn=lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
             // Reads do not restore or activate a minimized native window. Unsupported
             // providers return an unavailable snapshot instead of repeatedly flashing it.
             try
@@ -54,14 +57,16 @@ internal static partial class AppleMusicLibraryHandoff
                 for(int attempt=0;attempt<10;attempt++)
                 {
                     token.ThrowIfCancellationRequested();
-                    history=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>Name(b) is "历史记录" or "History");
+                    surface=NativeSurfaceTree.Read(root,token).ToArray();
+                    history=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && Name(b) is "历史记录" or "History");
                     if(history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On)
                     {
                         if(!allowPanelChanges)return MusicQueueSnapshot.Unavailable("Apple Music 正在显示历史记录；保留原生面板选择。");
-                        var upcoming=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>Name(b) is "待播清单" or "Playing Next");
+                        var upcoming=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && Name(b) is "待播清单" or "Playing Next");
                         if(upcoming?.Patterns.Toggle.IsSupported==true){token.ThrowIfCancellationRequested();upcoming.Patterns.Toggle.Pattern.Toggle();restoreHistory=true;token.WaitHandle.WaitOne(150);}
                     }
-                    var lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Where(l=>(l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();
+                    if(restoreHistory)surface=NativeSurfaceTree.Read(root,token).ToArray();
+                    var lists=surface.Where(l=>l.ControlType==ControlType.List && (l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();
                     if(lists.Length>0)return CaptureQueue(automation,root,lists,token,trace,allowRealize:allowPanelChanges);
                     // The installed client removes all queue lists after the final
                     // upcoming song starts. Its explicit empty state, observed twice,
@@ -88,16 +93,18 @@ internal static partial class AppleMusicLibraryHandoff
             }
     }
     static Track? QueueCurrent(AutomationElement root)
+        =>CurrentFromSurface(NativeSurfaceTree.Read(root));
+    static Track? CurrentFromSurface(IEnumerable<AutomationElement> surface)
     {
-        var names=root.FindAllDescendants(cf=>cf.ByAutomationId("ScrollingText")).Select(Name).Where(n=>n.Length>0).ToArray();
+        var names=surface.Where(e=>e.Properties.AutomationId.ValueOrDefault=="ScrollingText").Select(Name).Where(n=>n.Length>0).Take(3).ToArray();
         return names.Length==2?MusicPlaybackQueue.ParseNativeRow(names)?.Track:null;
     }
     internal static MusicQueueSnapshot? CaptureExplicitEmptyQueue(AutomationElement root)
     {
         var current=QueueCurrent(root);
-        bool empty=root.FindAllDescendants(cf=>cf.ByAutomationId("PaneRoot")).Any(pane=>
-            pane.FindFirstDescendant(cf=>cf.ByControlType(ControlType.Text).And(cf.ByName("无待播歌曲。"))) is not null
-            && pane.FindFirstDescendant(cf=>cf.ByControlType(ControlType.Button).And(cf.ByName("待播清单").Or(cf.ByName("Playing Next")))) is { } button
+        bool empty=NativeSurfaceTree.Read(root).Where(e=>e.Properties.AutomationId.ValueOrDefault=="PaneRoot").Any(pane=>
+            NativeSurfaceTree.Read(pane).Any(e=>e.ControlType==ControlType.Text && Name(e)=="无待播歌曲。")
+            && NativeSurfaceTree.Read(pane).FirstOrDefault(e=>e.ControlType==ControlType.Button && Name(e) is "待播清单" or "Playing Next") is { } button
             && button.Patterns.Toggle.IsSupported && button.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On);
         return empty && current==QueueCurrent(root)?new(current,[],true,true,DateTimeOffset.UtcNow,"接下来还没有歌曲"):null;
     }

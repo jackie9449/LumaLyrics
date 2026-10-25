@@ -210,7 +210,7 @@ public partial class MainWindow
         await VerifyApplicationDesignAsync(directory,checks);
         await VerifyResponsiveLayoutAsync(directory,checks);await VerifyIntegratedAppearanceAsync(directory,checks);
         await VerifyTrayIconAsync(directory,checks);
-        await VerifyOriginalLyricsAsync(directory,checks);
+        await VerifyOriginalLyricsAsync(directory,checks);await VerifyNativeSurfaceAsync(checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

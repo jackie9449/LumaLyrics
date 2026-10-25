@@ -1,4 +1,8 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--probe-native-memory-safety")
+{
+    await LumaLyrics.Probe.NativeMemorySafetyProbe.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify an external private report directory."));return;
+}
 if(LumaLyrics.Probe.PersonalLibraryCommands.TryRun(args))return;
 if(args.ElementAtOrDefault(0)=="--reuse-translation-drafts")
 {
