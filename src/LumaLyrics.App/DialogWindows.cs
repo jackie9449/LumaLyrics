@@ -106,19 +106,12 @@ public sealed class DiagnosticsWindow : Window
 }
 public sealed class LibraryWindow : Window
 {
+    internal LibraryPanel Library {get;}
     public LibraryWindow(PlaybackCoordinator c)
     {
-        Title="浮光歌词 · 资料库";
-        var p=DialogUi.Panel(this,"把音乐的细节，提前备好","动态歌词按录音版本、时长、时间戳与全文覆盖筛选。封面直接对应 Apple Music 资料库，优先缓存高清图片。进度保存在本机，下次继续。");
-        var status=new TextBlock{TextWrapping=TextWrapping.Wrap,FontSize=17,Margin=new(0,4,0,18)};p.Children.Add(status);
-        var progress=new ProgressBar{Height=8,Minimum=0,Maximum=1};p.Children.Add(progress);
-        var path=DialogUi.Field(p,"Apple Music 资料库路径",c.Settings.LibraryPath??AppleMusicLibraryReader.Discover()??"");path.IsReadOnly=true;
-        DialogUi.Button(p,"选择本机 Library.musicdb",()=>{var picker=new OpenFileDialog{Filter="Apple Music 资料库|Library.musicdb",CheckFileExists=true};if(picker.ShowDialog(this)==true){c.PauseLibraryPrefetch();c.Settings.LibraryPath=picker.FileName;path.Text=picker.FileName;c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();_=c.ResumeLibraryPrefetchAsync();}});
-        DialogUi.Button(p,"暂停后台预缓存",()=>{c.Settings.AutoPrefetchLibrary=false;c.SaveSettings();c.PauseLibraryPrefetch();});
-        DialogUi.Button(p,"继续预缓存",async()=>{if(!c.Settings.OnlineLookup){MessageBox.Show(this,"请先在设置中开启联网查词。");return;}c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync();});
-        DialogUi.Button(p,"立即重试尚未缓存的歌曲",async()=>{c.Settings.AutoPrefetchLibrary=true;c.SaveSettings();await c.ResumeLibraryPrefetchAsync(true);});
-        var note=new TextBlock{Text="只自动保存通过检查的动态歌词；静态全文不计入动态歌词，手动绑定会保留。确认的纯音乐歌词区留空。待补齐与网络错误分开记录，缺少歌词不会被当作纯音乐。高清按实际图片尺寸统计。",TextWrapping=TextWrapping.Wrap,Margin=new(0,20,0,0)};ThemeManager.Bind(note,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(note);
-        void Refresh(){var s=c.LibraryStatus;var a=c.ArtworkStatus;status.Text=s+"\n\n"+a;progress.Maximum=Math.Max(1,s.Total+a.Total);progress.Value=s.Cached+s.Unavailable+s.Errors+s.Manual+a.Cached+a.Unavailable+a.Errors;}
-        c.Updated+=Refresh;Closed+=(_,_)=>c.Updated-=Refresh;Refresh();
+        // Compatibility host for existing isolated captures. User entries open Settings.
+        Title="浮光歌词 · 资料库";Width=720;Height=760;MinWidth=480;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        Library=new(c);ApplicationWindowFrame.SetContent(this,new ScrollViewer{Content=Library,Margin=new(26),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
+        Closed+=(_,_)=>Library.Dispose();
     }
 }

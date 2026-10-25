@@ -89,7 +89,7 @@ internal static class ThemeManager
     }
 
     // These local resources never change when Application.Resources is replaced.
-    // Both the floating toolbar and its editor belong to the floating appearance.
+    // Floating windows and their toolbar retain their palette; Settings/editor chrome inherits the app.
     public static void ApplyOverlayResources(FrameworkElement target,OverlayAppearance appearance)
     {
         // Floating surfaces keep their original component styles as well as their local palette.

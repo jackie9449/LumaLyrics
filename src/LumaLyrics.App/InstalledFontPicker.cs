@@ -41,6 +41,13 @@ internal sealed class InstalledFontPicker : ComboBox
     }
     void LeaveRow(object sender,MouseEventArgs e){if(sender is ComboBoxItem{Content:string family} && hovered==family)EndPreview();}
     internal void EndPreview(){if(hovered is null)return;hovered=null;PreviewFontChanged?.Invoke(null);}
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        // Popup.Closed can wait for the application's exit animation. A closed list must
+        // release its transient font immediately, including while that fade is still visible.
+        if(e.Property==IsDropDownOpenProperty && e.NewValue is false)EndPreview();
+    }
     protected override void OnDropDownClosed(EventArgs e){EndPreview();base.OnDropDownClosed(e);}
     protected override void OnSelectionChanged(SelectionChangedEventArgs e){EndPreview();base.OnSelectionChanged(e);}
     sealed class FamilyConverter : IValueConverter

@@ -116,6 +116,16 @@
    <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" VerticalAlignment="Center"/></Border>
   </Grid><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
  </Style>
+ <!-- In-page sections use the same state layers and palette as Settings, without its navigation rail. -->
+ <Style x:Key="AppSectionTab" TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}"><Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="14,9"/></Style>
+ <Style x:Key="AppSectionTabs" TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
+  <Setter Property="TabStripPlacement" Value="Top"/><Setter Property="ItemContainerStyle" Value="{StaticResource AppSectionTab}"/>
+  <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><TabPanel/></ItemsPanelTemplate></Setter.Value></Setter>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><Grid ClipToBounds="True"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <ItemsPresenter Margin="0,0,0,14" HorizontalAlignment="Left" KeyboardNavigation.TabIndex="1"/>
+   <ContentPresenter x:Name="PART_SelectedContentHost" Grid.Row="1" ContentSource="SelectedContent" TextElement.FontWeight="Normal" local:AppMotion.RevealOnChange="True" KeyboardNavigation.TabIndex="2"/>
+  </Grid></ControlTemplate></Setter.Value></Setter>
+ </Style>
  <Style TargetType="ToolTip"><Setter Property="Background" Value="{DynamicResource RaisedBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="Padding" Value="12,9"/><Setter Property="FontSize" Value="11"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToolTip"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="10" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style>
 
  <Style TargetType="DataGridRow"><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="DataGridRow"><Grid Background="{TemplateBinding Background}"><Border Background="{DynamicResource HoverBrush}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/><Border Background="{DynamicResource AccentSoftBrush}" Opacity="{Binding Path=(local:AppMotion.Selected),RelativeSource={RelativeSource TemplatedParent}}"/><DataGridCellsPresenter/></Grid></ControlTemplate></Setter.Value></Setter></Style>

@@ -26,6 +26,7 @@ public partial class MainWindow
                 {
                     editor.PreviewTheme(theme);editor.UpdateLayout();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.Render);
                     checks[$"overlayIsolation.{app.Id}.{theme.Tag}.mainPaintStable"]=MainPaint()==baseline && Paint(parent.Background)==preferences;
+                    checks[$"overlayIsolation.{app.Id}.{theme.Tag}.editorChromeUsesApplicationPalette"]=keys.All(key=>Paint(editor.FindResource(key))==Paint(Application.Current.Resources[key])) && editor.Foreground==FindResource("TextBrush") && AppMotion.GetEnabled(editor);
                     checks[$"overlayIsolation.{app.Id}.{theme.Tag}.applicationChoiceStable"]=settings.UiTheme==app.Id && ThemeManager.Current.Id==app.Id && keys.Select((k,i)=>ReferenceEquals(Application.Current.Resources[k],global[i])).All(v=>v);
                 }
                 editor.ResetCurrentTheme();editor.Save();await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);

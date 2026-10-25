@@ -141,10 +141,10 @@ public partial class MainWindow
             CaptureMain("main-"+theme.Id+".png");
             var appearance=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};
             appearance.Show();await Task.Delay(80);
-            checks[theme.Id+".editorHasLocalPalette"]=appearance.Resources.Contains("WindowBrush") && appearance.Resources.Contains("TextBrush");
-            var editorBackground=appearance.Background;var editorForeground=appearance.Foreground;
+            checks[theme.Id+".editorInheritsAppPalette"]=!appearance.Resources.Contains("WindowBrush") && appearance.Background==FindResource("WindowBrush") && appearance.Foreground==FindResource("TextBrush");
+            var previewAppearance=OverlayAppearance.From(settings);var previewFont=appearance.PreviewSurface.RenderedFont;
             SelectUiTheme(theme.Id=="frost"?"material":"frost",false);
-            checks[theme.Id+".editorPaletteIndependent"]=appearance.Background==editorBackground && appearance.Foreground==editorForeground;
+            checks[theme.Id+".editorFollowsAppWithoutChangingPreview"]=appearance.Background==FindResource("WindowBrush") && appearance.Foreground==FindResource("TextBrush") && OverlayAppearance.From(settings)==previewAppearance && appearance.PreviewSurface.RenderedFont==previewFont;
             SelectUiTheme(theme.Id,false);
             checks[theme.Id+".appearanceControls"]=appearance.VerifyControls();
             VisualVerification.Save(appearance,Path.Combine(directory,"appearance-"+theme.Id+".png"));
@@ -182,7 +182,7 @@ public partial class MainWindow
         checks["artwork.manualTrackChangeClearsOldCover"]=Artwork.Source is null && CoverPlaceholder.Visibility==Visibility.Visible;
         coordinator.Import(new("微光之间","浮光","自写文字 · 界面预览",96000),fixture,"UI verification fixture",false);Tick();
         checks["instrumental.vocalSongRestores"]=lyricBlocks.Count==8 && LyricsScroll.Visibility==Visibility.Visible && !overlay.InstrumentalSuppressed;
-        var libraryWindow=new LibraryWindow(coordinator){Owner=this};libraryWindow.Show();await Task.Delay(60);
+        var libraryWindow=new LibraryWindow(coordinator){Owner=this};libraryWindow.Library.SourcePath.Text="Apple Music / Library.musicdb（原创界面示例）";libraryWindow.Show();await Task.Delay(60);
         checks["library.separateArtworkProgress"]=Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("高清")) && Descendants<TextBlock>(libraryWindow).Any(t=>t.Text.Contains("动态歌词"));
         VisualVerification.Save(libraryWindow,Path.Combine(directory,"library-assets.png"));libraryWindow.Close();
         await VerifyArtworkThemesAsync(directory,checks);

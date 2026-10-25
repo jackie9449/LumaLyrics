@@ -77,7 +77,7 @@ public partial class MainWindow
                 finally{gallery.Close();await Dispatcher.InvokeAsync(()=>{},System.Windows.Threading.DispatcherPriority.ApplicationIdle);}
                 checks[$"motion.{theme.Id}.closedWindowDetachesFeedback"]=AppMotion.ActiveFeedbackCount==initialActive;
 
-                var preferences=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();await Task.Delay(340);
+                var preferences=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Library.SourcePath.Text="Apple Music / Library.musicdb（原创界面示例）";preferences.Show();await Task.Delay(340);
                 try
                 {
                     var tabs=Descendants<TabControl>(preferences).Single();

@@ -57,12 +57,12 @@ public partial class MainWindow
             await Task.Delay(60);VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"cover-{id}-warm.png"),true);
             var preferences=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();
             var editor=new AppearanceWindow(settings,overlay.PreviewAppearance,coordinator.SaveSettings,()=>overlay.MaterialStatus){Owner=this};editor.Show();
-            var editorBackground=editor.Background;var editorForeground=editor.Foreground;
+            var previewFont=editor.PreviewSurface.RenderedFont;
             SetArtwork(cool);vm.Title="潮汐微光";
             checks[$"artwork.{id}.coolFromActualCover"]=artworkPalette is not null && artworkPalette.Primary.B>artworkPalette.Primary.R;
             checks[$"artwork.{id}.allSurfacesFollowCover"]=warmWindow!=Signature("WindowBrush") && warmPanel!=Signature("PanelBrush") && warmGlow!=Signature("GlowBrush") && warmAccent!=Signature("AccentBrush");
             checks[$"artwork.{id}.settingsFollowsCover"]=preferences.Background==FindResource("WindowBrush");
-            checks[$"artwork.{id}.floatingEditorIndependent"]=editor.Background==editorBackground && editor.Foreground==editorForeground;
+            checks[$"artwork.{id}.editorChromeFollowsCover"]=editor.Background==FindResource("WindowBrush") && editor.Foreground==FindResource("TextBrush") && editor.PreviewSurface.RenderedFont==previewFont && OverlayAppearance.From(settings)==overlayAppearance;
             editor.Close();preferences.Close();
             await Task.Delay(60);VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"cover-{id}-cool.png"),true);
             SetArtwork(gray);vm.Title="静默时分";

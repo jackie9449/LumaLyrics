@@ -28,8 +28,6 @@
        <StackPanel>
         <Button x:Name="LyricsNav" Style="{StaticResource NavButton}" Content="{StaticResource NavLyricsIcon}" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="当前歌词" AutomationProperties.Name="回到当前歌词" Click="ReturnClicked"/>
         <Button x:Name="MusicNav" Style="{StaticResource NavButton}" Content="{StaticResource NavMusicIcon}" ToolTip="音乐库 · 在浮光中选歌" AutomationProperties.Name="打开音乐库" Click="MusicLibraryClicked"/>
-        <Button x:Name="CacheNav" Style="{StaticResource NavButton}" Content="{StaticResource NavCacheIcon}" ToolTip="{Binding Library}" AutomationProperties.Name="资料库缓存管理" Click="LibraryClicked"/>
-        <Button x:Name="AppearanceNav" Style="{StaticResource NavButton}" Content="{StaticResource NavAppearanceIcon}" ToolTip="设置 · 悬浮歌词" AutomationProperties.Name="桌面歌词外观" Click="AppearanceClicked"/>
        </StackPanel>
       </DockPanel>
      </Border>

@@ -17,6 +17,7 @@ public sealed class SettingsWindow : Window
     readonly AppSettings settings;
     internal PersonalLibraryPanel PersonalLibrary {get;}
     internal ChineseTranslationPanel ChineseTranslations {get;}
+    internal LibraryPanel Library {get;}
 
     public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme)
     {
@@ -92,6 +93,7 @@ public sealed class SettingsWindow : Window
         save.SetResourceReference(StyleProperty,"PrimaryButton");tabs.Items.Add(Tab("常规",general));
         PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab("个人资料",PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();
         ChineseTranslations=new(coordinator);tabs.Items.Add(Tab("中文译文",ChineseTranslations));Closed+=(_,_)=>ChineseTranslations.Dispose();
+        Library=new(coordinator);tabs.Items.Add(Tab("资料库",Library));Closed+=(_,_)=>Library.Dispose();
         var done=new Button{Content="完成",MinWidth=88,HorizontalAlignment=HorizontalAlignment.Right,Margin=new(0,20,0,0),IsCancel=true};
         done.Click+=(_,_)=>Close();Grid.SetRow(done,2);root.Children.Add(done);
         Loaded+=(_,_)=>{
@@ -135,6 +137,7 @@ public sealed class SettingsWindow : Window
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
     internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
     internal void SelectTranslationTab()=>tabs.SelectedIndex=4;
+    internal void SelectLibraryTab()=>tabs.SelectedIndex=5;
     static bool StartupEnabled(){using var key=Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");return key?.GetValue("LumaLyrics") is not null;}
     static void SetStartup(bool enabled){using var key=Registry.CurrentUser.CreateSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run");if(enabled)key.SetValue("LumaLyrics","\""+System.IO.Path.Combine(AppContext.BaseDirectory,"LumaLyrics.exe")+"\"");else key.DeleteValue("LumaLyrics",false);}
 }

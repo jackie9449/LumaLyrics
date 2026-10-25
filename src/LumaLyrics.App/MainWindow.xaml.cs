@@ -264,7 +264,6 @@ public partial class MainWindow : Window
         window.Closed+=(_,_)=>{settingsWindow=null;if(quitting)return;SelectUiTheme(settings.UiTheme,false);overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();};
         window.Show();
     }
-    void AppearanceClicked(object s,RoutedEventArgs e)=>ShowAppearance();
     public void ShowAppearance(Window? dialogOwner=null)
     {
         var preferences=dialogOwner as SettingsWindow;
@@ -287,7 +286,12 @@ public partial class MainWindow : Window
         return editor;
     }
     void DiagnosticsClicked(object s,RoutedEventArgs e)=>new DiagnosticsWindow(coordinator,store,hotkeyError){Owner=this}.ShowDialog();
-    void LibraryClicked(object s,RoutedEventArgs e)=>new LibraryWindow(coordinator){Owner=this}.ShowDialog();
+    void LibraryClicked(object s,RoutedEventArgs e)
+    {
+        SettingsClicked(this,new());var preferences=settingsWindow!;preferences.SelectLibraryTab();
+        if(preferences.WindowState==WindowState.Minimized)preferences.WindowState=WindowState.Normal;
+        preferences.Activate();
+    }
     void PowerModeChanged(object s,PowerModeChangedEventArgs e) {if(e.Mode==PowerModes.Resume)Dispatcher.BeginInvoke(()=>coordinator.Resume());}
     void DisplayChanged(object? s,EventArgs e)=>Dispatcher.BeginInvoke(()=>{NativeWindow.ClampVisible(this);NativeWindow.ClampVisible(overlay);});
     void OnClosing(object? s,CancelEventArgs e) {if(quitting)return;e.Cancel=true;if(settings.CloseToTray && CanRecoverOverlay){Hide();coordinator.SaveSettings();}else _=QuitAsync();}

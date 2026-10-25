@@ -48,11 +48,9 @@ public sealed class AppearanceEditor : UserControl
         edit=new(settings);
         scene=new(preview);
         MinHeight=620;HorizontalContentAlignment=HorizontalAlignment.Stretch;
-        ThemeManager.ApplyOverlayResources(this,current);
-        ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
-        Resources.MergedDictionaries.Add(new(){Source=new Uri("/LumaLyrics;component/AppearanceStyles.xaml",UriKind.Relative)});
-        var root=new Grid{Margin=new(18,16,18,16)};
-        var frame=new Border{CornerRadius=new(16),BorderThickness=new(1),Child=root};ThemeManager.Bind(frame,Border.BackgroundProperty,"WindowBrush");ThemeManager.Bind(frame,Border.BorderBrushProperty,"BorderBrush");Content=frame;
+        // Editor chrome belongs to Settings. Only the lyric renderer uses the floating appearance.
+        Background=Brushes.Transparent;ThemeManager.Bind(this,ForegroundProperty,"TextBrush");FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
+        var root=new Grid();Content=root;
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new StackPanel{Margin=new(0,0,0,22)};
         heading.Children.Add(Label("A P P E A R A N C E",10,"#B8AEED"));
@@ -83,7 +81,7 @@ public sealed class AppearanceEditor : UserControl
         preview.DataContext=previewText;
         subtitle.FontSize=10;ThemeManager.Bind(subtitle,TextBlock.ForegroundProperty,"MutedBrush");subtitle.Margin=new(0,7,0,0);Grid.SetRow(subtitle,2);previewPanel.Children.Add(subtitle);
         SetScene(2);
-        var tabs=new TabControl{Background=Brushes.Transparent,BorderThickness=new(0),Padding=new(0,12,0,0)};Grid.SetRow(tabs,2);right.Children.Add(tabs);
+        var tabs=new TabControl();tabs.SetResourceReference(StyleProperty,"AppSectionTabs");Grid.SetRow(tabs,2);right.Children.Add(tabs);
         var typography=Columns();tabs.Items.Add(Tab("文字与排版",typography.Grid));
         typography.Left.Children.Add(Label("字体 · 悬停预览，点击选定"));
         var savedFonts=settings.OverlayThemeProfiles?.Values.Where(a=>a is not null).Select(a=>a.Normalize().Font)??[];
@@ -203,7 +201,6 @@ public sealed class AppearanceEditor : UserControl
     }
     void RefreshPreview()
     {
-        ThemeManager.ApplyOverlayResources(this,current);
         // Same renderer and actual type sizes as the desktop overlay; scrolling handles oversized previews.
         var effective=hoverFont is null?current:current with{Font=hoverFont};
         preview.Apply(effective,settings.ReduceMotion);status.Text=materialStatus();subtitle.Text=hoverFont is null?$"{current.Preset}  ·  {current.FontSize:0} px  ·  可直接拖动桌面歌词调整位置":$"正在预览 {hoverFont}  ·  点击字体选定，移开恢复";

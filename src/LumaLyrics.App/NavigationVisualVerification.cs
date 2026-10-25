@@ -12,7 +12,7 @@ public partial class MainWindow
     // Isolated --verify-ui fixtures only: exercise real navigation, then render original vector samples.
     async Task VerifyNavigationVisualsAsync(string directory,Dictionary<string,object?> checks,string theme)
     {
-        Button[] buttons=[LyricsNav,MusicNav,CacheNav,AppearanceNav,SettingsNav,DiagnosticsNav];
+        Button[] buttons=[LyricsNav,MusicNav,SettingsNav,DiagnosticsNav];
         var icons=buttons.Select(b=>(ContentPresenter)b.Template.FindName("NavigationIcon",b)).ToArray();
         Rect Bounds(FrameworkElement icon,Button button)=>icon.TransformToAncestor(button).TransformBounds(new Rect(icon.RenderSize));
         var resting=icons.Select((icon,i)=>Bounds(icon,buttons[i])).ToArray();
@@ -24,7 +24,8 @@ public partial class MainWindow
                 Math.Abs(bounds.Top+bounds.Height/2-buttons[item.i].ActualHeight/2)<.51;
         });
         bool Unmoved()=>icons.Select((icon,i)=>Bounds(icon,buttons[i])==resting[i]).All(value=>value);
-        checks[$"navigation.{theme}.sixVectorIconsWithAccessibleNames"]=buttons.All(b=>b.Content is Geometry && !string.IsNullOrWhiteSpace(AutomationProperties.GetName(b)) && b.ToolTip is not null);
+        checks[$"navigation.{theme}.fourVectorIconsWithAccessibleNames"]=buttons.All(b=>b.Content is Geometry && !string.IsNullOrWhiteSpace(AutomationProperties.GetName(b)) && b.ToolTip is not null);
+        checks[$"navigation.{theme}.managementEntriesLiveInSettings"]=Descendants<Button>(NavigationRail).Count()==4 && FindName("CacheNav") is null && FindName("AppearanceNav") is null;
         checks[$"navigation.{theme}.centeredAndUnclipped"]=Centered() && buttons.All(b=>
         {
             var bounds=b.TransformToAncestor(NavigationRail).TransformBounds(new Rect(b.RenderSize));
@@ -45,11 +46,11 @@ public partial class MainWindow
             buttons.All(b=>b.Focusable && b.IsHitTestVisible && b.ActualWidth==48 && b.ActualHeight==48) && Unmoved();
         VisualVerification.Save(NavigationRail,Path.Combine(directory,$"navigation-{theme}.png"),true);
 
-        string[] labels=["当前歌词","音乐库","缓存管理","歌词外观","设置","诊断"];
+        string[] labels=["当前歌词","音乐库","设置","诊断"];
         string[] states=["默认","选中","悬停","按下","键盘焦点"];
         foreach(double scale in new[]{1d,1.25,1.5})
         {
-            var sheet=new Grid{Width=500,Height=408,Background=(Brush)FindResource("WindowBrush"),UseLayoutRounding=true};
+            var sheet=new Grid{Width=500,Height=48+buttons.Length*60,Background=(Brush)FindResource("WindowBrush"),UseLayoutRounding=true};
             VisualTreeHelper.SetRootDpi(sheet,new DpiScale(scale,scale));
             sheet.ColumnDefinitions.Add(new(){Width=new GridLength(120)});
             for(int column=0;column<states.Length;column++)sheet.ColumnDefinitions.Add(new(){Width=new GridLength(76)});

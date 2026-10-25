@@ -45,7 +45,8 @@ public partial class MainWindow
             if(picker.Template.FindName("PART_Popup",picker) is System.Windows.Controls.Primitives.Popup{Child:FrameworkElement list})VisualVerification.Save(list,Path.Combine(directory,"font-preview-list.png"));
             Leave(row1);await Settle();checks["fontPreview.leavingRestoresSelectedFont"]=overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
             Hover(row1);Hover(row2);await Settle();checks["fontPreview.movingBetweenRowsUsesLatestFont"]=overlay.LyricSurface.RenderedFont.StartsWith(second+",",StringComparison.Ordinal);
-            picker.IsDropDownOpen=false;await Settle();checks["fontPreview.closingListRestoresSelectedFont"]=overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
+            picker.IsDropDownOpen=false;checks["fontPreview.closingClearsHoverBeforeFadeCompletes"]=picker.HoveredFont is null && overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
+            await Settle();checks["fontPreview.closingListRestoresSelectedFont"]=overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
             picker.IsDropDownOpen=true;await Settle();picker.SelectedIndex=1;await Settle();checks["fontPreview.selectingCommitsChosenFont"]=settings.OverlayFont==first && picker.HoveredFont is null;
             row2=(ComboBoxItem)picker.ItemContainerGenerator.ContainerFromIndex(2);Hover(row2);await Settle();editor.Save();await Settle();
             checks["fontPreview.saveIgnoresUnselectedHover"]=store.Load().OverlayFont==first && settings.OverlayFont==first;
