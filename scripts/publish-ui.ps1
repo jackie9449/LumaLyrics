@@ -1,7 +1,7 @@
-param([ValidateSet('win-x64')][string]$Runtime='win-x64')
+param([ValidateSet('win-x64')][string]$Runtime='win-x64',[switch]$Release)
 . "$PSScriptRoot/common.ps1"
 $releaseVersion = ([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
-$packageName = "LumaLyrics-$releaseVersion-ui-preview-$Runtime"
+$packageName = if($Release){"LumaLyrics-$releaseVersion-portable-$Runtime"}else{"LumaLyrics-$releaseVersion-ui-preview-$Runtime"}
 $destination = Join-Path $projectRoot "artifacts/$packageName"
 Invoke-Dotnet publish src/LumaLyrics.App -c Release -r $Runtime --self-contained true '-p:PublishSingleFile=false' '-p:PublishTrimmed=false' --no-restore -o $destination
 $probeDestination=Join-Path $projectRoot ".tools/publish-probe-$releaseVersion"
@@ -17,6 +17,13 @@ New-Item -ItemType Directory -Force -Path $fxrDirectory | Out-Null
 Copy-Item -LiteralPath $script:Dotnet -Destination (Join-Path $hostDirectory 'dotnet.exe') -Force
 Copy-Item -LiteralPath (Join-Path $fxr.FullName 'hostfxr.dll') -Destination $fxrDirectory -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Launch.vbs') -Destination $destination -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot 'src/LumaLyrics.App/Assets/luma.ico') -Destination $destination -Force
+$frameworkReference=Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319'
+$sdkVersion=(& $script:Dotnet --version).Trim()
+$launcherCompiler=Join-Path $dotnetRoot "sdk/$sdkVersion/Roslyn/bincore/csc.dll"
+$launcherVersion=Join-Path $projectRoot '.tools/launcher-version.cs'
+"[assembly:System.Reflection.AssemblyVersion(`"$releaseVersion.0`")]`n[assembly:System.Reflection.AssemblyFileVersion(`"$releaseVersion.0`")]`n[assembly:System.Reflection.AssemblyProduct(`"浮光歌词 LumaLyrics`")]" | Set-Content -LiteralPath $launcherVersion -Encoding utf8
+Invoke-Dotnet $launcherCompiler /nologo /nostdlib /target:winexe /platform:x64 /optimize+ /deterministic+ /codepage:65001 "/win32icon:$projectRoot/src/LumaLyrics.App/Assets/luma.ico" "/out:$destination/浮光歌词.exe" "/reference:$frameworkReference/mscorlib.dll" "/reference:$frameworkReference/System.dll" "/reference:$frameworkReference/System.Windows.Forms.dll" (Join-Path $projectRoot 'launcher/Program.cs') $launcherVersion
 Copy-Item -LiteralPath README.md,THIRD-PARTY-NOTICES.md -Destination $destination -Force
 Copy-Item -LiteralPath licenses -Destination $destination -Recurse -Force
 $guide = Join-Path $destination 'docs'
@@ -65,6 +72,7 @@ Copy-Item -LiteralPath docs/verification-v0170 -Destination $guide -Recurse -For
 Copy-Item -LiteralPath docs/verification-v0171 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v0180 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0180 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force

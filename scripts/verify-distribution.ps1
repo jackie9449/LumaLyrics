@@ -13,7 +13,7 @@ $privateFiles=@(Get-ChildItem -LiteralPath $distributionRoot -Recurse -Force -Fi
     $privateReview=$_.Name -match '^(review|lyrics-review|ocr|native-ocr|native-lyrics|native-ttml|apple-original|coverage-audit|library-coverage)([-_.].*)?\.(json|png|jpe?g)$'
     $privateExtension=$_.Name -match '\.db([-.].*)?$|\.sqlite3?(-(wal|shm|journal))?$|\.(musicdb|backup|bak|lrc|ttml|img|jsonl|zip|onnx|safetensors)$'
     $privateText=$_.Extension -eq '.txt' -and $relative -notmatch '^licenses/' -and $_.Name -notin @('LICENSE.txt','ThirdPartyNotices.txt')
-    $unexpectedImage=$_.Extension -match '^\.(png|jpe?g|webp|avif|bmp)$' -and $relative -notmatch '^docs/screenshots-ui-v(041|050|051|060|061|070|071|080|090|091|0100|0101|0110|0120|0130|0140|0150|0160|0161|0162|0164|0165|0166|0167|0170|0180)/[^/]+\.png$'
+    $unexpectedImage=$_.Extension -match '^\.(png|jpe?g|webp|avif|bmp)$' -and $relative -notmatch '^docs/screenshots-ui-v(041|050|051|060|061|070|071|080|090|091|0100|0101|0110|0120|0130|0140|0150|0160|0161|0162|0164|0165|0166|0167|0170|0180)/[^/]+\.png$|^docs/verification-v100/floating-playback-controls\.png$'
     $privateDirectory -or $privateName -or $privateQueue -or $privateReview -or $privateExtension -or $privateText -or $unexpectedImage
 })
 if($privateFiles.Count -gt 0){

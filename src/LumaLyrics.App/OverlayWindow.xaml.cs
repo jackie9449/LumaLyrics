@@ -9,13 +9,15 @@ namespace LumaLyrics.App;
 public partial class OverlayWindow : Window
 {
     readonly MainWindow owner; readonly AppSettings settings;
+    readonly Func<string,Task> transport;
+    internal Task? ActiveTransport {get;private set;}
     public bool IsLocked { get; private set; }
     bool firstLock=true,placed;
     bool instrumental;
     bool darkAdaptiveText;
     readonly DispatcherTimer contrastTimer=new(){Interval=TimeSpan.FromMilliseconds(400)};
     bool appearanceEditing,visibleBeforeEditing,visibilityPreferenceBeforeEditing;
-    bool interactiveMove,closed;
+    bool interactiveMove,closed,transportBusy,keyboardControls;
     bool syncingTranslationToggle=true;
     HwndSource? nativeSource;
     double opacityBeforeEditing;
@@ -33,22 +35,29 @@ public partial class OverlayWindow : Window
     readonly NativeBackdrop backdrop;
     public string MaterialStatus=>backdrop.Status;
     public bool BlurAccepted=>backdrop.Accepted;
-    public OverlayWindow(MainWindow owner,PlayerViewModel vm,AppSettings settings)
+    public OverlayWindow(MainWindow owner,PlayerViewModel vm,AppSettings settings,Func<string,Task>? transport=null)
     {
-        InitializeComponent(); this.owner=owner; this.settings=settings; DataContext=vm;backdrop=new(this);RefreshTranslationToggle();
+        InitializeComponent(); this.owner=owner; this.settings=settings;this.transport=transport??owner.ControlOverlayPlaybackAsync; DataContext=vm;backdrop=new(this);RefreshTranslationToggle();
         ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new(new Point(Math.Max(0,target.Width-popup.Width),-popup.Height-4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical),new(new Point(Math.Max(0,target.Width-popup.Width),target.Height+4),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical)];
+        PlaybackPopup.CustomPopupPlacementCallback=(popup,target,offset)=>[new(new Point((target.Width-popup.Width)/2,target.Height+6),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical),new(new Point((target.Width-popup.Width)/2,-popup.Height-52),System.Windows.Controls.Primitives.PopupPrimaryAxis.Vertical)];
+        foreach(var bar in new[]{Toolbar,PlaybackToolbar})
+        {
+            bar.PreviewKeyDown+=(_,e)=>{keyboardControls=true;if(e.Key==Key.Escape){HideHoverControls();e.Handled=true;}};
+            bar.PreviewMouseDown+=(_,_)=>keyboardControls=false;
+            bar.LostKeyboardFocus+=(_,_)=>toolbarDelay.Start();
+        }
         SourceInitialized+=(_,_)=>{NativeWindow.NoActivate(this);nativeSource=HwndSource.FromHwnd(NativeWindow.Handle(this));nativeSource.AddHook(MoveHook);};
         Loaded+=(_,_)=> {var left=settings.OverlayLeft;var top=settings.OverlayTop;ApplyStyle();UpdateLayout();NativeWindow.Place(this,left,top,true,DefaultBottomInset());placed=true;RememberPosition();};
-        MouseEnter+=(_,_)=>{if(interactiveMove)return;toolbarDelay.Stop();if(!IsLocked && !instrumental && !appearanceEditing)ToolbarPopup.IsOpen=true;LyricSurface.SetInteraction(new(.35,0),true);};
+        MouseEnter+=(_,_)=>{if(interactiveMove)return;ShowHoverControls();LyricSurface.SetInteraction(new(.35,0),true);};
         MouseMove+=(_,e)=>{if(interactiveMove)return;var p=e.GetPosition(LyricSurface);LyricSurface.SetInteraction(new(p.X/Math.Max(1,LyricSurface.ActualWidth),p.Y/Math.Max(1,LyricSurface.ActualHeight)),true);};
         MouseLeave+=(_,_)=>{if(interactiveMove)return;toolbarDelay.Start();LyricSurface.SetInteraction(new(.25,0),false);};
-        toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver)ToolbarPopup.IsOpen=false;};
-        IsVisibleChanged+=(_,_)=>{if(!IsVisible){ToolbarPopup.IsOpen=false;toolbarDelay.Stop();}UpdateAdaptiveText();backdrop.Refresh();};
+        toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver && !PlaybackToolbar.IsMouseOver && !(keyboardControls && (Toolbar.IsKeyboardFocusWithin || PlaybackToolbar.IsKeyboardFocusWithin)))HideHoverControls();};
+        IsVisibleChanged+=(_,_)=>{if(!IsVisible)HideHoverControls();UpdateAdaptiveText();backdrop.Refresh();};
         LocationChanged+=(_,_)=> {if(placed)RememberPosition();backdrop.Refresh();};
         SizeChanged+=(_,_)=> { if(placed) {settings.OverlayWidth=Width;RoundRegion();}backdrop.Refresh();};
         DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{RoundRegion();backdrop.Refresh();}));
         contrastTimer.Tick+=(_,_)=>UpdateAdaptiveText();
-        Closed+=(_,_)=>{closed=true;nativeSource?.RemoveHook(MoveHook);nativeSource=null;toolbarDelay.Stop();contrastTimer.Stop();ToolbarPopup.IsOpen=false;backdrop.Dispose();};
+        Closed+=(_,_)=>{closed=true;nativeSource?.RemoveHook(MoveHook);nativeSource=null;HideHoverControls();contrastTimer.Stop();backdrop.Dispose();};
     }
     nint MoveHook(nint handle,int message,nint w,nint l,ref bool handled)
     {
@@ -59,7 +68,7 @@ public partial class OverlayWindow : Window
     void SetInteractiveMove(bool active)
     {
         if(interactiveMove==active)return;interactiveMove=active;
-        if(active){contrastTimer.Stop();toolbarDelay.Stop();ToolbarPopup.IsOpen=false;}
+        if(active){contrastTimer.Stop();HideHoverControls();}
         else
         {
             backdrop.Refresh();
@@ -71,6 +80,9 @@ public partial class OverlayWindow : Window
         var a=CurrentAppearance;
         ThemeManager.ApplyOverlayResources(this,a);
         ThemeManager.ApplyOverlayResources(Toolbar,a);
+        ThemeManager.ApplyOverlayResources(PlaybackToolbar,a);
+        AppMotion.SetEnabled(PlaybackToolbar,true);
+        AppMotion.SetAnimationsEnabled(PlaybackToolbar,!settings.ReduceMotion && SystemParameters.ClientAreaAnimation);
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
         Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(OverlayContrast.Paint(a,darkAdaptiveText),settings.ReduceMotion);backdrop.Apply(a);
         if(IsLoaded) {UpdateLayout();RoundRegion();if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
@@ -100,7 +112,7 @@ public partial class OverlayWindow : Window
     {
         if(appearanceEditing)return;
         visibleBeforeEditing=IsVisible;visibilityPreferenceBeforeEditing=settings.OverlayVisible;opacityBeforeEditing=Opacity;appearanceEditing=true;Opacity=1;
-        if(!IsVisible)Show();ToolbarPopup.IsOpen=false;ResizeMode=ResizeMode.CanResizeWithGrip;ApplyInstrumentalState();
+        if(!IsVisible)Show();HideHoverControls();ResizeMode=ResizeMode.CanResizeWithGrip;ApplyInstrumentalState();
     }
     internal void EndAppearanceEditing()
     {
@@ -116,23 +128,38 @@ public partial class OverlayWindow : Window
     void ApplyInstrumentalState()
     {
         LyricSurface.Visibility=instrumental?Visibility.Hidden:Visibility.Visible;
-        if(instrumental){ToolbarPopup.IsOpen=false;backdrop.Apply(new(){SystemBlur=false});}
+        if(instrumental){HideHoverControls();backdrop.Apply(new(){SystemBlur=false});}
         else backdrop.Apply(CurrentAppearance);
         if(NativeWindow.Handle(this)!=0)NativeWindow.ClickThrough(this,IsLocked && !appearanceEditing || instrumental);
         UpdateAdaptiveText();
     }
-    internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen;
+    internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen && !PlaybackPopup.IsOpen;
     public void SetLocked(bool locked,bool showTip=true)
     {
         if(locked && !owner.CanRecoverOverlay) { MessageBox.Show("托盘暂不可用，无法安全锁定。请先重新连接托盘。","浮光歌词"); return; }
         if(locked && firstLock && showTip) { MessageBox.Show($"锁定后可点击穿透。\n从托盘选择“解锁歌词”，或按 {settings.UnlockHotkey} 解锁。","桌面歌词"); firstLock=false; }
-        IsLocked=locked; NativeWindow.ClickThrough(this,locked && !appearanceEditing);ToolbarPopup.IsOpen=false; ResizeMode=locked && !appearanceEditing?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
+        IsLocked=locked; NativeWindow.ClickThrough(this,locked && !appearanceEditing);HideHoverControls(); ResizeMode=locked && !appearanceEditing?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
     }
     void DragOverlay(object sender,MouseButtonEventArgs e) { if(CanDrag && e.ButtonState==MouseButtonState.Pressed) { try {SetInteractiveMove(true);DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } finally{SetInteractiveMove(false);} } }
     void LockClicked(object s,RoutedEventArgs e) { e.Handled=true; SetLocked(true); }
     void MainClicked(object s,RoutedEventArgs e) { e.Handled=true; owner.Restore(); }
     void AppearanceClicked(object s,RoutedEventArgs e) {e.Handled=true;owner.ShowAppearance();}
     void HideClicked(object s,RoutedEventArgs e) { e.Handled=true; owner.ToggleOverlay(); }
+    internal void ShowHoverControls()
+    {
+        toolbarDelay.Stop();if(closed || !IsVisible || IsLocked || instrumental || appearanceEditing || interactiveMove)return;
+        var animation=!settings.ReduceMotion && SystemParameters.ClientAreaAnimation?System.Windows.Controls.Primitives.PopupAnimation.Fade:System.Windows.Controls.Primitives.PopupAnimation.None;
+        ToolbarPopup.PopupAnimation=PlaybackPopup.PopupAnimation=animation;
+        ToolbarPopup.IsOpen=PlaybackPopup.IsOpen=true;
+    }
+    internal void HideHoverControls(){toolbarDelay.Stop();keyboardControls=false;ToolbarPopup.IsOpen=PlaybackPopup.IsOpen=false;}
+    async void TransportClicked(object sender,RoutedEventArgs e)
+    {
+        e.Handled=true;if(transportBusy || IsLocked || instrumental || appearanceEditing || sender is not System.Windows.Controls.Button{Tag:string action})return;
+        transportBusy=true;PlaybackToolbar.IsEnabled=false;
+        try{await (ActiveTransport=transport(action));}
+        finally{transportBusy=false;PlaybackToolbar.IsEnabled=true;}
+    }
     void ToolbarEntered(object s,System.Windows.Input.MouseEventArgs e)=>toolbarDelay.Stop();
     void ToolbarLeft(object s,System.Windows.Input.MouseEventArgs e)=>toolbarDelay.Start();
     void RememberPosition(){var p=NativeWindow.Location(this);settings.OverlayLeft=p.Left;settings.OverlayTop=p.Top;}

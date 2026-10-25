@@ -26,5 +26,27 @@
    </StackPanel>
   </Border>
   </Popup>
+  <Popup x:Name="PlaybackPopup" Placement="Custom" PlacementTarget="{Binding ElementName=LyricSurface}" AllowsTransparency="True" StaysOpen="True" Focusable="False">
+   <Border x:Name="PlaybackToolbar" CornerRadius="22" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="5" MouseEnter="ToolbarEntered" MouseLeave="ToolbarLeft" KeyboardNavigation.TabNavigation="Cycle" DataContext="{Binding DataContext,ElementName=LyricSurface}">
+    <Border.Resources>
+     <Style x:Key="FloatingTransport" TargetType="Button" BasedOn="{StaticResource IconButton}">
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/><Setter Property="FontSize" Value="16"/><Setter Property="Width" Value="44"/><Setter Property="Height" Value="44"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+       <Grid Opacity="{Binding Path=(local:AppMotion.Availability),RelativeSource={RelativeSource TemplatedParent}}"><Border Background="{TemplateBinding Background}" CornerRadius="22"/>
+        <Border x:Name="Feedback" CornerRadius="22" Background="{DynamicResource HoverBrush}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Border CornerRadius="22" Background="{DynamicResource AccentSoftBrush}" Opacity="{Binding Path=(local:AppMotion.Pressed),RelativeSource={RelativeSource TemplatedParent}}"/>
+        <Border x:Name="FocusRing" CornerRadius="22" BorderThickness="1" BorderBrush="{DynamicResource AccentBrush}" Opacity="{Binding Path=(local:AppMotion.Focus),RelativeSource={RelativeSource TemplatedParent}}"/>
+        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+       </Grid>
+      </ControlTemplate></Setter.Value></Setter>
+     </Style>
+    </Border.Resources>
+    <StackPanel Orientation="Horizontal">
+     <Button x:Name="OverlayPrevious" Style="{StaticResource FloatingTransport}" Content="&#xE892;" IsEnabled="{Binding CanPrevious}" ToolTip="上一曲" AutomationProperties.Name="悬浮歌词上一曲" Tag="previous" Click="TransportClicked"/>
+     <Button x:Name="OverlayPlayPause" Style="{StaticResource FloatingTransport}" Content="{Binding PlayGlyph}" IsEnabled="{Binding CanPlay}" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="{Binding PlayLabel}" AutomationProperties.Name="{Binding PlayLabel}" Tag="toggle" Click="TransportClicked" Margin="5,0"/>
+     <Button x:Name="OverlayNext" Style="{StaticResource FloatingTransport}" Content="&#xE893;" IsEnabled="{Binding CanNext}" ToolTip="下一曲" AutomationProperties.Name="悬浮歌词下一曲" Tag="next" Click="TransportClicked"/>
+    </StackPanel>
+   </Border>
+  </Popup>
  </Grid>
 </Window>

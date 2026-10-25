@@ -9,7 +9,7 @@ public partial class MainWindow
 {
     async Task VerifyAlbumArtworkAsync(MusicLibraryView browser,string directory,Dictionary<string,object?> checks,IReadOnlyList<string> covers,Action<int> mode,Func<int> loads)
     {
-        async Task Search(string query){browser.SearchBox.Text=query;await Task.Delay(180);UpdateLayout();}
+        async Task Search(string query){browser.SearchBox.Text=query;for(int attempt=0;attempt<100 && browser.IsFiltering;attempt++)await Task.Delay(20);UpdateLayout();}
         void Progress(int cached,string message)=>browser.ObserveArtworkProgress(new(3003,cached,cached,0,0,cached<3003,message));
         async Task Settle(){await Task.Delay(1350);UpdateLayout();}
         int Images()=>Descendants<Image>(browser.AlbumShelf).Count(i=>i.Source is BitmapImage{PixelWidth:360,IsFrozen:true});

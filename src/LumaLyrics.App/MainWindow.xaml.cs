@@ -139,6 +139,7 @@ public partial class MainWindow : Window
         vm.Status=s is null?"等待 Apple Music":$"已连接 · {(s.Status==PlayState.Playing?"正在播放":s.Status==PlayState.Paused?"已暂停":"已停止")}";
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=s?.CanSeek==true;
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
+        vm.IsPlaying=s?.Status==PlayState.Playing;
         vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
         overlay.RefreshTranslationToggle();
         RefreshMainTranslationToggle();
@@ -267,6 +268,13 @@ public partial class MainWindow : Window
     async void NextClicked(object s,RoutedEventArgs e)=>await ControlAsync("next");
     async void PreviousClicked(object s,RoutedEventArgs e)=>await ControlAsync("previous");
     async Task ControlAsync(string action,double? position=null) {if(!await coordinator.Source.ControlAsync(action,position))MessageBox.Show(this,"播放器未接受此操作。","浮光歌词");}
+    internal async Task ControlOverlayPlaybackAsync(string action)
+    {
+        var snapshot=coordinator.Snapshot;if(snapshot is null)return;
+        if(action=="toggle")action=snapshot.Status==PlayState.Playing?"pause":"play";
+        bool allowed=action switch{"previous"=>snapshot.CanPrevious,"next"=>snapshot.CanNext,"pause"=>snapshot.CanPause,"play"=>snapshot.CanPlay,_=>false};
+        if(allowed)await ControlAsync(action);
+    }
     async void SeekReleased(object s,MouseButtonEventArgs e) {if(coordinator.Snapshot?.CanSeek==true)await ControlAsync("seek",SeekSlider.Value);}
     void EarlierClicked(object s,RoutedEventArgs e)=>coordinator.SetOffset((coordinator.Binding?.OffsetMs ?? 0)-100);
     void LaterClicked(object s,RoutedEventArgs e)=>coordinator.SetOffset((coordinator.Binding?.OffsetMs ?? 0)+100);

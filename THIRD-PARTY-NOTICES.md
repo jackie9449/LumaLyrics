@@ -15,10 +15,11 @@
 | FlaUI.Core / FlaUI.UIA3 | 5.0.0 | [FlaUI](https://github.com/FlaUI/FlaUI)，MIT，原始许可见 licenses/FlaUI-LICENSE.txt |
 | Interop.UIAutomationClient | 10.19041.0 | [UIAutomation-Interop](https://github.com/Roemer/UIAutomation-Interop)，MIT，原始许可随包附带 |
 | System.Management | 8.0.0 | [dotnet/runtime](https://github.com/dotnet/runtime)，MIT，原始许可与 notices 随包附带 |
+| Inno Setup | 6.7.3 | 安装程序由 [Inno Setup](https://jrsoftware.org/) 生成；保留安装引擎版权及 [原始许可](licenses/Inno-Setup-LICENSE.txt)。安装界面中文增补文案由本项目编写。编译器不随应用分发。 |
 
 直接与传递 NuGet 版本和完整内容哈希固定在各项目 `packages.lock.json`，SDK 在 `global.json`。本次 SDK 为 10.0.402，仅用于开发，不把整个 SDK 分发给用户。附带的备用 dotnet host 和 hostfxr 来自相同微软发行版。
 
-歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。截图中的完整歌词是项目自写 QA fixture，封面来自实际播放会话。
+歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。新增公开截图使用原创几何封面与自写歌词，不含个人资料库内容。
 
 图标为本项目用几何图形生成的原生资产；未使用外部照片、字体文件或商业图标包。显示字体使用系统已有字体，不捆绑分发。
 

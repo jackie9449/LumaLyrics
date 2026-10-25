@@ -1,3 +1,3 @@
 param([ValidateSet('win-x64')][string]$Runtime='win-x64')
-# Preserve the original entry point while using the current version and package checks.
-& "$PSScriptRoot/publish-ui.ps1" -Runtime $Runtime
+# Produce the stable portable package. publish-installer.ps1 wraps the same verified payload.
+& "$PSScriptRoot/publish-ui.ps1" -Runtime $Runtime -Release

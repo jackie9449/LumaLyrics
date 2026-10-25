@@ -185,7 +185,7 @@ public static class AppMotion
             bool usable=control.IsEnabled;
             bool down=usable && (pressed || control is ButtonBase{IsPressed:true} || control is Thumb{IsDragging:true});
             bool selected=GetIsSelected(control) || control is ToggleButton{IsChecked:true} or ListBoxItem{IsSelected:true} or ComboBoxItem{IsHighlighted:true} or TabItem{IsSelected:true} or ComboBox{IsDropDownOpen:true} or DataGridRow{IsSelected:true};
-            int duration=instant || !Allowed || !control.IsVisible?0:ThemeManager.Current.Id=="material"?150:190;
+            int duration=instant || !Allowed || !GetAnimationsEnabled(control) || !control.IsVisible?0:ThemeManager.Current.Id=="material"?150:190;
             Smooth(control,HoverProperty,usable && hover?1:0,duration);Smooth(control,PressedProperty,down?1:0,Math.Min(duration,85));
             Smooth(control,FocusProperty,usable && control.IsKeyboardFocusWithin?1:0,duration);Smooth(control,SelectedProperty,selected?1:0,duration);
             Smooth(control,AvailabilityProperty,usable?1:.38,duration);

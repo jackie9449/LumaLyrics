@@ -31,4 +31,8 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
     public bool CanNext { get => canNext; set => Set(ref canNext,value); }
     public bool CanPrevious { get => canPrevious; set => Set(ref canPrevious,value); }
     public bool CanSeek { get => canSeek; set => Set(ref canSeek,value); }
+    bool isPlaying;
+    public bool IsPlaying {get=>isPlaying;set{if(isPlaying==value)return;Set(ref isPlaying,value);PropertyChanged?.Invoke(this,new(nameof(PlayGlyph)));PropertyChanged?.Invoke(this,new(nameof(PlayLabel)));}}
+    public string PlayGlyph=>IsPlaying?"\uE769":"\uE768";
+    public string PlayLabel=>IsPlaying?"暂停":"播放";
 }
