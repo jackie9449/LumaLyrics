@@ -79,4 +79,4 @@ C# / WPF，.NET 10，Windows x64。使用仓库的 SDK 选择脚本（有 `.tool
 
 UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.0.0 验证记录](docs/verification-v100/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
 
-[资料库导入工具](docs/library-assets.md) · [原词校对](docs/lyrics-review.md) · [第三方组件](THIRD-PARTY-NOTICES.md) · [协作规范](AGENTS.md)
+[资料库导入工具](docs/library-assets.md) · [原词校对](docs/lyrics-review.md) · [第三方组件](THIRD-PARTY-NOTICES.md) · [协作规范](AGENTS.md) · [Codex 换机接手](CODEX_HANDOFF.md)
