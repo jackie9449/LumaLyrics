@@ -23,12 +23,13 @@ internal sealed class PersonalLibraryPanel : StackPanel
     public PersonalLibraryPanel(string dataRoot)
     {
         this.dataRoot=dataRoot;
-        Children.Add(new TextBlock{Text="个人资料",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,10)});
+        var title=new TextBlock{Text="个人资料",FontSize=18,Margin=new(0,0,0,10)};ThemeManager.BindDisplay(title);Children.Add(title);
         var hint=Copy("歌词、中文译文、封面与校准记录独立保存。更新软件会继续使用这些资料；分发时只分享软件安装包。");ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(hint);
         var location=new StackPanel();location.Children.Add(Copy("当前个人数据目录",11));
         var path=new TextBox{Text=dataRoot,IsReadOnly=true,TextWrapping=TextWrapping.Wrap,BorderThickness=new(0),Background=System.Windows.Media.Brushes.Transparent,Padding=new(0),FontSize=12};
         AutomationProperties.SetName(path,"当前个人数据目录");location.Children.Add(path);
         var card=new Border{Child=location,Padding=new(16),CornerRadius=new(16),Margin=new(0,5,0,4)};ThemeManager.Bind(card,Border.BackgroundProperty,"RaisedBrush");Children.Add(card);
+        ThemeManager.Bind(card,Border.CornerRadiusProperty,"LocationCardRadius");
         ActionButton("打开个人数据目录",()=>{var start=new ProcessStartInfo("explorer.exe"){UseShellExecute=true};start.ArgumentList.Add(dataRoot);Process.Start(start);});
         Children.Add(new TextBlock{Text="单独备份，安心更新。",FontSize=16,FontWeight=FontWeights.SemiBold,Margin=new(0,18,0,8)});
         var detail=Copy("文件夹中可直接读取歌词与原始封面。个人备份 ZIP 还保留手动绑定、偏移和导入队列，支持离线恢复。");ThemeManager.Bind(detail,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(detail);

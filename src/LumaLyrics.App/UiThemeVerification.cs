@@ -16,6 +16,11 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-theme-collection"))
+        {
+            await VerifyThemeCollectionAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-tray-icon"))
         {
             await VerifyTrayIconAsync(directory,checks);
@@ -210,7 +215,7 @@ public partial class MainWindow
         await VerifyApplicationDesignAsync(directory,checks);
         await VerifyResponsiveLayoutAsync(directory,checks);await VerifyIntegratedAppearanceAsync(directory,checks);
         await VerifyTrayIconAsync(directory,checks);
-        await VerifyOriginalLyricsAsync(directory,checks);await VerifyNativeSurfaceAsync(checks);
+        await VerifyOriginalLyricsAsync(directory,checks);await VerifyNativeSurfaceAsync(checks);await VerifyThemeCollectionAsync(directory,checks);
         File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
     }
     static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject

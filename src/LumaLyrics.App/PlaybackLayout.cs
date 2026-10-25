@@ -15,7 +15,7 @@ public partial class MainWindow
         if(InfoPanel is null || ActualWidth<=0)return;
         double inset=Math.Clamp(ActualWidth*.022,22,60),gap=Math.Clamp(ActualWidth*.023,20,40);
         LyricsPage.Margin=new(inset,14,inset,18);
-        double bodyWidth=Math.Min(2080,Math.Max(1,ActualWidth-82-inset*2));
+        double bodyWidth=Math.Min(2080,Math.Max(1,ActualWidth-ThemeDesign.For(settings.UiTheme).RailWidth-2-inset*2));
         double queueWidth=settings.ShowPlaybackQueue?Math.Clamp(ActualWidth*.212,244,320):0;
         double available=bodyWidth-queueWidth;
         double height=Body.ActualHeight>0?Body.ActualHeight:Math.Max(240,ActualHeight-230);

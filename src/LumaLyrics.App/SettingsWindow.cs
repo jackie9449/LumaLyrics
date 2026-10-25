@@ -30,30 +30,28 @@ public sealed class SettingsWindow : Window
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new StackPanel{Margin=new(0,0,0,22)};
         heading.Children.Add(Text("P R E F E R E N C E S",10,true));
-        heading.Children.Add(new TextBlock{Text="让浮光，更合你心意。",FontSize=25,FontWeight=FontWeights.SemiBold,Margin=new(0,8,0,0)});
+        var headline=new TextBlock{Text="让浮光，更合你心意。",Margin=new(0,8,0,0)};headline.SetResourceReference(StyleProperty,"AppHeadline");heading.Children.Add(headline);
         root.Children.Add(heading);Grid.SetRow(tabs,1);root.Children.Add(tabs);
         tabs.Padding=new(0,18,0,0);
 
         var appPanel=new StackPanel();
-        appPanel.Children.Add(new TextBlock{Text="应用界面",FontSize=18,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,8)});
+        var appTitle=new TextBlock{Text="应用界面",Margin=new(0,0,0,8)};appTitle.SetResourceReference(StyleProperty,"AppSectionTitle");appPanel.Children.Add(appTitle);
         appPanel.Children.Add(Text("为主窗口和应用设置挑选一种氛围。选择后立即保存。",12));
-        appPanel.Children.Add(Text("两种玻璃主题随当前封面取色，切歌时柔和过渡。",12));
+        appPanel.Children.Add(Text("不同的材质、装帧与排版。两种玻璃随封面取色，其余风格保持自己的配色。",12));
         appPanel.Children.Add(Text("悬浮歌词拥有自己的外观，不会随这里的选择改变。",12));
+        var gallery=new System.Windows.Controls.Primitives.UniformGrid{Columns=2,Margin=new(-6,6,-6,0)};appPanel.Children.Add(gallery);
+        gallery.SizeChanged+=(_,e)=>{int columns=e.NewSize.Width>=590?2:1;if(gallery.Columns!=columns)gallery.Columns=columns;};
         foreach(var theme in AppThemes.All)
         {
-            var row=new Grid();row.ColumnDefinitions.Add(new(){Width=new(112)});row.ColumnDefinitions.Add(new());
-            var swatch=new Border{Height=76,CornerRadius=new(13),Background=Brush(theme.WindowStart),BorderBrush=Brush(theme.Border),BorderThickness=new(1),Margin=new(0,0,18,0)};
-            var sample=new StackPanel{Margin=new(16,10,0,0)};
-            sample.Children.Add(new TextBlock{Text="浮光",FontSize=20,FontWeight=FontWeights.SemiBold,Foreground=Brush(theme.Text)});
-            sample.Children.Add(new TextBlock{Text=theme.EnglishName,FontSize=8,Foreground=Brush(theme.Accent),Margin=new(0,7,0,0)});
-            swatch.Child=sample;row.Children.Add(swatch);
-            var copy=new StackPanel{VerticalAlignment=VerticalAlignment.Center};
-            copy.Children.Add(new TextBlock{Text=theme.Name,FontSize=15,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,7)});
-            copy.Children.Add(Text(theme.Caption,12));Grid.SetColumn(copy,1);row.Children.Add(copy);
-            var option=new RadioButton{Content=row,Tag=theme.Id,GroupName="ApplicationTheme",HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new(0,10,0,0),Padding=new(12),IsChecked=AppThemes.Find(settings.UiTheme).Id==theme.Id};
+            var card=new StackPanel();card.Children.Add(new ThemePreview(theme){Height=106,IsHitTestVisible=false});
+            var copy=new DockPanel{Margin=new(2,10,2,0)};
+            var name=new TextBlock{Text=theme.Name,FontSize=16,FontWeight=FontWeights.SemiBold};copy.Children.Add(name);
+            var english=new TextBlock{Text=theme.EnglishName,FontSize=8,VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right};ThemeManager.Bind(english,TextBlock.ForegroundProperty,"MutedBrush");copy.Children.Add(english);card.Children.Add(copy);
+            var caption=Text(theme.Caption,11);caption.Margin=new(2,6,2,1);caption.TextWrapping=TextWrapping.Wrap;card.Children.Add(caption);
+            var option=new RadioButton{Content=card,Tag=theme.Id,GroupName="ApplicationTheme",HorizontalAlignment=HorizontalAlignment.Stretch,Margin=new(6),Padding=new(12),IsChecked=AppThemes.Find(settings.UiTheme).Id==theme.Id};
             option.SetResourceReference(StyleProperty,"ThemeChoice");AutomationProperties.SetName(option,theme.Name+"应用主题");
             option.Checked+=(_,_)=>changeApplicationTheme(theme.Id);
-            themeChoices.Add(theme.Id,option);appPanel.Children.Add(option);
+            themeChoices.Add(theme.Id,option);gallery.Children.Add(option);
         }
         tabs.Items.Add(Tab("应用界面",appPanel));
 

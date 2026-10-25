@@ -21,7 +21,7 @@ public partial class MainWindow
             var bounds=Bounds(item.icon,buttons[item.i]);
             return Math.Abs(bounds.Width-22)<.01 && Math.Abs(bounds.Height-22)<.01 &&
                 Math.Abs(bounds.Left+bounds.Width/2-buttons[item.i].ActualWidth/2)<.51 &&
-                Math.Abs(bounds.Top+bounds.Height/2-buttons[item.i].ActualHeight/2)<.51;
+                Math.Abs(bounds.Top+bounds.Height/2-buttons[item.i].ActualHeight/2-(double)FindResource("NavIconOffset"))<.51;
         });
         bool Unmoved()=>icons.Select((icon,i)=>Bounds(icon,buttons[i])==resting[i]).All(value=>value);
         checks[$"navigation.{theme}.fourVectorIconsWithAccessibleNames"]=buttons.All(b=>b.Content is Geometry && !string.IsNullOrWhiteSpace(AutomationProperties.GetName(b)) && b.ToolTip is not null);
@@ -43,19 +43,19 @@ public partial class MainWindow
             b.Template.FindName("InteractionVisual",b) is FrameworkElement surface && !surface.RenderTransform.HasAnimatedProperties);
         LyricsNav.Focus();await Task.Delay(230);
         checks[$"navigation.{theme}.keyboardFocusAndHitTargetPreserved"]=LyricsNav.IsKeyboardFocused && AppMotion.GetFocus(LyricsNav)==1 &&
-            buttons.All(b=>b.Focusable && b.IsHitTestVisible && b.ActualWidth==48 && b.ActualHeight==48) && Unmoved();
+            buttons.All(b=>b.Focusable && b.IsHitTestVisible && b.ActualWidth==(double)FindResource("NavButtonWidth") && b.ActualHeight==(double)FindResource("NavButtonHeight") && b.ActualWidth>=44 && b.ActualHeight>=44) && Unmoved();
         VisualVerification.Save(NavigationRail,Path.Combine(directory,$"navigation-{theme}.png"),true);
 
         string[] labels=["当前歌词","音乐库","设置","诊断"];
         string[] states=["默认","选中","悬停","按下","键盘焦点"];
         foreach(double scale in new[]{1d,1.25,1.5})
         {
-            var sheet=new Grid{Width=500,Height=48+buttons.Length*60,Background=(Brush)FindResource("WindowBrush"),UseLayoutRounding=true};
+            var sheet=new Grid{Width=500,Height=48+buttons.Length*80,Background=(Brush)FindResource("WindowBrush"),UseLayoutRounding=true};
             VisualTreeHelper.SetRootDpi(sheet,new DpiScale(scale,scale));
             sheet.ColumnDefinitions.Add(new(){Width=new GridLength(120)});
             for(int column=0;column<states.Length;column++)sheet.ColumnDefinitions.Add(new(){Width=new GridLength(76)});
             sheet.RowDefinitions.Add(new(){Height=new GridLength(48)});
-            for(int row=0;row<buttons.Length;row++)sheet.RowDefinitions.Add(new(){Height=new GridLength(60)});
+            for(int row=0;row<buttons.Length;row++)sheet.RowDefinitions.Add(new(){Height=new GridLength(80)});
             void Add(UIElement element,int row,int column){Grid.SetRow(element,row);Grid.SetColumn(element,column);sheet.Children.Add(element);}
             TextBlock Label(string text)=>new(){Text=text,FontSize=12,Foreground=(Brush)FindResource("MutedBrush"),HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center};
             Add(Label($"{theme} · {scale*100:0}%"),0,0);

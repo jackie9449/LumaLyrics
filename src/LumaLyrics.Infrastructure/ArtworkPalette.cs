@@ -79,12 +79,12 @@ public sealed record ArtworkPalette(ArtworkColor Primary, ArtworkColor Secondary
             Glow=Tint(p,.40,.50),GlowSecondary=Tint(s,.36,.50)
         };
         return theme with {
-            WindowStart=Tint(p,.935,.32),WindowEnd=Tint(s,.865,.32),
-            Panel=Tint(p,.968,.28,222),Raised=Tint(p,.977,.22),
-            Control=Tint(p,.90,.25),Hover=Tint(p,.84,.25),
+            WindowStart=Tint(p,.957,.20),WindowEnd=Tint(s,.924,.22),
+            Panel=Tint(p,.978,.28,245),Raised=Tint(p,.988,.20),
+            Control=Tint(p,.933,.18),Hover=Tint(p,.885,.20),
             Muted=Tint(p,.285,.16),Accent=Tint(p,.22,.52),AccentText="#FFFFFF",
-            AccentSoft=Tint(p,.885,.28),Border=Tint(p,.57,.20,128),
-            Glow=Tint(p,.69,.36),GlowSecondary=Tint(s,.73,.34)
+            AccentSoft=Tint(p,.912,.24),Border=Tint(p,.69,.14,145),
+            Glow=Tint(p,.83,.20),GlowSecondary=Tint(s,.87,.20)
         };
     }
 

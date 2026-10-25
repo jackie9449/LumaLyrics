@@ -38,6 +38,7 @@ public sealed class AppThemeTests
     }
     [Theory]
     [InlineData("liquid")] [InlineData("frost")] [InlineData("material")]
+    [InlineData("paper")] [InlineData("studio")] [InlineData("bauhaus")]
     public void EveryFloatingPresetAndPreviewRollbackPreserveApplicationTheme(string applicationTheme)
     {
         var settings=new AppSettings{UiTheme=applicationTheme,GlobalOffsetMs=450};

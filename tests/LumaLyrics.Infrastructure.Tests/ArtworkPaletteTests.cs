@@ -85,6 +85,26 @@ public sealed class ArtworkPaletteTests
         }
     }
 
+    [Theory] [InlineData("material")] [InlineData("paper")] [InlineData("studio")] [InlineData("bauhaus")]
+    public void FixedThemesKeepTheirOwnPaletteWhenTheRecordingChanges(string id)
+    {
+        var theme=AppThemes.Find(id);
+        Assert.Same(theme,new ArtworkPalette(Orange,Blue).ApplyTo(theme));
+        Assert.Same(theme,new ArtworkPalette(new(0,0,0),new(255,255,255)).ApplyTo(theme));
+    }
+
+    [Theory] [InlineData("frost")] [InlineData("material")] [InlineData("paper")] [InlineData("studio")] [InlineData("bauhaus")]
+    public void RedesignedThemeTextAndControlsHaveReadableContrast(string id)
+    {
+        var theme=AppThemes.Find(id);
+        foreach(var surface in new[]{theme.WindowStart,theme.Raised,theme.Control,theme.Hover,theme.AccentSoft})
+        {
+            Assert.True(Contrast(Parse(theme.Text),Parse(surface))>=4.5,id+" text on "+surface);
+            Assert.True(Contrast(Parse(theme.Muted),Parse(surface))>=4.5,id+" secondary text on "+surface);
+        }
+        Assert.True(Contrast(Parse(theme.AccentText),Parse(theme.Accent))>=4.5,id+" primary action");
+    }
+
     static ArtworkColor Parse(string hex)
     {
         uint value=uint.Parse(hex.AsSpan(1),NumberStyles.HexNumber,CultureInfo.InvariantCulture);

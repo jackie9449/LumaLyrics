@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
+        ArtworkMat.SizeChanged+=(_,_)=>ClipArtwork();
         overlay=new(this,vm,settings);
         RefreshMainTranslationToggle();
         SelectUiTheme(settings.UiTheme,false);
@@ -46,14 +47,20 @@ public partial class MainWindow : Window
     internal void SelectUiTheme(string id,bool persist=true)
     {
         var theme=AppThemes.Find(id);settings.UiTheme=theme.Id;ThemeManager.Apply(theme.Id,artworkPalette,applicationScope:Resources);
-        ClipArtwork();
+        ApplyThemeIdentity();
         StyleLyricLines(-1,currentIndex);
         if(persist)coordinator.SaveSettings();
     }
     void ClipArtwork()
     {
         if(ArtworkBorder.ActualWidth>0 && ArtworkBorder.ActualHeight>0)
-            ArtworkBorder.Clip=new RectangleGeometry(new Rect(0,0,ArtworkBorder.ActualWidth,ArtworkBorder.ActualHeight),ThemeManager.Current.Radius,ThemeManager.Current.Radius);
+        {
+            double radius=ThemeDesign.For(settings.UiTheme).ArtworkRadius;
+            ArtworkBorder.Clip=new RectangleGeometry(new Rect(0,0,ArtworkBorder.ActualWidth,ArtworkBorder.ActualHeight),radius,radius);
+            if(settings.UiTheme=="liquid")ArtworkMat.Clip=null;
+            else if(ArtworkMat.ActualWidth>0 && ArtworkMat.ActualHeight>0)
+                ArtworkMat.Clip=new RectangleGeometry(new Rect(ArtworkMat.RenderSize),Math.Max(0,radius-ArtworkMat.Margin.Left),Math.Max(0,radius-ArtworkMat.Margin.Top));
+        }
     }
     void TitleBarPressed(object sender,MouseButtonEventArgs e)
     {
@@ -158,6 +165,7 @@ public partial class MainWindow : Window
         foreach(var text in displayed!.IsSynced?displayed.Groups.Select(g=>g.Text):displayed.Raw.Split('\n'))
         {
             var line=new TextBlock{Text=string.IsNullOrWhiteSpace(text)?" ":text,TextWrapping=TextWrapping.Wrap,FontSize=24,LineHeight=36,Margin=new(0,0,0,24),Foreground=(Brush)FindResource("MutedBrush")};
+            line.SetResourceReference(TextBlock.FontFamilyProperty,"LyricFont");
             string translation=displayedTranslationEnabled && displayed.IsSynced?displayedTranslation?.TextAt(lyricBlocks.Count)??"":"";
             var translated=new TextBlock{Text=translation,TextWrapping=TextWrapping.Wrap,FontSize=16,LineHeight=26,Margin=new(0,5,0,24),Visibility=translation.Length>0?Visibility.Visible:Visibility.Collapsed};
             translated.SetResourceReference(TextBlock.ForegroundProperty,"MutedBrush");
@@ -207,7 +215,8 @@ public partial class MainWindow : Window
             double oldSize=line.FontSize*(line.RenderTransform is ScaleTransform prior?prior.ScaleX:1),oldOpacity=line.Opacity;
             var color=((SolidColorBrush)FindResource(active?"TextBrush":"MutedBrush")).Color;
             var priorColor=line.Foreground is SolidColorBrush previous?previous.Color:color;
-            line.FontSize=(active?34:24)*playbackTextScale;line.LineHeight=line.FontSize*1.45;line.Margin=i<translationBlocks.Count && translationBlocks[i].Visibility==Visibility.Visible?new Thickness(0):new Thickness(0,0,0,24*playbackTextScale);line.FontWeight=active?FontWeights.SemiBold:FontWeights.Normal;
+            var design=ThemeDesign.For(settings.UiTheme);
+            line.FontSize=Math.Clamp((active?34:24)*playbackTextScale*design.LyricScale,active?27:18,active?38.08:30);line.LineHeight=line.FontSize*1.45;line.Margin=i<translationBlocks.Count && translationBlocks[i].Visibility==Visibility.Visible?new Thickness(0):new Thickness(0,0,0,24*playbackTextScale);line.FontWeight=active?design.Weight:FontWeights.Normal;
             line.BeginAnimation(OpacityProperty,null);line.Opacity=active?1:ThemeManager.Current.IsDark?.65:.82;line.RenderTransform=Transform.Identity;
             var brush=new SolidColorBrush(color);line.Foreground=brush;
             if(!motion || i!=oldIndex && i!=newIndex)continue;

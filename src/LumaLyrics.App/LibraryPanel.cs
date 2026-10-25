@@ -18,7 +18,7 @@ public sealed class LibraryPanel : UserControl,IDisposable
     {
         this.coordinator=coordinator;
         var body=new StackPanel();Content=body;ThemeManager.Bind(this,ForegroundProperty,"TextBrush");
-        body.Children.Add(new TextBlock{Text="把音乐的细节，提前备好",FontSize=21,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,10)});
+        var title=new TextBlock{Text="把音乐的细节，提前备好",FontSize=21,Margin=new(0,0,0,10)};ThemeManager.BindDisplay(title);body.Children.Add(title);
         body.Children.Add(Note("动态歌词按录音版本、时长、时间戳与全文覆盖筛选。封面直接对应 Apple Music 资料库，优先缓存高清图片。进度保存在本机，下次继续。"));
         var summary=new StackPanel();summary.Children.Add(status);summary.Children.Add(progress);
         var card=new Border{Child=summary,Padding=new(20),BorderThickness=new(1),Margin=new(0,16,0,22)};

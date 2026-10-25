@@ -44,19 +44,55 @@ internal static class ThemeManager
             ("BorderBrush",t.Border), ("GlowBrush",t.Glow), ("SecondaryGlowBrush",t.GlowSecondary),
             ("ScrollThumbBrush",t.Id=="material"?"#A79AB9":t.IsDark?t.Muted:t.Accent) })
             ReplaceBrush(resources,key,Solid(color),animate && key is not ("TextBrush" or "MutedBrush" or "AccentBrush" or "AccentTextBrush" or "ScrollThumbBrush"));
-        ReplaceBrush(resources,"WindowBrush",t.Id=="material"?Solid(t.WindowStart):Gradient(t.WindowStart,t.WindowEnd),animate);
+        ReplaceBrush(resources,"WindowBrush",t.Id is "liquid" or "frost"?Gradient(t.WindowStart,t.WindowEnd):Solid(t.WindowStart),animate);
         ReplaceBrush(resources,"PanelBrush",t.Id=="liquid"?Gradient(t.Panel,t.PanelEnd):Solid(t.Panel),animate);
-        ReplaceBrush(resources,"ArtworkBrush",t.Id=="material"?Solid("#EADDFF"):Gradient(t.Glow,t.WindowEnd),animate);
+        ReplaceBrush(resources,"ArtworkBrush",t.Id=="material"?Solid(t.AccentSoft):Gradient(t.Glow,t.WindowEnd),animate);
         ReplaceBrush(resources,"SheenBrush",Sheen(t.Accent),animate);
-        resources["PanelRadius"] = new CornerRadius(t.Radius);
-        resources["SurfaceSheenOpacity"] = t.Id == "liquid" ? .16 : t.Id == "frost" ? .09 : 0d;
-        resources["AmbientOpacity"] = t.Id == "liquid" ? .3 : t.Id == "frost" ? .38 : 0d;
-        resources["ControlRadius"]=new CornerRadius(t.Id=="material"?20:t.Id=="frost"?14:12);
-        resources["InputRadius"]=new CornerRadius(t.Id=="material"?16:t.Id=="frost"?12:10);
-        resources["ItemRadius"]=new CornerRadius(t.Id=="liquid"?12:16);
-        resources["CardRadius"]=new CornerRadius(t.Id=="material"?24:t.Id=="frost"?20:18);
+        var design=ThemeDesign.For(t.Id);
+        resources["ThemeId"]=t.Id;resources["DisplayFont"]=new FontFamily(design.DisplayFont);
+        resources["LyricFont"]=new FontFamily(t.Id is "paper" or "studio"?design.DisplayFont:"Segoe UI Variable, Microsoft YaHei UI");
+        resources["LabelFont"]=new FontFamily(t.Id=="studio"?"Consolas, Microsoft YaHei UI":"Segoe UI Variable, Microsoft YaHei UI");
+        resources["HeadlineSize"]=design.Headline;resources["HeadlineWeight"]=design.Weight;
+        resources["PanelRadius"] = design.Panel;
+        resources["SurfaceSheenOpacity"] = t.Id == "liquid" ? .16 : t.Id == "frost" ? .035 : 0d;
+        resources["AmbientOpacity"] = t.Id == "liquid" ? .3 : t.Id == "frost" ? .12 : 0d;
+        resources["ControlRadius"]=design.Control;resources["InputRadius"]=design.Input;
+        resources["ItemRadius"]=t.Id is "paper" or "studio" or "bauhaus"?design.Control:new CornerRadius(t.Id=="liquid"?12:16);
+        resources["CardRadius"]=design.Card;
+        resources["ArtworkRadius"]=new CornerRadius(design.ArtworkRadius);
+        resources["ArtworkMat"]=design.ArtworkMat;
+        resources["NavButtonWidth"]=design.NavWidth;resources["NavButtonHeight"]=design.NavHeight;
+        resources["NavLabelVisibility"]=design.NavLabels?Visibility.Visible:Visibility.Collapsed;
+        resources["NavIconOffset"]=design.NavLabels?-7d:0d;
+        resources["NavLabelMargin"]=new Thickness(0,32,0,0);
+        resources["AlbumCardPadding"]=design.CardPadding;resources["AlbumCardBorder"]=design.CardBorder;
+        resources["AlbumArtworkRadius"]=new CornerRadius(t.Id switch{"liquid"=>14,"frost"=>16,"material"=>20,"studio"=>2,_=>0});
+        resources["AlbumImagePadding"]=new Thickness(t.Id switch{"frost"=>5,"paper"=>6,"studio"=>2,_=>0});
+        resources["AlbumTitleSize"]=t.Id=="paper"?16d:t.Id=="studio"?13d:14d;
+        resources["ThumbRadius"]=new CornerRadius(t.Id is "paper" or "bauhaus"?0:t.Id=="studio"?2:10);
+        resources["ActionBorder"]=new Thickness(t.Id=="bauhaus"?1.5:1);
+        resources["ButtonFaceInset"]=t.Id=="bauhaus"?new Thickness(0,0,3,3):new Thickness(0);
+        resources["ButtonBaselineVisibility"]=t.Id is "paper" or "studio"?Visibility.Visible:Visibility.Collapsed;
+        resources["ButtonPlateVisibility"]=t.Id=="bauhaus"?Visibility.Visible:Visibility.Collapsed;
+        resources["SelectionMarkerVisibility"]=t.Id is "paper" or "studio"?Visibility.Visible:Visibility.Collapsed;
+        ReplaceBrush(resources,"CardBrush",t.Id=="liquid"?Gradient(t.Panel,t.PanelEnd):Solid(t.Id=="paper"?t.WindowStart:t.Panel),animate);
+        ReplaceBrush(resources,"ArtworkFrameBrush",t.Id=="liquid"?Gradient(t.Glow,t.WindowEnd):Solid(t.Id is "frost" or "paper"?t.Raised:t.Id=="studio"?"#0A1012":t.Panel),animate);
+        resources["TransportRadius"]=t.Id=="liquid"?new CornerRadius(16):design.Card;
+        resources["AlbumHeaderRadius"]=t.Id=="liquid"?new CornerRadius(18):design.Card;
+        resources["QueueCardRadius"]=t.Id=="liquid"?new CornerRadius(16):design.Control;
+        resources["CompactQueueRadius"]=t.Id=="liquid"?new CornerRadius(12):design.Control;
+        resources["PreviewCardRadius"]=t.Id=="liquid"?new CornerRadius(14):design.Card;
+        resources["LocationCardRadius"]=t.Id=="liquid"?new CornerRadius(16):design.Card;
+        resources["DetailArtworkRadius"]=t.Id=="liquid"?new CornerRadius(12):new CornerRadius(design.ArtworkRadius*.5);
+        resources["QueueArtworkRadius"]=t.Id=="liquid"?new CornerRadius(7):new CornerRadius(Math.Min(10,design.ArtworkRadius*.5));
+        resources["QueueBorderRadius"]=t.Id=="liquid"?new CornerRadius(8):(CornerRadius)resources["QueueArtworkRadius"];
+        resources["CurrentArtworkRadius"]=t.Id=="liquid"?new CornerRadius(9):(CornerRadius)resources["QueueArtworkRadius"];
+        resources["DialogHeadlineSize"]=t.Id=="liquid"?24d:design.Headline;
+        resources["NavigationBrush"]=Solid(t.Id switch{"liquid" or "paper"=>"#00000000","studio"=>"#101719","material"=>t.Control,_=>t.Raised});
+        resources["HeaderRuleVisibility"]=t.Id is "paper" or "studio" or "bauhaus"?Visibility.Visible:Visibility.Collapsed;
+        resources["FrameRuleBrush"]=Solid(t.Id is "paper" or "studio" or "bauhaus"?t.Border:"#00000000");
         ReplaceBrush(resources,"InputBrush",Solid(t.Id=="liquid"?t.WindowStart:t.Raised),animate);
-        ReplaceBrush(resources,"RailBrush",t.Id=="material"?Solid(t.Raised):Gradient(t.Control,t.WindowEnd),animate);
+        ReplaceBrush(resources,"RailBrush",t.Id=="liquid"?Gradient(t.Control,t.WindowEnd):Solid(t.Id=="material"?t.AccentSoft:t.Raised),animate);
         resources["PressedBrush"]=Solid(t.IsDark?"#16000000":"#12000000");
         resources["PrimaryFeedbackBrush"]=Solid(ColorOf(t.AccentText).R>160?"#28FFFFFF":"#16000000");
         resources["SwitchKnobBrush"]=Solid(t.Muted);
@@ -101,11 +137,19 @@ internal static class ThemeManager
         }
         var background=ColorOf(appearance.Background);
         bool light=(background.R*.2126+background.G*.7152+background.B*.0722)>160;
-        Populate(target.Resources,AppThemes.Find(light?"frost":"liquid"));
+        Populate(target.Resources,light?OverlayLightPalette:AppThemes.Find("liquid"));
         target.Resources["AccentBrush"]=Solid(appearance.Accent);
         var accent=ColorOf(appearance.Accent);
         target.Resources["AccentTextBrush"]=Solid(accent.R*.2126+accent.G*.7152+accent.B*.0722>160?"#182630":"#FFFFFF");
     }
 
+    // The floating toolbar's established light palette is independent of redesigned
+    // application themes. App theme changes must not recolor an existing overlay.
+    static readonly AppTheme OverlayLightPalette=new("frost","毛玻璃","","",false,
+        "#E6EEEA","#D7E4DE","#DEF3F7F4","#F3F8F5","#DFE9E3","#CFDFD5","#243D33","#576E61","#35634E",
+        "#FFFFFF","#D6E6DB","#7FA4BAAC","#B7D1C4","#CDD6C2",22);
+
     public static void Bind(FrameworkElement element, DependencyProperty property, string resource) => element.SetResourceReference(property,resource);
+    internal static void BindDisplay(System.Windows.Controls.TextBlock heading)
+    {Bind(heading,System.Windows.Controls.TextBlock.FontFamilyProperty,"DisplayFont");Bind(heading,System.Windows.Controls.TextBlock.FontWeightProperty,"HeadlineWeight");}
 }

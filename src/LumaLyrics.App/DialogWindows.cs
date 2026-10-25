@@ -13,7 +13,7 @@ internal static class DialogUi
     {
         window.Width=650;window.Height=650;window.MinWidth=480;window.MinHeight=400;window.WindowStartupLocation=WindowStartupLocation.CenterOwner;
         ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
-        var p=new StackPanel{Margin=new(26)};p.Children.Add(new TextBlock{Text=heading,FontSize=24,FontWeight=FontWeights.SemiBold,Margin=new(0,0,0,12)});
+        var p=new StackPanel{Margin=new(26)};var title=new TextBlock{Text=heading,Margin=new(0,0,0,12),TextWrapping=TextWrapping.Wrap};title.SetResourceReference(FrameworkElement.StyleProperty,"AppDialogHeadline");p.Children.Add(title);
         var hintLabel=new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,18)};ThemeManager.Bind(hintLabel,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(hintLabel);
         ApplicationWindowFrame.SetContent(window,new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return p;
     }
