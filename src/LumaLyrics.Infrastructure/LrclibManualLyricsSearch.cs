@@ -5,13 +5,15 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed partial class LrclibProvider
 {
-    public async Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)
+    public Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)=>SearchExpandedAsync(query,ManualLyricsSearch.Queries(query),token);
+    public Task<IReadOnlyList<LyricsCandidate>> SearchAutomaticAsync(Track track,IReadOnlyList<LyricsCandidate> known,CancellationToken token)=>SearchExpandedAsync(track,AutomaticLyricsSearch.Queries(track),token);
+    async Task<IReadOnlyList<LyricsCandidate>> SearchExpandedAsync(Track query,IReadOnlyList<ManualLyricsQuery> queries,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();var found=new List<LyricsCandidate>();var unavailable=new List<string>();
         using var budget=CancellationTokenSource.CreateLinkedTokenSource(token);budget.CancelAfter(TimeSpan.FromSeconds(20));
         try
         {
-            foreach(var search in ManualLyricsSearch.Queries(query))
+            foreach(var search in queries)
             {
                 var url=search.Keywords?"search?q="+Uri.EscapeDataString(search.Text)
                     :"search?track_name="+Uri.EscapeDataString(search.Title)+(search.Artist.Length>0?"&artist_name="+Uri.EscapeDataString(search.Artist):"");

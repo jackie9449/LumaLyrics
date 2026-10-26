@@ -14,7 +14,7 @@ public sealed record ManualLyricsQuery(string Title,string Artist,bool Keywords=
     public string Text=>string.Join(" ",new[]{Title,Artist}.Where(s=>s.Length>0));
 }
 
-// Broader suggestions are for explicit manual choice only, never automatic imports.
+// Query cleanup and ranking improve discovery; they never establish recording identity.
 public static partial class ManualLyricsSearch
 {
     [GeneratedRegex(@"\([^)]*\)|\[[^\]]*\]|【[^】]*】")]private static partial Regex Brackets();

@@ -5,13 +5,19 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed partial class NetEaseTranslationProvider
 {
-    public async Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)
+    public Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)=>SearchExpandedAsync(query,[],false,token);
+    public Task<IReadOnlyList<LyricsCandidate>> SearchAutomaticAsync(Track track,IReadOnlyList<LyricsCandidate> known,CancellationToken token)=>SearchExpandedAsync(track,known,true,token);
+    async Task<IReadOnlyList<LyricsCandidate>> SearchExpandedAsync(Track query,IReadOnlyList<LyricsCandidate> known,bool automatic,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();var catalog=new List<LyricsCandidate>();var found=new List<LyricsCandidate>();var unavailable=new List<string>();
+        if(automatic && !AutomaticLyricsSearch.CanExpand(query))return [];
+        var queries=automatic?AutomaticLyricsSearch.Queries(query):ManualLyricsSearch.Queries(query);
+        var originalQuery=ManualLyricsSearch.Queries(query).FirstOrDefault()?.Text;
+        var knownIds=known.Where(c=>c.ProviderName=="NetEase").Select(c=>c.Id).ToHashSet();
         using var budget=CancellationTokenSource.CreateLinkedTokenSource(token);budget.CancelAfter(TimeSpan.FromSeconds(20));
         try
         {
-            foreach(var text in ManualLyricsSearch.Queries(query).Select(q=>q.Text).Distinct(StringComparer.Ordinal))
+            foreach(var text in queries.Select(q=>q.Text).Where(text=>!automatic || text!=originalQuery).Distinct(StringComparer.Ordinal))
             {
                 try
                 {
@@ -36,8 +42,10 @@ public sealed partial class NetEaseTranslationProvider
                     break; // A later search failure must not discard catalog results already found.
                 }
             }
-            // Missing metadata and other editions remain suggestions, not automatic matches.
-            foreach(var item in ManualLyricsSearch.Rank(query,catalog.DistinctBy(c=>c.Id)).Take(8))
+            // Manual suggestions may have incomplete/different metadata. Automatic
+            // fallback must verify the recording before spending a lyric request.
+            var eligible=catalog.DistinctBy(c=>c.Id).Where(c=>!automatic || !knownIds.Contains(c.Id) && RecordingMatches(query,c.Track));
+            foreach(var item in ManualLyricsSearch.Rank(query,eligible).Take(automatic?3:8))
             {
                 try
                 {
@@ -48,7 +56,10 @@ public sealed partial class NetEaseTranslationProvider
                     var document=new LrcParser().Parse(original);bool synced=document.IsSynced;
                     var provenance=JsonSerializer.Serialize(new NetEaseOriginal("NetEase",item.Id,item.Track,instrumental?"":original,
                         $"https://music.163.com/#/song?id={item.Id}",instrumental,instrumental?original:null));
-                    found.Add(new(item.Id,item.Track,!instrumental && synced?original:null,!instrumental && !synced?original:null,instrumental,provenance){ProviderName="NetEase"});
+                    // Match existing automatic credit handling only after RecordingMatches;
+                    // the source's original credits remain in the provenance above.
+                    var candidateTrack=automatic?item.Track with{Artist=TrackMetadata.FromAppleSession(query).Artist}:item.Track;
+                    found.Add(new(item.Id,candidateTrack,!instrumental && synced?original:null,!instrumental && !synced?original:null,instrumental,provenance){ProviderName="NetEase"});
                 }
                 catch(LyricsProviderException ex)
                 {
