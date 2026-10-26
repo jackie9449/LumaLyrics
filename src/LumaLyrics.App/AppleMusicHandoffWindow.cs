@@ -15,6 +15,7 @@ internal static partial class AppleMusicLibraryHandoff
         internal HandoffWindow? Window;
         internal long Version;
         internal volatile bool CommandAttempted;
+        internal volatile bool PlaylistModeAttempted;
         internal void Capture(Process process,CancellationToken token=default)
         {
             lock(windowStateGate)

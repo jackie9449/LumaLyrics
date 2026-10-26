@@ -154,7 +154,7 @@ internal static partial class AppleMusicLibraryHandoff
         }
         return null;
     }
-    static string? InvokePlay(UIA3Automation automation,AutomationElement root,AutomationElement row,string title,int processId,CancellationToken token,Action<string,object?>? trace,AlbumRequest? album,bool insertNext,HandoffContext context)
+    static string? InvokePlay(UIA3Automation automation,AutomationElement root,AutomationElement row,string title,int processId,CancellationToken token,Action<string,object?>? trace,AlbumRequest? album,bool insertNext,HandoffContext context,Func<bool>? stillValid=null)
     {
         token.ThrowIfCancellationRequested();if(row.Patterns.ScrollItem.IsSupported)row.Patterns.ScrollItem.Pattern.ScrollIntoView();
         var more=FindReadySongAction(row)??throw new InvalidOperationException("The native song action changed before it was ready.");
@@ -173,7 +173,7 @@ internal static partial class AppleMusicLibraryHandoff
             {
                 bool requested=insertNext?MusicPlaybackQueue.IsPlayNextCommand(Name(command)):album is null?MusicLibraryPlayback.IsPlayCommand(Name(command),title):Name(command) is "在资料库中显示专辑" or "Show Album in Library";
                 if(requested && command.Patterns.Invoke.IsSupported)
-                {token.ThrowIfCancellationRequested();if(album is null)context.CommandAttempted=true;command.Patterns.Invoke.Pattern.Invoke();invoked=true;return album is null?null:InvokeAlbumPlay(automation,root,album,token,trace,context);}
+                {token.ThrowIfCancellationRequested();if(stillValid?.Invoke()==false)return "原生歌单位置或焦点已变化，未发送播放命令。";if(album is null)context.CommandAttempted=true;command.Patterns.Invoke.Pattern.Invoke();invoked=true;return album is null?null:InvokeAlbumPlay(automation,root,album,token,trace,context);}
             }
             if(token.WaitHandle.WaitOne(120))token.ThrowIfCancellationRequested();
         }

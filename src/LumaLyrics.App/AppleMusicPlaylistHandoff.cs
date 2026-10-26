@@ -9,25 +9,27 @@ namespace LumaLyrics.App;
 
 internal static partial class AppleMusicLibraryHandoff
 {
-    internal sealed record PlaylistSelection(string? Failure,Track? FirstTrack);
-    internal static async Task<PlaylistSelection> SelectPlaylistAsync(MusicPlaylist playlist,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null)
+    internal sealed record PlaylistSelection(string? Failure,Track? FirstTrack,MusicPlaybackModeState? Modes=null);
+    internal static async Task<PlaylistSelection> SelectPlaylistAsync(MusicPlaylistSelection request,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null,bool modesOnly=false)
     {
-        var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(60));
+        PlaylistSelection? prepared=null;
+        int seconds=request.Index is null?60:90;
+        var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(seconds));
         var worker=Task.Run(()=>
         {
             while(true)
             {
                 bounded.Token.ThrowIfCancellationRequested();
-                try{return SelectPlaylist(playlist,bounded.Token,context,trace);}
-                catch(Exception ex) when(!context.CommandAttempted && ex is (InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException))
+                try{return SelectPlaylist(request,bounded.Token,context,trace,modesOnly,value=>Volatile.Write(ref prepared,value));}
+                catch(Exception ex) when(!context.CommandAttempted && !context.PlaylistModeAttempted && ex is (InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException))
                 {trace?.Invoke("playlistReadinessRetry",new{error=ex.ToString()});bounded.Token.WaitHandle.WaitOne(200);}
             }
         },bounded.Token);
-        try{return await worker.WaitAsync(TimeSpan.FromSeconds(61),token);}
-        catch(OperationCanceledException) when(!token.IsCancellationRequested){return new("Apple Music 的歌单界面等待超时，请稍后重试。",null);}
-        catch(TimeoutException){bounded.Cancel();return new("Apple Music 的歌单界面等待超时，请稍后重试。",null);}
-        catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException)
-        {return new("Apple Music 的歌单界面暂不可用，请打开客户端后重试。",null);}
+        try{return await worker.WaitAsync(TimeSpan.FromSeconds(seconds+1),token);}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){return context.CommandAttempted && Volatile.Read(ref prepared) is { } sent?sent:new("Apple Music 的歌单界面等待超时，请稍后重试。",null);}
+        catch(TimeoutException){bounded.Cancel();return context.CommandAttempted && Volatile.Read(ref prepared) is { } sent?sent:new("Apple Music 的歌单界面等待超时，请稍后重试。",null);}
+        catch(Exception ex) when(ex is InvalidOperationException or System.ComponentModel.Win32Exception or COMException or FlaUI.Core.Exceptions.FlaUIException)
+        {return context.CommandAttempted && Volatile.Read(ref prepared) is { } sent?sent:new("Apple Music 的歌单界面暂不可用，请打开客户端后重试。",null);}
         finally
         {
             bounded.Cancel();
@@ -35,9 +37,10 @@ internal static partial class AppleMusicLibraryHandoff
             else _=worker.ContinueWith(t=>{_=t.Exception;bounded.Dispose();},TaskScheduler.Default);
         }
     }
-    static PlaylistSelection SelectPlaylist(MusicPlaylist playlist,CancellationToken token,HandoffContext context,Action<string,object?>? trace)
+    static PlaylistSelection SelectPlaylist(MusicPlaylistSelection request,CancellationToken token,HandoffContext context,Action<string,object?>? trace,bool modesOnly,Action<PlaylistSelection> prepare)
     {
-        if(!playlist.CanPlay)return new("歌单尚未同步完整或名称不唯一，请刷新后重试。",null);
+        var playlist=request.Playlist;
+        if(!MusicPlaylistContinuation.CanSelect(request))return new("歌单尚未同步完整或名称不唯一，请刷新后重试。",null);
         gate.Wait(token);
         try
         {
@@ -64,12 +67,12 @@ internal static partial class AppleMusicLibraryHandoff
             if(WaitForNative(()=>QueueForegroundWindow()==handle?context:null,TimeSpan.FromSeconds(3),token) is null)return new("Apple Music 尚未获得焦点，请重试歌单播放。",null);
             using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
             var root=automation.FromHandle(handle);
-            AutomationElement[] Candidates()=>root.FindAllDescendants(cf=>cf.ByControlType(ControlType.ListItem).And(cf.ByName(playlist.Name)))
+            AutomationElement[] Candidates()=>NativeSurfaceTree.Read(root,token).Where(e=>e.ControlType==ControlType.ListItem && Name(e)==playlist.Name)
                 .Where(e=>(e.Properties.AutomationId.ValueOrDefault??"").EndsWith("-IKIND:ePlaylist",StringComparison.Ordinal)).ToArray();
             var candidates=Candidates();
             if(candidates.Length==0)
             {
-                var hamburger=root.FindFirstDescendant(cf=>cf.ByAutomationId("Hamburger_Button"));
+                var hamburger=NativeSurfaceTree.Read(root,token).FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="Hamburger_Button");
                 if(hamburger?.Patterns.Invoke.IsSupported==true){token.ThrowIfCancellationRequested();hamburger.Patterns.Invoke.Pattern.Invoke();}
                 candidates=WaitForNative(()=>Candidates() is {Length:>0} values?values:null,TimeSpan.FromSeconds(8),token)??[];
             }
@@ -79,7 +82,7 @@ internal static partial class AppleMusicLibraryHandoff
             while(watch.Elapsed<TimeSpan.FromSeconds(30))
             {
                 token.ThrowIfCancellationRequested();
-                var button=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayButton").And(cf.ByControlType(ControlType.Button)));
+                var button=FindPlaylistPlayButton(automation,root,token);
                 if(button?.Patterns.Invoke.IsSupported==true && button.Properties.IsEnabled.ValueOrDefault)
                 {
                     var header=automation.TreeWalkerFactory.GetControlViewWalker().GetParent(button);
@@ -96,13 +99,35 @@ internal static partial class AppleMusicLibraryHandoff
                         if(names.FirstOrDefault()==playlist.Name && rowsMatch)
                         {
                             if(!Current())return new("歌单已发生变化，请刷新音乐库后重试。",null);
-                            // Verify the exact native first recording immediately before one
-                            // native playlist command. There is no single-song fallback.
-                            if(!MusicLibraryPlayback.NamesMatch(playlist.Songs[0].Track,RawNames(automation,first!,token)))continue;
-                            if(QueueForegroundWindow()!=handle || !candidates[0].Patterns.SelectionItem.Pattern.IsSelected.Value || RawNames(automation,header,token).FirstOrDefault()!=playlist.Name)
+                            AutomationElement? target=null;
+                            if(request.Index is { } index)
+                            {
+                                var captured=CapturePlaylistOccurrence(automation,list!,request,token,trace);
+                                if(captured.Failure is not null)return new(captured.Failure,null);
+                                target=captured.Target;
+                                if(target is null)return new("没有找到对应的歌单位置，未发送播放指令。",null);
+                            }
+                            if(!Current())return new("歌单已发生变化，请刷新音乐库后重试。",null);
+                            string? modeFailure=ApplyNativePlaybackModes(root,request.Options,token,context,trace);
+                            if(modeFailure is not null)return new(modeFailure+(context.PlaylistModeAttempted?" 部分设置可能已生效，请在 Apple Music 确认。":""),null);
+                            var modes=ReadNativePlaybackModes(root,token);
+                            if(!OwnsPlaylistWindow(context,token) || !candidates[0].Patterns.SelectionItem.Pattern.IsSelected.Value || RawNames(automation,header,token).FirstOrDefault()!=playlist.Name)
                                 return new("Apple Music 的歌单或焦点已变化，未发送播放命令，请重试。",null);
-                            token.ThrowIfCancellationRequested();context.CommandAttempted=true;button.Patterns.Invoke.Pattern.Invoke();
-                            trace?.Invoke("playlistPlayInvoked",new{playlist.Name,playlist.DeclaredCount});return new(null,playlist.Songs[0].Track);
+                            if(modesOnly)return new(null,null,modes);
+                            var pending=new PlaylistSelection(null,request.Index is { } chosen?playlist.Songs[chosen].Track:modes.Shuffle==true?null:playlist.Songs[0].Track,modes);
+                            prepare(pending);
+                            if(target is not null)
+                            {
+                                string? failure=InvokePlaylistOccurrence(automation,root,target,request,token,context,trace);
+                                if(failure is not null)return new(failure,null);
+                            }
+                            else
+                            {
+                                if(!MusicLibraryPlayback.NamesMatch(playlist.Songs[0].Track,RawNames(automation,first!,token)))return new("原生歌单首曲已变化，未发送播放命令。",null);
+                                token.ThrowIfCancellationRequested();context.CommandAttempted=true;button.Patterns.Invoke.Pattern.Invoke();
+                            }
+                            trace?.Invoke("playlistPlayInvoked",new{playlist.Name,playlist.DeclaredCount,request.Index,modes});
+                            return pending;
                         }
                     }
                 }

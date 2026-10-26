@@ -38,9 +38,9 @@ internal sealed partial class MusicLibraryView
         playlistsTab.Click+=(_,_)=>ShowPlaylists();AutomationProperties.SetName(playlistsTab,"浏览 Apple Music 歌单");
         playlistPanel.RowDefinitions.Add(new(){Height=GridLength.Auto});playlistPanel.RowDefinitions.Add(new());Grid.SetRow(playlistPanel,1);body.Children.Add(playlistPanel);
         playlistPanel.Children.Add(playlistHeader);playlistHeader.Children.Add(playlistTitle);playlistHeader.Children.Add(playlistSummary);ThemeManager.Bind(playlistSummary,TextBlock.ForegroundProperty,"MutedBrush");
-        var commands=new StackPanel{Orientation=Orientation.Horizontal};playlistHeader.Children.Add(commands);playlistPlay.SetResourceReference(StyleProperty,"PrimaryButton");commands.Children.Add(playlistPlay);
+        var commands=new WrapPanel{Orientation=Orientation.Horizontal};playlistHeader.Children.Add(commands);playlistPlay.SetResourceReference(StyleProperty,"PrimaryButton");commands.Children.Add(playlistPlay);
         playlistPlay.Click+=(_,_)=>{if(selectedPlaylist is { } p)BeginPlayPlaylist(p);};AutomationProperties.SetName(playlistPlay,"播放当前歌单");
-        var back=new Button{Content="‹ 所有歌单",Padding=new(12,8,12,8)};commands.Children.Add(back);back.Click+=(_,_)=>ShowPlaylists();
+        var back=new Button{Content="‹ 所有歌单",Padding=new(12,8,12,8)};commands.Children.Add(back);back.Click+=(_,_)=>ShowPlaylists();SetupPlaylistControls(commands);
         foreach(var list in new[]{playlistShelf,playlistTracks})
         {
             VirtualizingPanel.SetIsVirtualizing(list,true);VirtualizingPanel.SetVirtualizationMode(list,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(list,true);ScrollViewer.SetHorizontalScrollBarVisibility(list,ScrollBarVisibility.Disabled);
@@ -64,9 +64,11 @@ internal sealed partial class MusicLibraryView
         var copy=new FrameworkElementFactory(typeof(StackPanel));copy.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);copy.AppendChild(PlaylistLabel("Name",17,"TextBrush"));var summary=PlaylistLabel("Summary",12,"MutedBrush");summary.SetValue(MarginProperty,new Thickness(0,8,0,0));copy.AppendChild(summary);row.AppendChild(copy);
         return new(){VisualTree=row};
     }
-    static DataTemplate PlaylistTrackTemplate()
+    DataTemplate PlaylistTrackTemplate()
     {
         var row=new FrameworkElementFactory(typeof(DockPanel));row.SetValue(HeightProperty,64d);row.SetValue(MarginProperty,new Thickness(8,0,10,0));
+        var playButton=new FrameworkElementFactory(typeof(Button));playButton.SetValue(ContentControl.ContentProperty,"▷");playButton.SetValue(WidthProperty,40d);playButton.SetValue(HeightProperty,36d);playButton.SetValue(MarginProperty,new Thickness(10,0,0,0));playButton.SetValue(DockPanel.DockProperty,Dock.Right);playButton.SetBinding(IsEnabledProperty,new Binding("CanContinue"));playButton.SetValue(ToolTipProperty,"从这首继续播放歌单");playButton.SetBinding(AutomationProperties.NameProperty,new Binding("Song.Title"){StringFormat="从这首继续 · {0}"});
+        playButton.AddHandler(Button.ClickEvent,new RoutedEventHandler((_,e)=>{e.Handled=true;if((e.Source as FrameworkElement)?.DataContext is PlaylistTrack row)BeginContinuePlaylist(row);}));row.AppendChild(playButton);
         var duration=PlaylistLabel("Song.Duration",12,"MutedBrush");duration.SetValue(DockPanel.DockProperty,Dock.Right);duration.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);row.AppendChild(duration);
         var number=PlaylistLabel("Number",12,"MutedBrush");number.SetValue(WidthProperty,44d);number.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);row.AppendChild(number);
         var text=new FrameworkElementFactory(typeof(StackPanel));text.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);text.AppendChild(PlaylistLabel("Song.Title",14,"TextBrush"));var artist=PlaylistLabel("Song.Artist",11,"MutedBrush");artist.SetValue(MarginProperty,new Thickness(0,6,0,0));text.AppendChild(artist);row.AppendChild(text);return new(){VisualTree=row};
@@ -92,16 +94,16 @@ internal sealed partial class MusicLibraryView
     internal void OpenPlaylist(MusicPlaylist playlist)
     {
         if(!showingPlaylists)ShowPlaylists();if(selectedPlaylist is null){playlistQuery=search.Text;playlistShelfOffset=FindArtworkScroll(playlistShelf)?.VerticalOffset??0;}
-        selectedPlaylist=playlist;search.Text="";Filter();playlistTracks.SelectedItem=null;
-        status.Text=!playlist.Complete?"歌单尚未同步完整，请在 Apple Music 完成同步后刷新。":!playlist.UniqueName?"存在同名歌单，请在 Apple Music 区分名称后刷新。":playlist.Songs.Count==0?"这张歌单还没有歌曲。":"点击“播放歌单”，按原有顺序开始播放。";
+        selectedPlaylist=playlist;playlistFilterStamp="";search.Text="";Filter();playlistTracks.SelectedItem=null;
+        status.Text=!playlist.Complete?"歌单尚未同步完整，请在 Apple Music 完成同步后刷新。":!playlist.UniqueName?"存在同名歌单，请在 Apple Music 区分名称后刷新。":playlist.Songs.Count==0?"这张歌单还没有歌曲。":"双击歌曲或选择后按 Enter，从歌单中的该位置继续。";
     }
     void UpdatePlaylistSurface()
     {
-        playlistPanel.Visibility=showingPlaylists?Visibility.Visible:Visibility.Collapsed;bool active=showingPlaylists && !showingQueue;
+        playlistPanel.Visibility=showingPlaylists?Visibility.Visible:Visibility.Collapsed;bool active=showingPlaylists && !showingQueue;UpdatePlaylistSelectedControl(active);
         AppMotion.SetIsSelected(playlistsTab,active);playlistsTab.SetResourceReference(Control.BackgroundProperty,active?"AccentSoftBrush":"ControlBrush");playlistsTab.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");
         sort.Visibility=showingPlaylists?Visibility.Collapsed:Visibility.Visible;
         if(!showingPlaylists)return;
-        albumShelf.Visibility=songs.Visibility=albumHeader.Visibility=Visibility.Collapsed;sort.Visibility=Visibility.Collapsed;playSelected.Visibility=Visibility.Collapsed;
+        albumShelf.Visibility=songs.Visibility=albumHeader.Visibility=Visibility.Collapsed;sort.Visibility=Visibility.Collapsed;
         if(active)foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=selectedPlaylist is null?Visibility.Visible:Visibility.Collapsed;
         if(active)foreach(var button in new[]{albumsTab,songsTab}){AppMotion.SetIsSelected(button,false);button.SetResourceReference(Control.BackgroundProperty,"ControlBrush");button.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}
     }
@@ -117,16 +119,17 @@ internal sealed partial class MusicLibraryView
         else
         {
             playlistHeader.Visibility=playlistTracks.Visibility=Visibility.Visible;playlistShelf.Visibility=Visibility.Collapsed;playlistTitle.Text=selectedPlaylist.Name;
-            playlistSummary.Text=selectedPlaylist.Summary+" · 按 Apple Music 原顺序播放";playlistPlay.IsEnabled=selectedPlaylist.CanPlay && playPlaylist is not null;
-            var rows=selectedPlaylist.Songs.Select((song,index)=>new PlaylistTrack(index+1,song)).Where(r=>MusicLibraryCatalog.Matches(r.Song,search.Text)).ToArray();string stamp=selectedPlaylist.Key+"\0"+search.Text+"\0"+playlistRevision;if(playlistFilterStamp!=stamp){playlistTracks.ItemsSource=rows;playlistFilterStamp=stamp;}
+            playlistSummary.Text=selectedPlaylist.Summary+" · 双击歌曲继续播放，顺序与循环在播放时应用";playlistPlay.IsEnabled=selectedPlaylist.CanPlay && (playPlaylist is not null || playPlaylistSelection is not null);
+            var rows=selectedPlaylist.Songs.Select((song,index)=>new PlaylistTrack(index+1,song,selectedPlaylist,selectedPlaylist.CanPlay && playPlaylistSelection is not null)).Where(r=>MusicLibraryCatalog.Matches(r.Song,search.Text)).ToArray();string stamp=selectedPlaylist.Key+"\0"+search.Text+"\0"+playlistRevision;if(playlistFilterStamp!=stamp){playlistTracks.ItemsSource=rows;playlistFilterStamp=stamp;}
             count.Text=$"歌单 · {rows.Length:N0} / {selectedPlaylist.DeclaredCount:N0} 首歌曲";empty.Text="歌单中没有匹配的歌曲";empty.Visibility=rows.Length==0?Visibility.Visible:Visibility.Collapsed;
         }
     }
     void BeginPlayPlaylist(MusicPlaylist playlist)=>ActivePlayback=PlayPlaylistAsync(playlist);
     async Task PlayPlaylistAsync(MusicPlaylist playlist)
     {
-        if(!playlist.CanPlay || playPlaylist is null){status.Text="歌单尚未同步完整或名称不唯一，请在 Apple Music 确认后刷新。";return;}
-        await RequestPlaybackAsync("正在打开歌单 · "+playlist.Name,token=>playPlaylist(playlist,token));
+        if(!playlist.CanPlay || playPlaylist is null && playPlaylistSelection is null){status.Text="歌单尚未同步完整或名称不唯一，请在 Apple Music 确认后刷新。";return;}
+        var request=new MusicPlaylistSelection(playlist,Options:PlaylistOptions());
+        await RequestPlaybackAsync("正在打开歌单 · "+playlist.Name,token=>playPlaylistSelection is not null?playPlaylistSelection(request,token):playPlaylist!(playlist,token));
     }
-    internal sealed record PlaylistTrack(int Number,MusicLibrarySong Song);
+    internal sealed record PlaylistTrack(int Number,MusicLibrarySong Song,MusicPlaylist Playlist,bool CanContinue);
 }

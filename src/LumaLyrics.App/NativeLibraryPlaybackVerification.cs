@@ -34,7 +34,7 @@ public partial class MainWindow
         if(args.Contains("--native-verify-passive")){await VerifyPassiveNativeAsync(directory,args.Contains("--native-acquire-original"),timeout.Token);return;}
         if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
         if(args.Contains("--native-start-visible"))Trace("preparedVisible",new{visible=await AppleMusicLibraryHandoff.PrepareVisibleVerificationAsync(timeout.Token)});
-        Trace("initial",await Task.Run(AppleMusicLibraryHandoff.Inspect,timeout.Token).WaitAsync(TimeSpan.FromSeconds(12),timeout.Token));
+        Trace("initial",await Task.Run(()=>args.Contains("--native-play-playlist") || args.Contains("--native-read-playlist-modes")?AppleMusicLibraryHandoff.InspectPlaylistSurface():AppleMusicLibraryHandoff.Inspect(),timeout.Token).WaitAsync(TimeSpan.FromSeconds(12),timeout.Token));
         if(args.Contains("--native-inspect-queue")){Trace("queue",await AppleMusicLibraryHandoff.InspectQueueAsync(timeout.Token));return;}
         if(args.Contains("--native-read-queue")){Trace("queueRead",await AppleMusicLibraryHandoff.ReadQueueAsync(timeout.Token,Trace));return;}
         if(args.Contains("--native-verify-queue-state")){Trace("queueState",await AppleMusicLibraryHandoff.VerifyQueueStateAsync(timeout.Token));return;}
@@ -47,6 +47,7 @@ public partial class MainWindow
             var request=JsonSerializer.Deserialize<QueueRestoreVerification>(File.ReadAllText(Path.Combine(directory,"queue-restore-input.json")))??throw new InvalidDataException("Missing exact native queue baseline.");
             Trace("queueRestored",new{restored=await AppleMusicLibraryHandoff.RestoreQueueVerificationAsync(request.Baseline,request.Expected,timeout.Token)});return;
         }
+        if(args.Contains("--native-read-playlist-modes")){Trace("playlistModes",await AppleMusicLibraryHandoff.ReadPlaylistModesAsync(timeout.Token));return;}
         if(args.Contains("--native-inspect-only"))return;
         if(Argument("--native-play-playlist") is { } playlistName)
         {
@@ -55,7 +56,16 @@ public partial class MainWindow
             await coordinator.Source.StartAsync(timeout.Token);
             Trace("playlistSelected",new{playlist.Name,playlist.DeclaredCount,playlist.Complete});
             var playlistBridge=new AppleMusicPlaybackBridge(coordinator,Trace);
-            var playlistResult=await playlistBridge.PlayPlaylistAsync(playlist,timeout.Token);Trace("playlistResult",new{playlistResult,actual=coordinator.Source.Latest});return;
+            int? position=int.TryParse(Argument("--native-playlist-position"),out int requestedPosition)?requestedPosition-1:null;
+            var options=new MusicPlaybackOptions(Argument("--native-playlist-order") switch{"sequential"=>false,"shuffle"=>true,_=>(bool?)null},Argument("--native-playlist-repeat") switch{"off"=>MusicRepeatMode.None,"all"=>MusicRepeatMode.List,"one"=>MusicRepeatMode.One,_=>(MusicRepeatMode?)null});
+            if(args.Contains("--native-playlist-modes-only"))
+            {
+                var modeContext=new AppleMusicLibraryHandoff.HandoffContext();
+                try{var modeResult=await AppleMusicLibraryHandoff.SelectPlaylistAsync(new(playlist,Options:options),timeout.Token,modeContext,Trace,true);Trace("playlistModeResult",modeResult);}
+                finally{await AppleMusicLibraryHandoff.CompleteHandoffWindowAsync(modeContext,false,Trace);}
+                return;
+            }
+            var playlistResult=await playlistBridge.PlayPlaylistSelectionAsync(new(playlist,position,options),timeout.Token);Trace("playlistResult",new{playlistResult,actual=coordinator.Source.Latest});return;
         }
 
         if(args.Contains("--native-verify-lyrics"))
