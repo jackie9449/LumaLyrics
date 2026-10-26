@@ -48,6 +48,16 @@ public partial class MainWindow
             Trace("queueRestored",new{restored=await AppleMusicLibraryHandoff.RestoreQueueVerificationAsync(request.Baseline,request.Expected,timeout.Token)});return;
         }
         if(args.Contains("--native-inspect-only"))return;
+        if(Argument("--native-play-playlist") is { } playlistName)
+        {
+            var playlistCatalog=new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(timeout.Token);
+            var playlist=playlistCatalog.Playlists.Single(p=>p.Name==playlistName);
+            await coordinator.Source.StartAsync(timeout.Token);
+            Trace("playlistSelected",new{playlist.Name,playlist.DeclaredCount,playlist.Complete});
+            var playlistBridge=new AppleMusicPlaybackBridge(coordinator,Trace);
+            var playlistResult=await playlistBridge.PlayPlaylistAsync(playlist,timeout.Token);Trace("playlistResult",new{playlistResult,actual=coordinator.Source.Latest});return;
+        }
+
         if(args.Contains("--native-verify-lyrics"))
         {
             await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.RefreshAsync();var before=coordinator.Source.Latest??throw new InvalidOperationException("No current native recording");

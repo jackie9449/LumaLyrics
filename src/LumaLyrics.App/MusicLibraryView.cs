@@ -42,16 +42,16 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     internal bool IsFiltering=>debounce.IsEnabled;
     internal bool HasEmptyMessage=>empty.Visibility==Visibility.Visible;
     internal Task? ActivePlayback {get;private set;}
-    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorderQueue=null)
+    internal MusicLibraryView(Func<CancellationToken,Task<MusicLibraryResult>> load,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>> play,Action manage,Action returnLyrics,Action activate,PlayerViewModel player,Action previous,Action toggle,Action next,Func<MusicAlbum,CancellationToken,Task<LibraryPlayResult>>? playAlbum=null,Func<CancellationToken,Task<MusicQueueSnapshot>>? readQueue=null,Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorderQueue=null,Func<MusicPlaylist,CancellationToken,Task<LibraryPlayResult>>? playPlaylist=null)
     {
-        this.load=load;this.play=play;this.playAlbum=playAlbum;this.readQueue=readQueue;this.insertNext=insertNext;this.playQueue=playQueue;this.reorderQueue=reorderQueue;this.activate=activate;Margin=new(28,14,30,18);
+        this.playPlaylist=playPlaylist;this.load=load;this.play=play;this.playAlbum=playAlbum;this.readQueue=readQueue;this.insertNext=insertNext;this.playQueue=playQueue;this.reorderQueue=reorderQueue;this.activate=activate;Margin=new(28,14,30,18);
         var root=new Grid();Content=root;root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new Grid{Margin=new(0,0,0,22)};heading.ColumnDefinitions.Add(new());heading.ColumnDefinitions.Add(new(){Width=GridLength.Auto});root.Children.Add(heading);
         var copy=new StackPanel();heading.Children.Add(copy);var headline=new TextBlock{Text="你的音乐，随时抵达。"};headline.SetResourceReference(StyleProperty,"AppHeadline");copy.Children.Add(headline);var eyebrow=new TextBlock{Text="M Y   M U S I C",Margin=new(1,7,0,12)};eyebrow.SetResourceReference(StyleProperty,"AppEyebrow");copy.Children.Add(eyebrow);copy.Children.Add(count);
         ThemeManager.Bind(count,TextBlock.ForegroundProperty,"MutedBrush");
         var manageButton=new Button{Content="缓存管理",Padding=new(14,9,14,9),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new(0)};manageButton.Click+=(_,_)=>manage();Grid.SetColumn(manageButton,1);heading.Children.Add(manageButton);
         var filters=new Grid{Margin=new(0,0,0,18)};filters.ColumnDefinitions.Add(new());filters.ColumnDefinitions.Add(new(){Width=GridLength.Auto});filters.ColumnDefinitions.Add(new(){Width=GridLength.Auto});Grid.SetRow(filters,1);root.Children.Add(filters);
-        var searchHost=new Grid();searchHost.Children.Add(search);var hint=new TextBlock{Text="搜索歌曲、艺人或专辑",Margin=new(15,0,0,0),VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false};ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");searchHost.Children.Add(hint);filters.Children.Add(searchHost);AutomationProperties.SetName(search,"搜索音乐库");
+        var searchHost=new Grid();searchHost.Children.Add(search);var hint=new TextBlock{Text="搜索歌曲、艺人、专辑或歌单",Margin=new(15,0,0,0),VerticalAlignment=VerticalAlignment.Center,IsHitTestVisible=false};ThemeManager.Bind(hint,TextBlock.ForegroundProperty,"MutedBrush");searchHost.Children.Add(hint);filters.Children.Add(searchHost);AutomationProperties.SetName(search,"搜索音乐库");
         Grid.SetColumn(sort,1);filters.Children.Add(sort);AutomationProperties.SetName(sort,"音乐库排序");Grid.SetColumn(refresh,2);filters.Children.Add(refresh);refresh.Margin=new(0);refresh.Click+=async(_,_)=>await RefreshAsync();
         var body=new Grid();AppMotion.SetRevealOnChange(body,true);Grid.SetRow(body,2);root.Children.Add(body);
         VirtualizingPanel.SetIsVirtualizing(songs,true);VirtualizingPanel.SetVirtualizationMode(songs,VirtualizationMode.Recycling);VirtualizingPanel.SetScrollUnit(songs,ScrollUnit.Pixel);ScrollViewer.SetCanContentScroll(songs,true);ScrollViewer.SetHorizontalScrollBarVisibility(songs,ScrollBarVisibility.Disabled);
@@ -61,6 +61,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         body.Children.Add(songs);empty.VerticalAlignment=VerticalAlignment.Center;empty.Margin=new(24);ThemeManager.Bind(empty,TextBlock.ForegroundProperty,"MutedBrush");body.Children.Add(empty);
         SetupAlbumNavigation(heading,manageButton,body);
         SetupQueueNavigation(root,heading,filters,body);
+        SetupPlaylistNavigation(heading,body);
         var footer=new Grid{Margin=new(0,16,0,0)};Grid.SetRow(footer,3);root.Children.Add(footer);footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.RowDefinitions.Add(new(){Height=GridLength.Auto});footer.ColumnDefinitions.Add(new());footer.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
         ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");status.Margin=new(0,0,14,14);footer.Children.Add(status);playSelected.SetResourceReference(StyleProperty,"PrimaryButton");Grid.SetColumn(playSelected,1);footer.Children.Add(playSelected);playSelected.Click+=(_,_)=>{if(songs.SelectedItem is MusicRow row)BeginPlay(row);};
         var now=new Border{CornerRadius=new(16),Padding=new(16,10,16,10),Margin=new(0,4,0,0),BorderThickness=new(1)};ThemeManager.Bind(now,Border.BackgroundProperty,"PanelBrush");ThemeManager.Bind(now,Border.BorderBrushProperty,"BorderBrush");Grid.SetRow(now,1);Grid.SetColumnSpan(now,2);footer.Children.Add(now);
@@ -106,11 +107,11 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
             var result=await load(token);token.ThrowIfCancellationRequested();if(disposed)return;
             if(result.Unavailable && loaded){if(!preserveContext)status.Text=result.Message;return;}
             var context=preserveContext?CaptureArtworkContext():null;
-            thumbnails.Clear();albumCovers.Clear();queuePanel.SetLibrary(result.Songs);lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);loaded=true;Filter();
+            thumbnails.Clear();albumCovers.Clear();queuePanel.SetLibrary(result.Songs);lastTrack="";var rows=result.Songs.Select(s=>new MusicRow(s,thumbnails)).ToList();view=new ListCollectionView(rows){Culture=System.Globalization.CultureInfo.CurrentCulture};songs.ItemsSource=view;RefreshAlbumGroups(result.Songs);RefreshPlaylists(result);loaded=true;Filter();
             SetNowPlaying(nowPlayingTrack,nowPlaying);
             artworkLoadedRevision=revision;applied=true;
             if(context is not null)await RestoreArtworkContextAsync(context);
-            if(!preserveContext)status.Text=result.Message.Length>0?result.Message:"双击歌曲或按 Enter 播放 · 歌词与封面随实际播放同步";
+            if(!preserveContext)status.Text=result.Message.Length>0?result.Message:showingPlaylists?"打开歌单查看原有顺序 · 在详情中播放整单":"双击歌曲或按 Enter 播放 · 歌词与封面随实际播放同步";
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException){if(!disposed && !preserveContext){status.Text="音乐库暂时无法读取，请稍后刷新或检查缓存管理。";empty.Text="暂时无法读取音乐库";empty.Visibility=Visibility.Visible;}}
@@ -119,7 +120,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
     void Filter()
     {
         if(view is null)return;terms=search.Text.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries|StringSplitOptions.TrimEntries).Select(MatchRules.Normalize).Where(s=>s.Length>0).ToArray();
-        UpdateAlbumSurface();UpdateQueueSurface();if(showingQueue)return;if(showAlbumShelf){FilterAlbums();return;}
+        UpdateAlbumSurface();UpdateQueueSurface();UpdatePlaylistSurface();if(showingQueue)return;if(showingPlaylists){FilterPlaylists();return;}if(showAlbumShelf){FilterAlbums();return;}
         using(view.DeferRefresh())
         {
             view.Filter=item=>item is MusicRow row && (albumSongKeys is null || albumSongKeys.Contains(row.Song.Key)) && terms.All(t=>row.SearchText.Contains(t,StringComparison.Ordinal));view.SortDescriptions.Clear();

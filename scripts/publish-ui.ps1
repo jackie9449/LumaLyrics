@@ -75,6 +75,7 @@ Copy-Item -LiteralPath docs/verification-v0171 -Destination $guide -Recurse -For
 Copy-Item -LiteralPath docs/screenshots-ui-v0180 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v0180 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-playlists -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
 $archive = Join-Path $projectRoot "artifacts/$packageName.zip"
 Compress-Archive -Path "$destination/*" -DestinationPath $archive -Force

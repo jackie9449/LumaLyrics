@@ -99,6 +99,28 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         if(selection.FirstTrack is not { } first)return new(false,"尚无法确认 Apple Music 的专辑首曲，当前歌词继续跟随实际播放。");
         return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),"正在播放专辑 · "+album.Title,requestToken,context);
     },token);
+    internal Task<LibraryPlayResult> PlayPlaylistAsync(MusicPlaylist playlist,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
+    {
+        var selection=await AppleMusicLibraryHandoff.SelectPlaylistAsync(playlist,requestToken,context,trace);
+        if(selection.Failure is not null)return new(false,selection.Failure);
+        if(selection.FirstTrack is not { } first)return new(false,"尚未确认 Apple Music 的歌单首曲。");
+        var playback=await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),"正在播放歌单 · "+playlist.Name,requestToken,context);
+        if(!playback.Confirmed)return playback;
+        using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(requestToken);confirmation.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            while(true)
+            {
+                var queue=await AppleMusicLibraryHandoff.ReadQueueAsync(confirmation.Token,trace,context);
+                await coordinator.Source.RefreshAsync().WaitAsync(confirmation.Token);var actual=coordinator.Source.Latest;
+                if(MusicPlaylistPlayback.Confirms(playlist,queue) && actual is {Status:PlayState.Playing} && actual.CapturedUtc>=queue.CapturedUtc
+                    && MusicLibraryPlayback.IsRequestedRecording(first,actual.Track))return playback;
+                await Task.Delay(250,confirmation.Token);
+            }
+        }
+        catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
+        return new(false,"已发送原生歌单播放请求，尚未确认歌单队列，请在 Apple Music 查看。");
+    },token);
     internal Task<LibraryPlayResult> PlayQueueAsync(MusicQueueSelection selection,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         string? failure=await AppleMusicLibraryHandoff.SelectQueueAsync(selection,requestToken,context,trace);

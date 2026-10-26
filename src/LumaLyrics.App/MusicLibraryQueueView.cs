@@ -58,7 +58,7 @@ internal sealed partial class MusicLibraryView
         browseBody.Visibility=browseFilters.Visibility=showingQueue?Visibility.Collapsed:Visibility.Visible;queuePanel.Visibility=showingQueue?Visibility.Visible:Visibility.Collapsed;
         queueTab.SetResourceReference(Control.BackgroundProperty,showingQueue?"AccentSoftBrush":"ControlBrush");queueTab.SetResourceReference(Control.ForegroundProperty,showingQueue?"AccentBrush":"MutedBrush");
         AppMotion.SetIsSelected(queueTab,showingQueue);
-        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text="正在播放与接下来播放";playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab}){AppMotion.SetIsSelected(tab,false);tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
+        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text="正在播放与接下来播放";playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab,playlistsTab}){AppMotion.SetIsSelected(tab,false);tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
     }
     async Task RefreshQueueAsync()
     {

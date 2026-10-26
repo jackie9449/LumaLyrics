@@ -16,6 +16,12 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-playlists"))
+        {
+            await VerifyPlaylistsAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+
         if(Environment.GetCommandLineArgs().Contains("--verify-manual-lyrics"))
         {
             await VerifyManualLyricsAsync(directory,checks);
@@ -217,6 +223,7 @@ public partial class MainWindow
         await VerifyOverlayMotionAsync(checks);
         await VerifyOverlayIsolationAsync(directory,checks);
         await VerifyMusicLibraryAsync(directory,checks);
+        await VerifyPlaylistsAsync(directory,checks);
         await VerifyPlaybackQueueAsync(directory,checks);
         await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
         await VerifyTranslationsAsync(directory,checks);

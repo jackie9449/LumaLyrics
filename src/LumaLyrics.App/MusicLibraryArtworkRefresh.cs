@@ -34,15 +34,16 @@ internal sealed partial class MusicLibraryView
         // imports must update visible covers before the whole queue completes.
         if(!disposed && loaded && IsVisible && refresh.IsEnabled && artworkRevision!=artworkLoadedRevision && !artworkRefresh.IsEnabled)artworkRefresh.Start();
     }
-    sealed record ArtworkBrowsingContext(bool Shelf,string? Album,string Query,double ShelfOffset,double SongOffset,string? SelectedSong);
-    ArtworkBrowsingContext CaptureArtworkContext()=>new(showAlbumShelf,selectedAlbum?.Key,search.Text,albumShelf.ScrollOffset,FindArtworkScroll(songs)?.VerticalOffset??0,(songs.SelectedItem as MusicRow)?.Song.Key);
+    sealed record ArtworkBrowsingContext(bool Shelf,string? Album,string Query,double ShelfOffset,double SongOffset,string? SelectedSong,bool Playlists,string? Playlist,double PlaylistOffset);
+    ArtworkBrowsingContext CaptureArtworkContext()=>new(showAlbumShelf,selectedAlbum?.Key,search.Text,albumShelf.ScrollOffset,FindArtworkScroll(songs)?.VerticalOffset??0,(songs.SelectedItem as MusicRow)?.Song.Key,showingPlaylists,selectedPlaylist?.Key,FindArtworkScroll(selectedPlaylist is null?playlistShelf:playlistTracks)?.VerticalOffset??0);
     async Task RestoreArtworkContextAsync(ArtworkBrowsingContext context)
     {
         if(context.SelectedSong is { } key)songs.SelectedItem=view?.Cast<MusicRow>().FirstOrDefault(r=>r.Song.Key==key);
         await Dispatcher.InvokeAsync(()=>
         {
-            if(disposed || showAlbumShelf!=context.Shelf || selectedAlbum?.Key!=context.Album || search.Text!=context.Query)return;
-            if(showAlbumShelf)albumShelf.RestoreOffset(context.ShelfOffset);
+            if(disposed || showingPlaylists!=context.Playlists || selectedPlaylist?.Key!=context.Playlist || showAlbumShelf!=context.Shelf || selectedAlbum?.Key!=context.Album || search.Text!=context.Query)return;
+            if(showingPlaylists)FindArtworkScroll(selectedPlaylist is null?playlistShelf:playlistTracks)?.ScrollToVerticalOffset(context.PlaylistOffset);
+            else if(showAlbumShelf)albumShelf.RestoreOffset(context.ShelfOffset);
             else FindArtworkScroll(songs)?.ScrollToVerticalOffset(context.SongOffset);
         },DispatcherPriority.Loaded);
     }

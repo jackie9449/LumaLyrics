@@ -102,7 +102,7 @@ public sealed class LibraryMembershipTests:IDisposable
     }
 }
 
-internal sealed record PlaylistFixture(ulong[] Members,bool Master=true,string Name="Original fixture",int? Declared=null,bool InvalidReference=false);
+internal sealed record PlaylistFixture(ulong[] Members,bool Master=true,string Name="Original fixture",int? Declared=null,bool InvalidReference=false,string? Metadata=null);
 internal static class MusicDbPlaylistFixture
 {
     internal static void Write(BinaryWriter writer,params PlaylistFixture[] playlists)
@@ -111,7 +111,12 @@ internal static class MusicDbPlaylistFixture
         foreach(var playlist in playlists)
         {
             byte[] title=Encoding.Unicode.GetBytes(playlist.Name);var name=new byte[36+title.Length];"boma"u8.CopyTo(name);BitConverter.GetBytes(20).CopyTo(name,4);BitConverter.GetBytes(name.Length).CopyTo(name,8);BitConverter.GetBytes(200).CopyTo(name,12);BitConverter.GetBytes(1).CopyTo(name,20);BitConverter.GetBytes(title.Length).CopyTo(name,24);title.CopyTo(name,36);
-            var header=new byte[48];"lpma"u8.CopyTo(header);BitConverter.GetBytes(header.Length).CopyTo(header,4);BitConverter.GetBytes(header.Length+name.Length+88*playlist.Members.Length).CopyTo(header,8);BitConverter.GetBytes(1+playlist.Members.Length).CopyTo(header,12);BitConverter.GetBytes(playlist.Declared??playlist.Members.Length).CopyTo(header,16);BitConverter.GetBytes(playlist.Master?1:0).CopyTo(header,44);writer.Write(header);writer.Write(name);
+            byte[] metadata=[];
+            if(playlist.Metadata is { } xml)
+            {
+                byte[] content=Encoding.UTF8.GetBytes(xml);metadata=new byte[20+content.Length];"boma"u8.CopyTo(metadata);BitConverter.GetBytes(20).CopyTo(metadata,4);BitConverter.GetBytes(metadata.Length).CopyTo(metadata,8);BitConverter.GetBytes(205).CopyTo(metadata,12);content.CopyTo(metadata,20);
+            }
+            var header=new byte[48];"lpma"u8.CopyTo(header);BitConverter.GetBytes(header.Length).CopyTo(header,4);BitConverter.GetBytes(header.Length+name.Length+metadata.Length+88*playlist.Members.Length).CopyTo(header,8);BitConverter.GetBytes(1+(metadata.Length>0?1:0)+playlist.Members.Length).CopyTo(header,12);BitConverter.GetBytes(playlist.Declared??playlist.Members.Length).CopyTo(header,16);BitConverter.GetBytes(playlist.Master?1:0).CopyTo(header,44);writer.Write(header);writer.Write(name);writer.Write(metadata);
             foreach(ulong id in playlist.Members)
             {
                 var reference=new byte[88];"boma"u8.CopyTo(reference);BitConverter.GetBytes(20).CopyTo(reference,4);BitConverter.GetBytes(reference.Length).CopyTo(reference,8);BitConverter.GetBytes(206).CopyTo(reference,12);(playlist.InvalidReference?"bad!"u8:"ipfa"u8).CopyTo(reference.AsSpan(20));BitConverter.GetBytes(68).CopyTo(reference,24);BitConverter.GetBytes(id).CopyTo(reference,40);writer.Write(reference);

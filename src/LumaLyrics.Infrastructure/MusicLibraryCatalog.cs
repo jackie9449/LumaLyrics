@@ -16,6 +16,8 @@ public sealed record MusicLibrarySong(string Source,string PersistentId,Track Tr
 public sealed record MusicLibraryResult(IReadOnlyList<MusicLibrarySong> Songs,string Message)
 {
     public bool Unavailable {get;init;}
+    public IReadOnlyList<MusicPlaylist> Playlists {get;init;}=[];
+    public bool PlaylistsUnavailable {get;init;}
 }
 
 // Read-only connections: browsing never starts downloads, changes bindings or edits Apple's library.
@@ -30,7 +32,7 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
             try{token.ThrowIfCancellationRequested();snapshot=new AppleMusicLibraryReader().Read(path);}
             catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException){message="本机 Apple Music 资料库主清单暂不可读；已有核验清单可离线浏览，请在同步完成后刷新。";}
         }
-        if(snapshot is null && cached.Count==0)return new([],"尚未取得可确认的音乐库清单。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库后刷新。"){Unavailable=true};
+        if(snapshot is null && cached.Count==0)return new([],"尚未取得可确认的音乐库清单。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库后刷新。"){Unavailable=true,PlaylistsUnavailable=true};
         var covers=ReadCovers(token);
         IReadOnlyDictionary<string,AppleArtworkSource>? albumReferences=null;
         if(snapshot is not null)try{albumReferences=new AppleMusicArtworkReader().Read(snapshot.Path);}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or SqliteException){}
@@ -42,7 +44,14 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
             token.ThrowIfCancellationRequested();cached.TryGetValue(item.Key,out var saved);covers.TryGetValue(item.Key,out var cover);
             songs.Add(item with{CoverPath=cover,LyricsKind=saved?.LyricsKind??""});
         }
-        return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message);
+        MusicLibrarySong PlaylistSong(LibraryTrack t)
+        {
+            string key=snapshot!.Path+"\0"+t.PersistentId;cached.TryGetValue(key,out var saved);covers.TryGetValue(key,out var cover);
+            return new(snapshot.Path,t.PersistentId,t.Track,cover,saved?.LyricsKind??"",t.AlbumArtist);
+        }
+        var playlists=snapshot?.Playlists.Select(p=>new MusicPlaylist(snapshot.Path,p.Id,p.Name,p.DeclaredCount,p.Tracks.Select(PlaylistSong).ToArray(),p.Complete,
+            snapshot.Playlists.Count(other=>string.Equals(other.Name,p.Name,StringComparison.OrdinalIgnoreCase))==1)).ToArray()??[];
+        return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message){Playlists=playlists,PlaylistsUnavailable=snapshot is null};
     }
     Dictionary<string,MusicLibrarySong> ReadCached(string? source,CancellationToken token)
     {
