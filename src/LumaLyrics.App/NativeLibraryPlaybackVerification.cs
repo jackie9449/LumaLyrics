@@ -30,6 +30,42 @@ public partial class MainWindow
         }
         string? Argument(string name){int index=Array.IndexOf(args,name);return index>=0 && index+1<args.Length?args[index+1]:null;}
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(150));
+        if(args.Contains("--native-restore-seek-pause"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);var expected=coordinator.Source.Latest??throw new InvalidOperationException("No current recording");Trace("seekPauseCleanup",await RestoreSeekPauseAsync(expected,timeout.Token));return;
+        }
+        if(Argument("--native-seek-offset-ms") is { } offset && double.TryParse(offset,out var delta))
+        {
+            settings.AppleMusicOriginalLyrics=false;
+            await coordinator.Source.StartAsync(timeout.Token);var before=coordinator.Source.Latest??throw new InvalidOperationException("No current recording");
+            bool startedForSeek=false;
+            try
+            {
+            if(args.Contains("--native-seek-playing") && before.Status==LumaLyrics.Core.PlayState.Paused)
+            {
+                startedForSeek=await coordinator.Source.ControlAsync("play");Trace("seekPlayAccepted",startedForSeek);
+                for(int wait=0;wait<20 && coordinator.Source.Latest?.Status!=LumaLyrics.Core.PlayState.Playing;wait++){await Task.Delay(200,timeout.Token);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);}
+                if(coordinator.Source.Latest is not {Status:LumaLyrics.Core.PlayState.Playing} playing || !LumaLyrics.Core.PlaybackSeeking.SameRecording(before,playing))throw new InvalidOperationException("Playback was not confirmed; no seek was issued.");
+                await Task.Delay(1200,timeout.Token);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);before=coordinator.Source.Latest??playing;
+            }
+            Trace("seekBefore",before);bool native=await AppleMusicLibraryHandoff.SeekControlAsync(before,()=>coordinator.Source.Latest,null,timeout.Token,Trace);Trace("nativeSeekAvailable",native);
+            var seekBridge=new AppleMusicPlaybackBridge(coordinator,Trace);var seekResult=await seekBridge.SeekAsync(before,(before.PositionMs??0)+delta,native,timeout.Token);Trace("seekResult",new{seekResult,actual=coordinator.Source.Latest,stateRetained=coordinator.Source.Latest?.Status==before.Status});
+            if(seekResult.Confirmed && args.Contains("--native-restore-seek") && before.PositionMs is { } original && coordinator.Source.Latest is { } after && LumaLyrics.Core.PlaybackSeeking.SameRecording(before,after))
+                Trace("seekRestored",await seekBridge.SeekAsync(after,original,native,timeout.Token));
+            }
+            finally
+            {
+                using var cleanup=new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                if(startedForSeek)Trace("seekPauseRestored",await RestoreSeekPauseAsync(before,cleanup.Token));
+            }
+            Trace("seekSurfaceAfter",await Task.Run(AppleMusicLibraryHandoff.InspectSeekSurface,timeout.Token).WaitAsync(TimeSpan.FromSeconds(8),timeout.Token));
+            return;
+        }
+        if(args.Contains("--native-inspect-seek"))
+        {
+            await coordinator.Source.StartAsync(timeout.Token);Trace("media",coordinator.Source.Latest);
+            Trace("seekSurface",await Task.Run(AppleMusicLibraryHandoff.InspectSeekSurface,timeout.Token).WaitAsync(TimeSpan.FromSeconds(10),timeout.Token));return;
+        }
         if(args.Contains("--native-probe-read-safety")){await VerifyNativeReadSafetyAsync(directory,Argument("--native-safety-mode")??"anchors",timeout.Token);return;}
         if(args.Contains("--native-verify-passive")){await VerifyPassiveNativeAsync(directory,args.Contains("--native-acquire-original"),timeout.Token);return;}
         if(args.Contains("--native-pause-before")){await coordinator.Source.StartAsync(timeout.Token);await coordinator.Source.ControlAsync("pause");await Task.Delay(300,timeout.Token);}
@@ -197,5 +233,18 @@ public partial class MainWindow
         Trace("result",new{result,actual=coordinator.Snapshot});
         if(result.Confirmed && args.Contains("--native-pause-after")){bool paused=await coordinator.Source.ControlAsync("pause");await Task.Delay(400,timeout.Token);Trace("paused",new{paused,actual=coordinator.Snapshot});}
         Trace("final",await Task.Run(AppleMusicLibraryHandoff.Inspect,timeout.Token).WaitAsync(TimeSpan.FromSeconds(12),timeout.Token));
+    }
+    async Task<bool> RestoreSeekPauseAsync(LumaLyrics.Core.PlaybackSnapshot expected,CancellationToken token)
+    {
+        bool attempted=false;
+        for(int i=0;i<30;i++)
+        {
+            await coordinator.Source.RefreshAsync().WaitAsync(token);var actual=coordinator.Source.Latest;
+            if(!LumaLyrics.Core.PlaybackSeeking.SameRecording(expected,actual))return false;
+            if(actual!.Status==LumaLyrics.Core.PlayState.Paused)return true;
+            if(!attempted && actual.CanPause){attempted=true;await coordinator.Source.ControlAsync("pause");}
+            await Task.Delay(200,token);
+        }
+        return false;
     }
 }

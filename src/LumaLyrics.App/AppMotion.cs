@@ -70,11 +70,12 @@ public static class AppMotion
         foreach(Window window in app.Windows)if(GetEnabled(window))SetAnimationsEnabled(window,Allowed);
         foreach(var item in active.ToArray())item.Update(!Allowed);
         if(!Allowed)foreach(var entrance in moving.ToArray())entrance.Finish();
+        RangeMotion.RefreshAll();
     }
     static void ScopeChanged(DependencyObject d,DependencyPropertyChangedEventArgs e)
     {
         if(d is Window window && (bool)e.NewValue)SetAnimationsEnabled(window,Allowed);
-        if(d is not Control control || control is not (ButtonBase or ListBoxItem or TabItem or TextBoxBase or ComboBox or Thumb or DataGridRow))return;
+        if(d is not Control control || control is not (ButtonBase or ListBoxItem or TabItem or TextBoxBase or ComboBox or Thumb or DataGridRow or Slider or ProgressBar))return;
         var state=feedback.GetValue(control,c=>new(c));
         if((bool)e.NewValue)state.Enable();else state.Disable();
     }
@@ -146,9 +147,10 @@ public static class AppMotion
             if(control is TabItem)Watch(TabItem.IsSelectedProperty);
             if(control is ComboBox)Watch(ComboBox.IsDropDownOpenProperty);
             if(control is Thumb)Watch(Thumb.IsDraggingProperty);
+            if(control is SeekSlider)Watch(SeekSlider.IsEditingProperty);
             if(control is DataGridRow)Watch(DataGridRow.IsSelectedProperty);
             control.ApplyTemplate();
-            transformSurface=control is ButtonBase?control.Template?.FindName("InteractionVisual",control) as FrameworkElement:control is Thumb?control:null;
+            transformSurface=control is ButtonBase or Slider?control.Template?.FindName("InteractionVisual",control) as FrameworkElement:control is Thumb?control:null;
             if(transformSurface is { } surface && !BindingOperations.IsDataBound(surface,UIElement.RenderTransformProperty) && surface.RenderTransform.Value.IsIdentity && !surface.RenderTransform.HasAnimatedProperties)
             {
                 originalTransform=surface.RenderTransform;originalOrigin=surface.RenderTransformOrigin;
@@ -169,11 +171,12 @@ public static class AppMotion
         }
         void Enter(object s,MouseEventArgs e){hover=true;Update();}
         void Leave(object s,MouseEventArgs e){hover=false;pressed=false;Update();}
-        void Down(object s,MouseButtonEventArgs e){if(control is ButtonBase)pressed=true;Update();}
+        void Down(object s,MouseButtonEventArgs e){if(control is ButtonBase or Slider)pressed=true;Update();}
         void Up(object s,MouseButtonEventArgs e){pressed=false;Update();}
         void Release(object s,MouseEventArgs e){pressed=false;Update();}
-        void KeyDown(object s,KeyEventArgs e){if(control.IsKeyboardFocused && e.Key is Key.Space or Key.Enter){pressed=true;Update();}}
-        void KeyUp(object s,KeyEventArgs e){if(e.Key is Key.Space or Key.Enter){pressed=false;Update();}}
+        static bool RangeKey(Key key)=>key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
+        void KeyDown(object s,KeyEventArgs e){if(control.IsKeyboardFocused && (e.Key is Key.Space or Key.Enter || control is Slider && RangeKey(e.Key))){pressed=true;Update();}}
+        void KeyUp(object s,KeyEventArgs e){if(e.Key is Key.Space or Key.Enter || control is Slider && RangeKey(e.Key)){pressed=false;Update();}}
         void FocusChanged(object s,KeyboardFocusChangedEventArgs e)=>Update();
         void EnabledChanged(object s,DependencyPropertyChangedEventArgs e){pressed=false;hover=control.IsEnabled && control.IsMouseOver;Update();}
         void VisibilityChanged(object s,DependencyPropertyChangedEventArgs e){pressed=false;hover=control.IsVisible && control.IsMouseOver;Update(true);}
@@ -183,7 +186,7 @@ public static class AppMotion
         {
             if(!connected)return;
             bool usable=control.IsEnabled;
-            bool down=usable && (pressed || control is ButtonBase{IsPressed:true} || control is Thumb{IsDragging:true});
+            bool down=usable && (pressed || control is ButtonBase{IsPressed:true} || control is Thumb{IsDragging:true} || control is SeekSlider{IsEditing:true} || control is Slider{IsMouseCaptureWithin:true});
             bool selected=GetIsSelected(control) || control is ToggleButton{IsChecked:true} or ListBoxItem{IsSelected:true} or ComboBoxItem{IsHighlighted:true} or TabItem{IsSelected:true} or ComboBox{IsDropDownOpen:true} or DataGridRow{IsSelected:true};
             int duration=instant || !Allowed || !GetAnimationsEnabled(control) || !control.IsVisible?0:ThemeManager.Current.Id=="material"?150:190;
             Smooth(control,HoverProperty,usable && hover?1:0,duration);Smooth(control,PressedProperty,down?1:0,Math.Min(duration,85));
@@ -191,7 +194,7 @@ public static class AppMotion
             Smooth(control,AvailabilityProperty,usable?1:.38,duration);
             if(ownsTransform)
             {
-                double size=down?.975:usable && hover?control is Thumb?1.18:control is RadioButton?1.006:1.018:1;
+                double size=control is Slider?(down?1.34:usable && hover?1.18:1):down?.975:usable && hover?control is Thumb?1.18:control is RadioButton?1.006:1.018:1;
                 Smooth(scale,ScaleTransform.ScaleXProperty,size,duration);Smooth(scale,ScaleTransform.ScaleYProperty,size,duration);
                 Smooth(translate,TranslateTransform.YProperty,usable && hover && !down && control is Button?-1:0,duration);
             }
@@ -244,4 +247,10 @@ public sealed class MotionFactorConverter:IValueConverter
 {
     public object Convert(object value,Type type,object parameter,CultureInfo culture)=>value is double number && double.TryParse(parameter?.ToString(),NumberStyles.Float,CultureInfo.InvariantCulture,out double factor)?number*factor:0d;
     public object ConvertBack(object value,Type type,object parameter,CultureInfo culture)=>Binding.DoNothing;
+}
+
+public sealed class RangeScaleConverter:IMultiValueConverter
+{
+    public object Convert(object[] values,Type type,object parameter,CultureInfo culture)=>1+Math.Max(values.ElementAtOrDefault(0) is double hover?hover*.18:0,values.ElementAtOrDefault(1) is double press?press*.34:0);
+    public object[] ConvertBack(object value,Type[] types,object parameter,CultureInfo culture)=>types.Select(_=>Binding.DoNothing).ToArray();
 }

@@ -102,6 +102,20 @@ public sealed class GsmtcPlaybackSource : IPlaybackSource
         }
         catch (Exception e) { Error?.Invoke(e.Message); return false; }
     }
+    public async Task<bool> SeekAsync(PlaybackSnapshot expected,double milliseconds,CancellationToken token)
+    {
+        var session=selected;
+        if(session is null || PlaybackSeeking.Target(expected,milliseconds) is not { } target || !PlaybackSeeking.SameRecording(expected,Latest))return false;
+        var media=await session.TryGetMediaPropertiesAsync().AsTask(token);
+        var timeline=session.GetTimelineProperties();
+        var track=new Track(media.Title,media.Artist,media.AlbumTitle,(timeline.EndTime-timeline.StartTime).TotalMilliseconds);
+        if(session.SourceAppUserModelId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase))track=TrackMetadata.FromAppleSession(track);
+        token.ThrowIfCancellationRequested();
+        if(session!=selected || track.Fingerprint!=expected.Track.Fingerprint || !PlaybackSeeking.SameRecording(expected,Latest) || !session.GetPlaybackInfo().Controls.IsPlaybackPositionEnabled || track.DurationMs is not >0)return false;
+        target=Math.Clamp(target,0,track.DurationMs.Value);
+        token.ThrowIfCancellationRequested();
+        return await session.TryChangePlaybackPositionAsync(timeline.StartTime.Ticks+TimeSpan.FromMilliseconds(target).Ticks).AsTask(token);
+    }
     public async Task<byte[]?> GetArtworkAsync()
     {
         var s = selected; if (s is null) return null;

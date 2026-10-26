@@ -137,10 +137,11 @@ public partial class MainWindow : Window
         var s=coordinator.Snapshot;
         vm.Title=coordinator.ActiveTrack?.Title is {Length:>0} t?t:"让歌词，浮在音乐之上。";vm.Artist=s is null?coordinator.ManualTrack is { } mt?$"{mt.Artist} · {mt.Album} · 手动浏览":"打开 Apple Music，播放你喜欢的歌":$"{s.Track.Artist} · {s.Track.Album}";
         vm.Status=s is null?"等待 Apple Music":$"已连接 · {(s.Status==PlayState.Playing?"正在播放":s.Status==PlayState.Paused?"已暂停":"已停止")}";
-        vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=s?.CanSeek==true;
+        UpdateSeekCapability(s);ValidateSeek(s);
+        vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=CanSeek(s);
         PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
         vm.IsPlaying=s?.Status==PlayState.Playing;
-        vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs ?? 1;
+        vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs is >0 and var duration && double.IsFinite(duration)?duration:1;
         overlay.RefreshTranslationToggle();
         RefreshMainTranslationToggle();
         vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
@@ -181,8 +182,14 @@ public partial class MainWindow : Window
     {
         var s=coordinator.Snapshot; var p=coordinator.Position;
         static string T(double? ms)=>ms.HasValue?TimeSpan.FromMilliseconds(Math.Max(0,ms.Value)).ToString(ms>=3600000?@"h\:mm\:ss":@"mm\:ss"):"--:--";
-        vm.Time=$"{T(p)} / {T(s?.Track.DurationMs)}";
-        if(!SeekSlider.IsMouseCaptureWithin)vm.Position=p ?? 0;
+        vm.Time=$"{T(SeekSlider.IsEditing?SeekSlider.Value:seekPending?seekTarget:p)} / {T(s?.Track.DurationMs)}";
+        if(!SeekSlider.IsEditing && !seekPending)
+        {
+            vm.Position=p ?? 0;
+            // A local edit can leave the OneWay binding's source unchanged (paused
+            // rejection/cancel). Explicitly restore its target in that case.
+            if(SeekSlider.Value!=vm.Position)SeekSlider.GetBindingExpression(System.Windows.Controls.Primitives.RangeBase.ValueProperty)?.UpdateTarget();
+        }
         vm.Quality=s is null?"尚无播放时间轴":p.HasValue?"GSMTC · 整秒位置插值 · B 级兼容":"同步受限 · 当前无可信播放位置";
         if(s?.Status==PlayState.Paused) { if(pausedSince==DateTime.MinValue)pausedSince=DateTime.UtcNow; }else pausedSince=DateTime.MinValue;
         overlay.Opacity=!overlay.AppearanceEditing && settings.FadeOnPause && pausedSince!=DateTime.MinValue && DateTime.UtcNow-pausedSince>TimeSpan.FromSeconds(10)?.25:1;
@@ -275,7 +282,6 @@ public partial class MainWindow : Window
         bool allowed=action switch{"previous"=>snapshot.CanPrevious,"next"=>snapshot.CanNext,"pause"=>snapshot.CanPause,"play"=>snapshot.CanPlay,_=>false};
         if(allowed)await ControlAsync(action);
     }
-    async void SeekReleased(object s,MouseButtonEventArgs e) {if(coordinator.Snapshot?.CanSeek==true)await ControlAsync("seek",SeekSlider.Value);}
     void EarlierClicked(object s,RoutedEventArgs e)=>coordinator.SetOffset((coordinator.Binding?.OffsetMs ?? 0)-100);
     void LaterClicked(object s,RoutedEventArgs e)=>coordinator.SetOffset((coordinator.Binding?.OffsetMs ?? 0)+100);
     void ResetOffsetClicked(object s,RoutedEventArgs e)=>coordinator.SetOffset(0);
@@ -324,7 +330,7 @@ public partial class MainWindow : Window
     void OnClosing(object? s,CancelEventArgs e) {if(quitting)return;e.Cancel=true;if(settings.CloseToTray && CanRecoverOverlay){Hide();coordinator.SaveSettings();}else _=QuitAsync();}
     public async Task QuitAsync()
     {
-        if(quitting)return;quitting=true;timer.Stop();hotkeys?.Dispose();DisposeTray();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
+        if(quitting)return;quitting=true;seekProbe?.Cancel();seekCancellation?.Cancel();SeekSlider.CancelEdit();timer.Stop();hotkeys?.Dispose();DisposeTray();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
         playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)

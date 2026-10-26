@@ -30,6 +30,14 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         finally{Interlocked.Decrement(ref pending);HandoffCompleted?.Invoke();}
     }
     internal Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token)=>AppleMusicLibraryHandoff.ReadQueueAsync(token,trace);
+    internal Task<LibraryPlayResult> SeekAsync(PlaybackSnapshot expected,double target,bool nativeSeek,CancellationToken token)=>RunSelectionAsync(async (_,requestToken)=>
+    {
+        var result=await PlaybackSeeking.ExecuteAsync(expected,target,async readToken=>
+        {
+            await coordinator.Source.RefreshAsync().WaitAsync(readToken);return coordinator.Source.Latest;
+        },(before,position,commandToken)=>before.CanSeek?coordinator.Source.SeekAsync(before,position,commandToken):AppleMusicLibraryHandoff.SeekControlAsync(before,()=>coordinator.Source.Latest,position,commandToken,trace),requestToken,nativeSeek);
+        return new(result.Confirmed,result.Message,false);
+    },token);
     internal Task<LibraryPlayResult> ReorderQueueAsync(MusicQueueMove move,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         await coordinator.Source.RefreshAsync().WaitAsync(requestToken);var before=coordinator.Source.Latest;
