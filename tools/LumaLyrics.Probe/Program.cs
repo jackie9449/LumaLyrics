@@ -1,4 +1,8 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--analyze-instrument-file")
+{
+    await LumaLyrics.Probe.InstrumentBenchmarkCommands.RunFileAsync(args);return;
+}
 if(args.ElementAtOrDefault(0)=="--verify-instrument-model")
 {
     await LumaLyrics.Probe.InstrumentBenchmarkCommands.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify a private converted model directory."));return;

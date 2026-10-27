@@ -13,7 +13,25 @@ public sealed class InstrumentEngine : IAsyncDisposable
     Task? disposal;
     bool disposed;
 
-    public InstrumentEngine(IInstrumentClassifier classifier) => this.classifier = classifier;
+    public string ProfileId { get; }
+    public int SampleRate => classifier.SampleRate;
+    public int WindowSamples => classifier.WindowSamples;
+    public int HopSamples => classifier.HopSamples;
+    public IReadOnlyDictionary<InstrumentKind, ActivityParameters> ActivityParameters { get; }
+    public InstrumentEngine(IInstrumentClassifier classifier, IReadOnlyDictionary<InstrumentKind, ActivityParameters>? activityParameters = null)
+    {
+        this.classifier = classifier;
+        var parameters = activityParameters ?? (classifier as OnnxInstrumentClassifier)?.ActivityParameters ?? new Dictionary<InstrumentKind, ActivityParameters>();
+        foreach (var pair in parameters)
+        { if (!Enum.IsDefined(pair.Key)) throw new ArgumentException("Invalid instrument family."); _ = new InstrumentActivityFilter(pair.Value); }
+        ActivityParameters = new ReadOnlyDictionary<InstrumentKind, ActivityParameters>(parameters.ToDictionary());
+        ProfileId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            ClassifierProfile = classifier.ProfileId, Resampling = InstrumentResampler.Version, Downmix = "mean-all-channels-v1",
+            classifier.SampleRate, classifier.WindowSamples, classifier.HopSamples,
+            Activity = parameters.OrderBy(pair => pair.Key).ToArray()
+        }))).ToLowerInvariant();
+    }
 
     public async Task<InstrumentFrame> AnalyzeAsync(InstrumentWindow window, CancellationToken token)
     {
@@ -46,7 +64,7 @@ public sealed class InstrumentEngine : IAsyncDisposable
                         throw new InvalidDataException("Invalid instrument classifier output.");
                     copy.Add(score.Key, score.Value);
                 }
-                return new(window.Epoch, window.EndTicks, window.StartMs, window.EndMs, classifier.ProfileId,
+                return new(window.Epoch, window.EndTicks, window.StartMs, window.EndMs, ProfileId,
                     new ReadOnlyDictionary<InstrumentKind, float>(copy));
             }
             finally { inferenceGate.Release(); }

@@ -68,4 +68,14 @@ public sealed class InstrumentWindowTests
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.Push(new float[10001], T(600), A, 600));
         Assert.Single(builder.Push(new float[400], T(600), A, 600));
     }
+    [Fact]
+    public void OfflinePaddingDoesNotExtendTheObservedTail()
+    {
+        var builder = new InstrumentWindowBuilder(1000, 1000, 500);
+        builder.Push(Enumerable.Repeat(.5f, 1300).ToArray(), T(0), A, 0);
+        var tail = builder.Finish()!;
+        Assert.Equal(1000, tail.Mono.Length); Assert.Equal(1300, tail.EndMs); Assert.Equal(500, tail.StartMs);
+        Assert.Equal(0f, tail.Mono[^1]); Assert.Null(builder.Finish());
+        Assert.Throws<InvalidOperationException>(() => builder.Push([0f], T(1300), A, 1300));
+    }
 }

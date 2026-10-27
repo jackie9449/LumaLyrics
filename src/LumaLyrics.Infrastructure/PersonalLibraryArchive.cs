@@ -8,7 +8,7 @@ namespace LumaLyrics.Infrastructure;
 public static class PersonalLibraryArchive
 {
     static readonly JsonSerializerOptions Json=new(){WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase};
-    static readonly HashSet<string> StateFiles=["state/lyrics.db","state/artwork.db","state/translations.db","state/settings.json","state/apple-reference-audit.json"];
+    static readonly HashSet<string> StateFiles=["state/lyrics.db","state/artwork.db","state/translations.db","state/instruments.db","state/settings.json","state/apple-reference-audit.json"];
     internal static bool IsHash(string? value)=>value is {Length:64} && value.All(Uri.IsHexDigit);
     static string Hash(string path){using var stream=File.OpenRead(path);return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();}
     internal static void AddFile(string root,string relative,string kind,PersonalLibraryManifest manifest)
@@ -66,6 +66,7 @@ public static class PersonalLibraryArchive
             PersonalLibrarySnapshot.Export(dataRoot,staging,manifest,token,progress);
             File.WriteAllText(Path.Combine(staging,"README.md"),"# 浮光歌词个人资料\n\n这是私人备份，与软件安装包分别保存。lyrics/ 中是已通过自动检查或手动保留的歌词，covers/ 中是原始图片，translations/ 中是可阅读的中文译文 JSON（包含原词哈希、逐行编号与来源）；曲目对应关系、来源和校准记录见 personal-library.json。纯音乐没有歌词文件，缺失或待核歌词不生成文件。state/ 保留数据库快照、手动绑定、设置和待导入队列，其中的历史候选不代表全部准确或已由 Apple 核对。译文的原文及逐行对应检查不等于语义已经人工逐首校对。\n\n在新版浮光歌词“设置 → 个人资料”中恢复到一个新目录；不会覆盖已有资料。备份后新增的下载需要再次导出。包含 translations.db 的备份请使用 0.10.0 或更新版本恢复。\n",new UTF8Encoding(false));
             File.AppendAllText(Path.Combine(staging,"README.md"),"\n0.17.0 起，originals/ 包含本机 Apple Music TTML 原词来源 JSON：完整 TTML、录音元数据、时间模型与原词哈希；它来自同一歌词数据库快照，不代表人工语义校对。包含此目录的备份需由 0.17.0 或更新版本恢复。\n",new UTF8Encoding(false));
+            if(manifest.Files.Any(file=>file.Path=="state/instruments.db"))File.AppendAllText(Path.Combine(staging,"README.md"),"\n乐器分析位于 instruments/ 和 state/instruments.db，二者来自同一快照。实验分析没有自动升级为人工已审；完整覆盖不等于识别准确。源音乐和模型权重不在备份中，原文件路径失效后须重新选择并核对内容。此类备份要求包含 2026-10-27 乐器缓存实现的版本恢复，旧版本会拒绝未知文件类型。\n",new UTF8Encoding(false));
             AddFile(staging,"README.md","readme",manifest);
             DataDirectoryConfiguration.ProtectFromGit(staging);AddFile(staging,".gitignore","metadata",manifest);
             File.WriteAllText(Path.Combine(staging,PersonalLibraryManifest.FileName),JsonSerializer.Serialize(manifest,Json),new UTF8Encoding(false));
@@ -86,6 +87,7 @@ public static class PersonalLibraryArchive
                 "state"=>StateFiles.Contains(file.Path),
                 "lyric"=>file.Path.StartsWith("lyrics/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".lrc" or ".txt",
                 "translation"=>file.Path.StartsWith("translations/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
+                "instrument"=>file.Path.Split('/') is ["instruments",var recording,var profile] && IsHash(recording) && profile.Length==69 && profile.EndsWith(".json",StringComparison.Ordinal) && IsHash(profile[..64]),
                 "original"=>file.Path.StartsWith("originals/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
                 "review"=>file.Path.Split('/') is ["lyrics-review",{Length:>0},"review.json" or "capture.png"],
                 "cover"=>file.Path.StartsWith("covers/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".png" or ".jpg",
@@ -119,6 +121,7 @@ public static class PersonalLibraryArchive
         PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/lyrics.db"),true);
         if(files.ContainsKey("state/artwork.db"))PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/artwork.db"),false);
         if(files.ContainsKey("state/translations.db"))TranslationRepository.CheckDatabase(AssetPath(root,"state/translations.db"));
+        InstrumentBackup.Validate(root,manifest,token);
         foreach(var original in manifest.Files.Where(f=>f.Kind=="original"))
         {
             if(original.Bytes>16*1024*1024)throw new InvalidDataException("原词来源文件过大。");

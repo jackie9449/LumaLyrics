@@ -10,6 +10,7 @@ public sealed class InstrumentWindowBuilder
     InstrumentEpoch? epoch;
     long originTicks, receivedSamples, consumedSamples;
     double? originMs;
+    bool finished;
 
     public InstrumentWindowBuilder(int sampleRate, int windowSamples, int hopSamples)
     {
@@ -20,6 +21,7 @@ public sealed class InstrumentWindowBuilder
 
     public IReadOnlyList<InstrumentWindow> Push(float[] mono, long firstSampleTicks, InstrumentEpoch value, double? firstSampleMs)
     {
+        if (finished) throw new InvalidOperationException("The audio window builder has finished.");
         ArgumentNullException.ThrowIfNull(mono);
         ArgumentNullException.ThrowIfNull(value);
         if (mono.Length > sampleRate * 10) throw new ArgumentOutOfRangeException(nameof(mono), "Audio chunk exceeds ten seconds.");
@@ -55,8 +57,24 @@ public sealed class InstrumentWindowBuilder
         return windows;
     }
 
+    /// <summary>Offline tail padding changes model input only, never the observed audio range.</summary>
+    public InstrumentWindow? Finish()
+    {
+        if (finished) return null;
+        if (receivedSamples < windowSamples) throw new InvalidOperationException("Audio is shorter than one valid model context.");
+        finished = true;
+        if (buffer.Count == 0 || epoch is null) return null;
+        var mono = new float[windowSamples]; buffer.CopyTo(mono);
+        long start = originTicks + checked((long)(consumedSamples * (Stopwatch.Frequency / (double)sampleRate)));
+        long end = originTicks + checked((long)(receivedSamples * (Stopwatch.Frequency / (double)sampleRate)));
+        var result = new InstrumentWindow(epoch, start, end,
+            originMs.HasValue ? originMs + consumedSamples * (1000d / sampleRate) : null,
+            originMs.HasValue ? originMs + receivedSamples * (1000d / sampleRate) : null, sampleRate, mono);
+        buffer.Clear(); return result;
+    }
+
     public void Reset()
     {
-        buffer.Clear(); epoch = null; originMs = null; originTicks = receivedSamples = consumedSamples = 0;
+        buffer.Clear(); epoch = null; originMs = null; originTicks = receivedSamples = consumedSamples = 0; finished = false;
     }
 }

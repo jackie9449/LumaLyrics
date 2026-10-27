@@ -17,8 +17,7 @@ public sealed class InstrumentModelStore
 
     public InstrumentModelStore(string dataRoot, HttpClient? httpClient = null)
     {
-        root = Path.GetFullPath(dataRoot);
-        PersonalLibraryArchive.EnsureOutsideSoftware(root);
+        root = InstrumentStoragePaths.CheckRoot(dataRoot);
         http = httpClient ?? SharedHttp;
     }
 

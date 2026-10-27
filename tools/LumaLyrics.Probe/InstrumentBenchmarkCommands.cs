@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
+using LumaLyrics.Windows;
 
 namespace LumaLyrics.Probe;
 
@@ -12,19 +13,7 @@ internal static class InstrumentBenchmarkCommands
     {
         string root = Path.GetFullPath(directory);
         PersonalLibraryArchive.EnsureOutsideSoftware(root);
-        using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "instrument-model-export.json")));
-        var data = metadata.RootElement;
-        var json = new JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } };
-        var labels = data.GetProperty("labelMap").Deserialize<Dictionary<int, InstrumentKind>>(json)!;
-        var profile = new InstrumentInferenceProfile
-        {
-            Id = "yamnet-waveform-experimental", Sha256 = data.GetProperty("modelSha256").GetString()!,
-            SampleRate = data.GetProperty("sampleRate").GetInt32(), WindowSamples = data.GetProperty("windowSamples").GetInt32(),
-            HopSamples = data.GetProperty("hopSamples").GetInt32(), InputName = data.GetProperty("inputName").GetString()!,
-            OutputName = data.GetProperty("outputName").GetString()!, OutputClassCount = data.GetProperty("outputClassCount").GetInt32(),
-            PreprocessingVersion = data.GetProperty("preprocessingVersion").GetString()!, LabelMap = labels,
-            Thresholds = labels.Values.Distinct().ToDictionary(kind => kind, _ => new ActivityParameters(.65f, .4f, 2, 750))
-        };
+        var profile = LoadProfile(root);
         await using var classifier = new OnnxInstrumentClassifier(Path.Combine(root, "yamnet-waveform.onnx"), profile);
         float[] inputs = ReadFloats(Path.Combine(root, "parity-inputs.f32"));
         float[] expected = ReadFloats(Path.Combine(root, "parity-scores.f32"));
@@ -52,6 +41,65 @@ internal static class InstrumentBenchmarkCommands
         await File.WriteAllTextAsync(Path.Combine(root, "instrument-csharp-parity.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine(JsonSerializer.Serialize(report));
         if (!report.numericParityPassed) throw new InvalidDataException("C# numerical parity gate failed.");
+    }
+
+    static InstrumentInferenceProfile LoadProfile(string root)
+    {
+        using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "instrument-model-export.json")));
+        var data = metadata.RootElement;
+        var json = new JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } };
+        var labels = data.GetProperty("labelMap").Deserialize<Dictionary<int, InstrumentKind>>(json)!;
+        return new InstrumentInferenceProfile
+        {
+            Id = "yamnet-waveform-experimental", Sha256 = data.GetProperty("modelSha256").GetString()!,
+            SampleRate = data.GetProperty("sampleRate").GetInt32(), WindowSamples = data.GetProperty("windowSamples").GetInt32(),
+            HopSamples = data.GetProperty("hopSamples").GetInt32(), InputName = data.GetProperty("inputName").GetString()!,
+            OutputName = data.GetProperty("outputName").GetString()!, OutputClassCount = data.GetProperty("outputClassCount").GetInt32(),
+            PreprocessingVersion = data.GetProperty("preprocessingVersion").GetString()!, LabelMap = labels,
+            Thresholds = labels.Values.Distinct().ToDictionary(kind => kind, _ => new ActivityParameters(.65f, .4f, 2, 750))
+        };
+    }
+
+    internal static async Task RunFileAsync(string[] args)
+    {
+        string Value(string flag)
+        { int index = Array.IndexOf(args, flag); return index >= 0 && index + 1 < args.Length && !args[index + 1].StartsWith("--") ? args[index + 1] : throw new ArgumentException("Missing " + flag); }
+        if (!args.Contains("--experimental")) throw new ArgumentException("Uncalibrated file analysis requires the explicit --experimental flag.");
+        string root = Path.GetFullPath(Value("--data-dir")), modelRoot = Path.GetFullPath(Value("--model-dir")), path = Path.GetFullPath(Value("--file"));
+        PersonalLibraryArchive.EnsureOutsideSoftware(root); PersonalLibraryArchive.EnsureOutsideSoftware(modelRoot);
+        using var repository = new InstrumentRepository(root);
+        using var cancel = new CancellationTokenSource();
+        ConsoleCancelEventHandler handler = (_, e) => { e.Cancel = true; cancel.Cancel(); };
+        Console.CancelKeyPress += handler;
+        var watch = Stopwatch.StartNew();
+        object report;
+        try
+        {
+            using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(modelRoot, "instrument-model-export.json"), cancel.Token));
+            if (!metadata.RootElement.GetProperty("numericParityPassed").GetBoolean()) throw new InvalidDataException("Model export did not pass the numerical gate.");
+            var classifier = new OnnxInstrumentClassifier(Path.Combine(modelRoot, "yamnet-waveform.onnx"), LoadProfile(modelRoot));
+            await using var engine = new InstrumentEngine(classifier);
+            var info = WaveAudioReader.Inspect(path);
+            string localId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path))).ToLowerInvariant();
+            var key = new InstrumentRecordingKey("explicit-local-file", localId, checked((long)Math.Ceiling(info.DurationMs)), null);
+            var analysis = new InstrumentFileAnalysis(engine, repository, WaveAudioReader.ReadAsync);
+            var result = await analysis.AnalyzeAsync(path, key, null, cancel.Token);
+            report = new { status = "AnalyzedExperimental", completeCoverage = result.Complete, windows = result.Scores.Length,
+                durationMs = result.Recording.DurationMs, elapsedMs = watch.Elapsed.TotalMilliseconds,
+                profileId = result.ProfileId, sampleRate = engine.SampleRate, windowSamples = engine.WindowSamples, hopSamples = engine.HopSamples,
+                timingConvention = "window-center-estimate", windowCenterUncertaintyMs = engine.WindowSamples * (500d / engine.SampleRate),
+                sourcePreprocessing = InstrumentResampler.Version, accuracyValidated = false, productionReady = false };
+        }
+        catch (Exception error)
+        {
+            Environment.ExitCode = 2;
+            report = new { status = cancel.IsCancellationRequested ? "Cancelled" : "Failed", errorType = error.GetType().Name,
+                hresult = $"0x{error.HResult:X8}", accuracyValidated = false, productionReady = false };
+        }
+        finally { Console.CancelKeyPress -= handler; }
+        string output = Path.Combine(root, "instrument-file-analysis-" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(output, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine(JsonSerializer.Serialize(report));
     }
 
     static float[] ReadFloats(string path)

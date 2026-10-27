@@ -32,7 +32,7 @@
 
 ## 使用方式与执行顺序
 
-执行中：任务 1 已完成。任务 2 已取得实际音乐信号、核对同包独立渲染进程，并用独立辅助进程约束原生停止等待；完整实机矩阵仍待验证。任务 3 已实现模型安装协议、固定 YAMNet 实验导出、Python／C# 数值对照和私有评价入口；30 个片段尚未人工标注，PANNs 比较和正式类别校准尚未完成，G2 未通过。任务 4 已实现固定窗口、串行引擎和过期结果保护，尚缺完整流式重采样／调度与端到端测试。任务 5–10 未实施，不发布正式识别 UI。当前 476 项 .NET 测试、8 项 Python 测试、124 项隔离滑条 UI 回归通过；详细证据与剩余限制见 [执行记录](../../instrument-evaluation.md)。仓库检查基线为 `4cc273f7b8d4ed842915071a3d9e0a81d8fa3da1`，实现时重新检查远端。
+执行中：任务 1 完成。任务 2 已取得实际音乐信号并隔离原生采集停止，完整实机矩阵仍待验证。任务 3–4 已有模型安装、Python／C# 数值对照、评价入口、固定窗口、重采样与过期结果保护，仍缺类别校准及实时最新窗口调度。用户确认没有人工时间标注，G2 保持未通过；依据设计的实验后端边界，先推进任务 5–6、9：录音／模型缓存、完整 WAV 实验分析和一致备份已实现。一个约 43.4 分钟文件分析完成，5426 个窗口、实际覆盖完整、耗时约 14.3 秒；不代表准确度通过。任务 7–8 正式播放身份连接和图标 UI 尚未实施。500 项 .NET 测试、8 项 Python 测试、253 项既有应用／Settings 主题检查通过；详细证据见 [执行记录](../../instrument-evaluation.md)。实现前本地及远端 main 为 `37328560605f19849c2b1202a8a3c541b89a684b`，工作区干净。
 
 上方技能提示是 writing-plans 的标准交接格式。当前已提供的技能目录没有列出那两个 `superpowers` 执行技能；选择执行方式时先检查可用性，不能声称已经调用。任务本身包含独立的操作和验收步骤，用户若直接要求按计划执行，可按本计划逐项执行；子代理方式需遵守当时的用户授权和会话规则。
 
@@ -378,7 +378,7 @@ var pending = System.Threading.Channels.Channel.CreateBounded<InstrumentWindow>(
 
 **Interfaces:** 使用公共 `InstrumentRecordingKey`、`InstrumentTimeline` 和 `InstrumentRepository`。`InstrumentRecordingIdentity.KeyId(InstrumentRecordingKey recording): string` 生成存储键；`InstrumentTimelineBuilder(InstrumentRecordingKey recording, string profileId)` 提供 `Add(InstrumentFrame frame, InstrumentInterval[] intervals)`、`Build(): InstrumentTimeline`。
 
-- [ ] **Step 1：写版本隔离及不完整覆盖测试，运行后确认失败。**
+- [x] **Step 1：写版本隔离及不完整覆盖测试，运行后确认失败。**
 
 ```csharp
 [Fact]
@@ -418,7 +418,7 @@ public static string KeyId(InstrumentRecordingKey recording)
 
 确认来源与持久 ID 后，先由 `FindRecordings` 读取已存储的不可变 recording key，再校验时长与文件绑定；不能用每次 GSMTC 上报的取整时长重新生成 key。多个不同内容哈希候选且没有当前版本证据时拒绝自动选择。时长只作为一致性检查，容差只能对应已观察到的来源取整误差，不能放宽为版本匹配依据。增加“同一持久 ID 对应多个文件内容”“上报时长取整”“旧绑定在外部切歌后失效”测试。
 
-- [ ] **Step 3：实现数据库事务与验证。** 使用个人根目录 `instruments.db`，WAL、参数化 SQL、`foreign_keys=ON`；版本以 `PRAGMA user_version=1` 管理。一个分析事务同时写入元数据、覆盖、分数和活动区间。最小表结构如下：
+- [x] **Step 3：实现数据库事务与验证。** 使用个人根目录 `instruments.db`，WAL、参数化 SQL、`foreign_keys=ON`；版本以 `PRAGMA user_version=1` 管理。一个分析事务同时写入元数据、覆盖、分数和活动区间。最小表结构如下：
 
 ```sql
 CREATE TABLE Recordings(Id TEXT PRIMARY KEY, IdentityJson TEXT NOT NULL, BindingJson TEXT);
@@ -440,8 +440,10 @@ CREATE INDEX IntervalsByTime ON Intervals(RecordingId,ProfileId,StartMs);
 
 读写时验证有限值、`0 ≤ start < end ≤ duration`、合法枚举、分数范围及分析版本。`Complete` 必须由真实覆盖重算，外部 JSON 中传入 true 不能绕过验证。禁止以最后播放位置作为连续覆盖率。相同 profile 的重播按音乐区间去重，新 revision 事务替换对应范围，不无限追加重复帧；较旧 revision 不覆盖较新数据。
 - [ ] **Step 4：实现 timeline 构建。** 只接受时间线与身份均可用的 frame；按实际模型的输出时间约定映射，不以推断完成时刻充当演奏时刻。YAMNet 类窗口输出按窗中心标注并在分析元数据保留半窗时间不确定度；真正逐帧模型按其输出步长映射。状态平滑可以产生估计区间，但不能填补音频覆盖缺口。只把稳定活动的类别加入 roster，已知 roster 本曲内保持固定排序。`Add` 遇到不同 profile 或无有效时间则拒绝持久化。
-- [ ] **Step 5：验证事务、掉帧与损坏。** 实测写入中断后旧事务仍完整；重复播放不增加覆盖；seek 缺口不消失；不同模型无法混合；人工篡改 Complete 被拒绝；损坏数据库不导致歌词和播放退出。缓存清理只删除乐器分析，不删除原始文件、模型、手动歌词或用户文件绑定。
-- [ ] **Step 6：提交。** `feat: persist recording-scoped instrument timelines`。
+- [x] **Step 5：验证事务、掉帧与损坏。** 实测写入中断后旧事务仍完整；重复播放不增加覆盖；seek 缺口不消失；不同模型无法混合；人工篡改 Complete 被拒绝；损坏数据库不导致歌词和播放退出。缓存清理只删除乐器分析，不删除原始文件、模型、手动歌词或用户文件绑定。
+- [x] **Step 6：提交。** `feat: persist recording-scoped instrument timelines`。
+
+任务 5 后端事务与构建器已实现；当前媒体会话的确认 ID 连接及显式半窗不确定度缓存元数据仍待后续集成，未以文件分析成功替代这些检查。
 
 ### Task 6：完整本地 WAV 的预分析
 
@@ -456,7 +458,7 @@ public InstrumentFileAnalysis(InstrumentEngine engine, InstrumentRepository repo
     Func<string, CancellationToken, IAsyncEnumerable<PcmChunk>> readAudio);
 ```
 
-- [ ] **Step 1：先写 WAV 安全解析测试。** 在测试中用 `BinaryWriter` 生成自写的 PCM16 与 float32 WAV；包括 RIFF chunk 奇数字节填充、非 44 字节头、data 截断、越界 chunk 长度、NaN float、零通道及未知编码。合法样本读回的样本数和幅度必须一致，截断文件不能 Complete。
+- [x] **Step 1：先写 WAV 安全解析测试。** 在测试中用 `BinaryWriter` 生成自写的 PCM16 与 float32 WAV；包括 RIFF chunk 奇数字节填充、非 44 字节头、data 截断、越界 chunk 长度、NaN float、零通道及未知编码。合法样本读回的样本数和幅度必须一致，截断文件不能 Complete。
 
 ```csharp
 // 最小自写 PCM16 WAV 测试夹具内容，不含用户音频。
@@ -476,9 +478,11 @@ Assert.Equal(48, stream.Length);
 - [ ] **Step 2：实现分块读取和稳定内容身份。** 以只读方式打开用户文件，读取前后校验文件身份、长度及修改时间，流式计算 SHA-256；变化则分析失败，不提交新缓存。采样数决定音乐时间，不使用处理耗时决定进度。支持的 WAV 编码及声道限制要在文件选择界面明确显示，其他格式给出可理解的错误。
 
 如果输入 recording 已有 AudioSha256，必须与本次计算值相同；没有时由明确的用户文件绑定建立含哈希的新 key。返回 timeline 使用已确认的实际样本时长和计算哈希，并保存对应绑定，不能将新文件分析写回另一内容哈希的旧 key。
-- [ ] **Step 3：执行离线窗口推断。** 复用任务 4 模型预处理及任务 5 的持久化格式；最后不足一窗时可按模型规则 padding，但覆盖只记真实样本范围。短于模型最小有效上下文的音频返回“音频过短，无法可靠识别”，不能因为 padding 生成完整乐器清单。取消保留之前已提交的部分分析，绝不标记 Complete。整曲文件不复制到个人目录。
+- [x] **Step 3：执行离线窗口推断。** 复用任务 4 模型预处理及任务 5 的持久化格式；最后不足一窗时可按模型规则 padding，但覆盖只记真实样本范围。短于模型最小有效上下文的音频返回“音频过短，无法可靠识别”，不能因为 padding 生成完整乐器清单。取消保留之前已提交的部分分析，绝不标记 Complete。整曲文件不复制到个人目录。
 - [ ] **Step 4：验证预分析与实时一致性。** 同一段自写或许可测试音频，按整块和任意 packet 边界输入，重采样／模型输出应在任务 3 的数值容差内；暂停和恢复离线任务不能影响当前歌曲。先分析后播放，开头可立即取得完整 roster。文件绑定失败或录音不一致时禁止应用该时间线。
-- [ ] **Step 5：提交。** `feat: preanalyze local WAV instrument activity`。这一交付即使 G1 不通过也可独立工作，但公开状态必须注明其数据来源。
+- [x] **Step 5：提交。** `feat: preanalyze local WAV instrument activity`。这一交付即使 G1 不通过也可独立工作，但公开状态必须注明其数据来源。
+
+任务 6 实验 CLI 已跑通完整文件；Settings 文件选择入口和真实播放后按时钟读取 roster 尚未实现，故相关步骤保留未勾选。
 
 ### Task 7：连接播放生命周期与最新结果（G3）
 
@@ -626,9 +630,9 @@ using var restored = new InstrumentRepository(PathOf("restored"));
 Assert.False(restored.Load(new("fixture", "recording-1", 30000, null), "fixture-profile")!.Complete);
 ```
 
-- [ ] **Step 2：实现一致快照和 readable JSON。** 先用 SQLite backup API 得到 `state/instruments.db`；所有 `instruments/<recording-key>/<profile-hash>.json` 从该快照生成，不再读取 live DB。profile-hash 是 ProfileId UTF-8 文本的 SHA-256，JSON 内保留实际 ProfileId，测试用 fixture 名称也按相同规则处理。manifest 注册 `instrument` kind 和 state 文件白名单；校验 JSON 内容与 DB 的录音、profile、revision、覆盖及哈希一致。文件名使用经过验证的十六进制哈希，拒绝路径穿越和重定向链接。
-- [ ] **Step 3：定义兼容与恢复。** 新版本继续接受没有乐器文件的旧备份。带新 kind 的备份要求支持该功能的版本，并在备份 README 明示最低恢复版本；不静默忽略未知 kind。恢复只进入新目录，不覆盖原资料；缺少模型不妨碍恢复已有时间线，显示重新安装模型入口。模型权重和原始音乐文件不打入个人备份，文件绑定保留来源说明；原路径失效后要求重新选择对应内容，不扫描或猜测替代文件。
-- [ ] **Step 4：扩充分发拒绝规则并先验证失败。** 在现有分发测试中加入以下自写私有样本；既有 `.onnx` 和 models 目录拦截继续保留。
+- [x] **Step 2：实现一致快照和 readable JSON。** 先用 SQLite backup API 得到 `state/instruments.db`；所有 `instruments/<recording-key>/<profile-hash>.json` 从该快照生成，不再读取 live DB。profile-hash 是 ProfileId UTF-8 文本的 SHA-256，JSON 内保留实际 ProfileId，测试用 fixture 名称也按相同规则处理。manifest 注册 `instrument` kind 和 state 文件白名单；校验 JSON 内容与 DB 的录音、profile、revision、覆盖及哈希一致。文件名使用经过验证的十六进制哈希，拒绝路径穿越和重定向链接。
+- [x] **Step 3：定义兼容与恢复。** 新版本继续接受没有乐器文件的旧备份。带新 kind 的备份要求支持该功能的版本，并在备份 README 明示最低恢复版本；不静默忽略未知 kind。恢复只进入新目录，不覆盖原资料；缺少模型不妨碍恢复已有时间线，显示重新安装模型入口。模型权重和原始音乐文件不打入个人备份，文件绑定保留来源说明；原路径失效后要求重新选择对应内容，不扫描或猜测替代文件。
+- [x] **Step 4：扩充分发拒绝规则并先验证失败。** 在现有分发测试中加入以下自写私有样本；既有 `.onnx` 和 models 目录拦截继续保留。
 
 ```powershell
 $cases += @('instruments.db', 'instrument-analysis.json', 'instrument-audio-probe.json',
@@ -638,7 +642,7 @@ $cases += @('instruments.db', 'instrument-analysis.json', 'instrument-audio-prob
 ```
 
 新增 instruments 私有目录、`instrument-*` 私有报告名和音频后缀检查；软件允许公开说明 Markdown 和经审核的代码内模型清单，不能为模型下载功能放开整个 `.onnx`／models 目录。`.gitignore` 加入对应个人报告、音频、模型及 analysis 目录模式，避免把 docs 的 Markdown 计划一起忽略。
-- [ ] **Step 5：运行备份与分发测试并提交。** `Invoke-Dotnet test tests/LumaLyrics.Infrastructure.Tests -c Release --filter 'FullyQualifiedName~PersonalLibrary|FullyQualifiedName~InstrumentBackup'`；`powershell -NoProfile -File scripts/test-distribution.ps1`。提交 `feat: back up instrument timelines and protect distribution boundaries`。
+- [x] **Step 5：运行备份与分发测试并提交。** `Invoke-Dotnet test tests/LumaLyrics.Infrastructure.Tests -c Release --filter 'FullyQualifiedName~PersonalLibrary|FullyQualifiedName~InstrumentBackup'`；`powershell -NoProfile -File scripts/test-distribution.ps1`。提交 `feat: back up instrument timelines and protect distribution boundaries`。
 
 ### Task 10：完成验收、说明与 GitHub 同步（G4）
 
