@@ -1,6 +1,12 @@
 namespace LumaLyrics.Core;
 
-public enum InstrumentKind { Drums, Bass, Guitar, Piano, Strings, Brass, Woodwind, Synth }
+public enum InstrumentKind
+{
+    // Persisted values 0–7 must never change meaning.
+    Drums, Bass, Guitar, Piano, Strings, Brass, Woodwind, Synth,
+    Accordion, Banjo, Cello, Clarinet, Cymbals, Flute, MalletPercussion,
+    Mandolin, Organ, Saxophone, Trombone, Trumpet, Ukulele, Violin
+}
 public enum InstrumentStatus { Disabled, Preparing, Learning, Ready, Paused, Unavailable }
 public enum InstrumentVisualState { Unknown, Dim, Active }
 public sealed record InstrumentEpoch(string SessionId, long Generation, long Revision, long Discontinuity);

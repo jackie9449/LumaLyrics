@@ -38,7 +38,7 @@ internal static class InstrumentMusicProbe
                 || Optional("--expect-artist") is { } artist && MatchRules.Normalize(artist) != MatchRules.Normalize(snapshot.Track.Artist))
             { report["status"] = "RequestedRecordingMismatch"; return; }
             if (snapshot.Status != PlayState.Playing) { report["status"] = "NotPlaying"; return; }
-            var option = InstrumentModelCatalog.Get(Optional("--model-id") ?? InstrumentModelCatalog.RockId);
+            var option = InstrumentModelCatalog.Get(Optional("--model-id"));
             var models = new InstrumentModelStore(root);
             string model = await models.ImportAsync(Required("--model"), option.Profile, option.Bytes, default);
             var target = await AppleMusicAudioTargetResolver.ResolveAsync(snapshot, default);

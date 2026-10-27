@@ -77,7 +77,7 @@ internal static class InstrumentBenchmarkCommands
         using var dataset = JsonDocument.Parse(await File.ReadAllTextAsync(Value("--dataset")));
         using var modelMetadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(model, "instrument-model-export.json")));
         if (!modelMetadata.RootElement.GetProperty("numericParityPassed").GetBoolean()) throw new InvalidDataException("Model numerical gate did not pass.");
-        var profile = LoadProfile(model);
+        var profile = SelectedProfile(model, args);
         await using var engine = new InstrumentEngine(new OnnxInstrumentClassifier(ModelPath(model), profile));
         using var repository = new InstrumentRepository(root);
         var items = new List<object>(); var watch = Stopwatch.StartNew();
@@ -94,6 +94,7 @@ internal static class InstrumentBenchmarkCommands
             double span = engine.WindowSamples * (1000d / engine.SampleRate);
             var points = result.Scores.Where(point => point.EndMs - point.StartMs >= span - .001).ToArray();
             items.Add(new { recordingId = id, audioSha256 = result.Recording.AudioSha256,
+                completeCoverage = result.Complete, roster = InstrumentVocabulary.VisibleKinds(result.Roster).Select(kind => kind.ToString()).ToArray(),
                 centersMs = points.Select(point => point.StartMs + span / 2).ToArray(), endsMs = points.Select(point => point.EndMs).ToArray(),
                 scores = profile.LabelMap.Values.Distinct().ToDictionary(kind => kind.ToString(), kind => points.Select(point => point.Scores[kind]).ToArray()) });
         }
@@ -121,7 +122,7 @@ internal static class InstrumentBenchmarkCommands
         {
             using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(modelRoot, "instrument-model-export.json"), cancel.Token));
             if (!metadata.RootElement.GetProperty("numericParityPassed").GetBoolean()) throw new InvalidDataException("Model export did not pass the numerical gate.");
-            var classifier = new OnnxInstrumentClassifier(ModelPath(modelRoot), LoadProfile(modelRoot));
+            var classifier = new OnnxInstrumentClassifier(ModelPath(modelRoot), SelectedProfile(modelRoot, args));
             await using var engine = new InstrumentEngine(classifier);
             var info = WaveAudioReader.Inspect(path);
             string localId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path))).ToLowerInvariant();
@@ -129,6 +130,7 @@ internal static class InstrumentBenchmarkCommands
             var analysis = new InstrumentFileAnalysis(engine, repository, WaveAudioReader.ReadAsync);
             var result = await analysis.AnalyzeAsync(path, key, null, cancel.Token);
             report = new { status = "AnalyzedExperimental", completeCoverage = result.Complete, windows = result.Scores.Length,
+                roster = InstrumentVocabulary.VisibleKinds(result.Roster).Select(InstrumentVocabulary.Name).ToArray(),
                 durationMs = result.Recording.DurationMs, elapsedMs = watch.Elapsed.TotalMilliseconds,
                 profileId = result.ProfileId, sampleRate = engine.SampleRate, windowSamples = engine.WindowSamples, hopSamples = engine.HopSamples,
                 timingConvention = "window-center-estimate", windowCenterUncertaintyMs = engine.WindowSamples * (500d / engine.SampleRate),
@@ -144,6 +146,13 @@ internal static class InstrumentBenchmarkCommands
         string output = Path.Combine(root, "instrument-file-analysis-" + Guid.NewGuid().ToString("N") + ".json");
         await File.WriteAllTextAsync(output, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         Console.WriteLine(JsonSerializer.Serialize(report));
+    }
+
+    static InstrumentInferenceProfile SelectedProfile(string root, string[] args)
+    {
+        int index = Array.IndexOf(args, "--model-id");
+        return index < 0 ? LoadProfile(root) : index + 1 < args.Length
+            ? InstrumentModelCatalog.Get(args[index + 1]).Profile : throw new ArgumentException("Missing --model-id");
     }
 
     static float[] ReadFloats(string path)

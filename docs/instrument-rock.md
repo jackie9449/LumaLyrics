@@ -1,5 +1,7 @@
 # 吉他、贝斯与鼓：摇滚实验
 
+> 本文保留旧 MTG 三类模型的历史验证与复现。新的 `song-instruments` 预览已改用[按歌曲生成清单的通用实验模型](instrument-roster.md)，产品选择中不再提供固定三类，旧设置自动迁移。以下设置步骤仅适用于旧 `rock-instruments` 预览；CLI 仍可指定旧模型 ID 复现。
+
 在 **设置 → 乐器识别 → 乐器识别模型** 选择「摇滚／金属：吉他、贝斯、鼓（实验）」，点「准备本机已下载模型」，再开启显示。当前电脑已经生成并安装固定模型；开关仍默认关闭。古典室内乐弦乐组是独立选项，切换立即取消旧分析并清除本次录音绑定，不混用缓存。
 
 需要实际启动 `rock-instruments` 预览。先从托盘菜单选择「退出」关闭旧 `instrument-activity` 版本，再启动新版；仅关窗口可能只是进入托盘。旧版只支持弦乐，不会因为下载了新模型就出现新类别。新版继续读取原个人资料，仍需在设置选择摇滚模型并开启显示。
@@ -56,7 +58,7 @@ Invoke-Dotnet build tools/LumaLyrics.Probe -c Release
 
 ```powershell
 # reports 必须是已经存在的软件目录外个人文件夹，诊断不会发送 Play。
-& $script:Dotnet tools/LumaLyrics.Probe/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.Probe.dll --probe-instrument-music --data-dir $reports --model "$checks/mtg-export-official/mtg-jamendo-waveform.onnx" --expect-title Paranoid --expect-artist 'Black Sabbath' --seconds 30
+& $script:Dotnet tools/LumaLyrics.Probe/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.Probe.dll --probe-instrument-music --data-dir $reports --model-id mtg-rock-three-experimental-v1 --model "$checks/mtg-export-official/mtg-jamendo-waveform.onnx" --expect-title Paranoid --expect-artist 'Black Sabbath' --seconds 30
 ```
 
 实际歌曲不匹配时返回 `RequestedRecordingMismatch`，并把真实快照写入个人诊断文件，停止采集；不会把《Paranoid》专辑的其他歌曲当成同名歌曲通过。实际媒体会话在开始采集前再次检查，切歌或暂停即取消。诊断文件不含 PCM，包含私人曲目元数据和逐窗数值，不能加入软件归档。

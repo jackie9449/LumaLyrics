@@ -41,7 +41,7 @@ public sealed class InstrumentPresentation
     {
         bool paused = state != PlayState.Playing;
         bool fresh = lastTicks >= 0 && nowTicks >= lastTicks && Stopwatch.GetElapsedTime(lastTicks, nowTicks).TotalMilliseconds <= 2000;
-        var icons = roster.ToDictionary(kind => kind, kind => paused ? InstrumentVisualState.Dim
+        var icons = InstrumentVocabulary.VisibleKinds(roster).ToDictionary(kind => kind, kind => paused ? InstrumentVisualState.Dim
             : !fresh || !active.TryGetValue(kind, out _) ? InstrumentVisualState.Unknown
             : active[kind] ? InstrumentVisualState.Active : InstrumentVisualState.Dim);
         string message = paused ? "已暂停" : !fresh ? "等待新的音频结果"
@@ -54,11 +54,11 @@ public sealed class InstrumentPresentation
         bool paused = state != PlayState.Playing;
         bool covered = positionMs is { } position && double.IsFinite(position)
             && timeline.Coverage.Any(span => span.StartMs <= position && position < span.EndMs);
-        var icons = timeline.Roster.Order().ToDictionary(kind => kind, kind => paused ? InstrumentVisualState.Dim
+        var icons = InstrumentVocabulary.VisibleKinds(timeline.Roster).ToDictionary(kind => kind, kind => paused ? InstrumentVisualState.Dim
             : !covered || !timeline.Scores.Any(point => point.StartMs <= positionMs && positionMs < point.EndMs && point.Scores.ContainsKey(kind)) ? InstrumentVisualState.Unknown
             : timeline.Intervals.Any(interval => interval.Kind == kind && interval.StartMs <= positionMs && positionMs < interval.EndMs)
                 ? InstrumentVisualState.Active : InstrumentVisualState.Dim);
         return new(paused ? InstrumentStatus.Paused : timeline.Complete ? InstrumentStatus.Ready : InstrumentStatus.Learning,
-            timeline.Complete, icons, paused ? "已暂停" : timeline.Complete ? "整曲清单 · 本地文件分析" : "乐器清单尚未完整");
+            timeline.Complete, icons, paused ? "已暂停" : timeline.Complete ? "已分析整曲 · 识别到的乐器" : "乐器清单尚未完整");
     }
 }

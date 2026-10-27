@@ -28,7 +28,7 @@ public sealed class InstrumentController : IAsyncDisposable
     long serial;
     DateTime retryAfter;
     string message = "等待 Apple Music 播放";
-    string modelId = InstrumentModelCatalog.StringsId;
+    string modelId = InstrumentModelCatalog.GeneralId;
     InstrumentStatus status = InstrumentStatus.Preparing;
 
     public InstrumentController(GsmtcPlaybackSource source, string root)
@@ -121,7 +121,7 @@ public sealed class InstrumentController : IAsyncDisposable
         }
     }
     static InstrumentViewState Empty(InstrumentStatus state, string text) => new(state, false, new Dictionary<InstrumentKind, InstrumentVisualState>(), text);
-    InstrumentViewState Experimental(InstrumentViewState state) => state with { Message = (modelId == InstrumentModelCatalog.RockId ? "实验摇滚三类 · " : "实验弦乐 · ") + state.Message };
+    InstrumentViewState Experimental(InstrumentViewState state) => state with { Message = "实验识别 · " + state.Message };
     async Task SuperviseAsync()
     {
         try

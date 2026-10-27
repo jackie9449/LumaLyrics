@@ -7,11 +7,12 @@ public sealed record InstrumentModelOption(string Id, string Name, string Scope,
     public override string ToString() => Name;
 }
 
-/// <summary>Restricted experiment. General eight-family accuracy gate is still unpassed.</summary>
+/// <summary>Finite instrument vocabulary experiment. General accuracy is still unvalidated.</summary>
 public static class InstrumentModelCatalog
 {
     public const string StringsId = "yamnet-chamber-strings-experimental-v1";
     public const string RockId = "mtg-rock-three-experimental-v1";
+    public const string GeneralId = "matpac-song-instruments-experimental-v1";
     public const long ModelBytes = 16064581;
     public const string ModelSha256 = "5e08c523631c1bcc62489b724024e0d55e93da130c68cc650e1fc52a486ffb1a";
     public const string Scope = "实验识别 · 当前仅启用古典室内乐中的弦乐组";
@@ -34,8 +35,32 @@ public static class InstrumentModelCatalog
             [3] = InstrumentKind.Bass, [14] = InstrumentKind.Drums },
         Thresholds = new() { [InstrumentKind.Guitar] = new(.5f, .3f, 2, 750), [InstrumentKind.Bass] = new(.5f, .3f, 2, 750), [InstrumentKind.Drums] = new(.5f, .3f, 2, 750) }
     };
-    public static InstrumentModelOption Get(string? id) => id == RockId
-        ? new(RockId, "摇滚／金属：吉他、贝斯、鼓（实验）", "摇滚三类实验 · 吉他／贝斯／鼓 · 通用准确度与边界未验收", 20374087, "mtg-export-official", "mtg-jamendo-waveform.onnx", RockExperimental)
-        : new(StringsId, "古典室内乐：弦乐组（实验）", Scope, ModelBytes, "yamnet-fft-export", "yamnet-waveform.onnx", Experimental);
-    public static IReadOnlyList<InstrumentModelOption> All => [Get(StringsId), Get(RockId)];
+    public static InstrumentInferenceProfile GeneralExperimental
+    {
+        get
+        {
+            var labels = new Dictionary<int, InstrumentKind> { [0] = InstrumentKind.Accordion, [1] = InstrumentKind.Banjo,
+                [2] = InstrumentKind.Bass, [3] = InstrumentKind.Cello, [4] = InstrumentKind.Clarinet, [5] = InstrumentKind.Cymbals,
+                [6] = InstrumentKind.Drums, [7] = InstrumentKind.Flute, [8] = InstrumentKind.Guitar, [9] = InstrumentKind.MalletPercussion,
+                [10] = InstrumentKind.Mandolin, [11] = InstrumentKind.Organ, [12] = InstrumentKind.Piano, [13] = InstrumentKind.Saxophone,
+                [14] = InstrumentKind.Synth, [15] = InstrumentKind.Trombone, [16] = InstrumentKind.Trumpet,
+                [17] = InstrumentKind.Ukulele, [18] = InstrumentKind.Violin };
+            return new()
+            {
+                Id = GeneralId, Sha256 = "eb7f7460012bfbf93f029404542faa2e57ffd6ebb4050b18d7bdd6e6b301119f",
+                SampleRate = 16000, WindowSamples = 48880, HopSamples = 8000,
+                InputName = "waveform", OutputName = "scores", OutputClassCount = 20,
+                PreprocessingVersion = "matpac-304-slaney-power-ln-f64dft-layer10-v1", LabelMap = labels,
+                Thresholds = labels.Values.ToDictionary(kind => kind, kind => kind is InstrumentKind.Guitar or InstrumentKind.Bass or InstrumentKind.Drums or InstrumentKind.Cymbals
+                    ? new ActivityParameters(.5f, .3f, 2, 750) : new ActivityParameters(.7f, .45f, 3, 750))
+            };
+        }
+    }
+    public static InstrumentModelOption Get(string? id) => id switch
+    {
+        StringsId => new(StringsId, "室内乐弦乐兼容模型（实验）", Scope, ModelBytes, "yamnet-fft-export", "yamnet-waveform.onnx", Experimental),
+        RockId => new(RockId, "旧版摇滚三类模型（实验）", "旧版三类 · 吉他／贝斯／鼓", 20374087, "mtg-export-official", "mtg-jamendo-waveform.onnx", RockExperimental),
+        _ => new(GeneralId, "通用多乐器：按歌曲识别（实验）", "随当前歌曲生成清单 · 尝试识别 19 类乐器 · 准确度与进出时刻仍未验收", 322477291, "matpac-export", "matpac-openmic-waveform.onnx", GeneralExperimental)
+    };
+    public static IReadOnlyList<InstrumentModelOption> All => [Get(GeneralId), Get(StringsId)];
 }

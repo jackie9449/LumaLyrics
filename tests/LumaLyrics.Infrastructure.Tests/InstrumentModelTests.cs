@@ -10,13 +10,35 @@ public sealed class InstrumentModelTests : IDisposable
     public void RockProfileSeparatesGuitarBassAndDrumsAndOldSettingsRemainCompatible()
     {
         var old = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!;
-        Assert.Equal(InstrumentModelCatalog.StringsId, old.InstrumentModelId);
+        Assert.Equal(InstrumentModelCatalog.GeneralId, old.InstrumentModelId);
         var profile = InstrumentModelCatalog.Get(InstrumentModelCatalog.RockId).Profile; profile.Validate();
         Assert.Equal(new[] { InstrumentKind.Drums, InstrumentKind.Bass, InstrumentKind.Guitar }, profile.LabelMap.Values.Distinct().Order());
         Assert.Equal(InstrumentKind.Bass, profile.LabelMap[3]); Assert.Equal(InstrumentKind.Guitar, profile.LabelMap[15]);
         Assert.Equal(InstrumentKind.Drums, profile.LabelMap[14]); Assert.Equal(33024, profile.WindowSamples);
         Assert.NotEqual(profile.ProfileId, InstrumentModelCatalog.Experimental.ProfileId);
-        Assert.Equal(InstrumentModelCatalog.StringsId, InstrumentModelCatalog.Get("unknown").Id);
+        Assert.Equal(InstrumentModelCatalog.GeneralId, InstrumentModelCatalog.Get("unknown").Id);
+    }
+    [Fact]
+    public void GeneralModelHasNineteenNamedInstrumentsAndDoesNotMapVoiceOrInventSongRoster()
+    {
+        var profile = InstrumentModelCatalog.GeneralExperimental; profile.Validate();
+        Assert.Equal(19, profile.LabelMap.Values.Distinct().Count());
+        Assert.DoesNotContain(19, profile.LabelMap.Keys);
+        Assert.Equal(InstrumentKind.Violin, profile.LabelMap[18]); Assert.Equal(InstrumentKind.Piano, profile.LabelMap[12]);
+        Assert.Equal(InstrumentKind.Flute, profile.LabelMap[7]); Assert.Equal(InstrumentKind.Guitar, profile.LabelMap[8]);
+        Assert.NotEqual(profile.ProfileId, InstrumentModelCatalog.RockExperimental.ProfileId);
+        Assert.DoesNotContain(InstrumentModelCatalog.All, option => option.Id == InstrumentModelCatalog.RockId);
+    }
+
+    [Fact]
+    public void LoadingLegacyThreeClassChoiceMigratesScopeWithoutEnablingAnalysis()
+    {
+        Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "settings.json"), "{\"InstrumentModelId\":\"" + InstrumentModelCatalog.RockId + "\",\"ShowInstrumentActivity\":false}");
+        var loaded = new SettingsStore(root).Load();
+        Assert.Equal(InstrumentModelCatalog.GeneralId, loaded.InstrumentModelId); Assert.False(loaded.ShowInstrumentActivity);
+        File.WriteAllText(Path.Combine(root, "settings.json"), "{\"InstrumentModelId\":\"" + InstrumentModelCatalog.StringsId + "\"}");
+        Assert.Equal(InstrumentModelCatalog.StringsId, new SettingsStore(root).Load().InstrumentModelId);
     }
     [Fact]
     public void ExistingSettingsKeepInstrumentAnalysisOffAndCatalogIsRestricted()

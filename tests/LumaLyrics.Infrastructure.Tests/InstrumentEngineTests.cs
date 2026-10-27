@@ -18,7 +18,20 @@ public sealed class InstrumentEngineTests
         public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
     }
     static readonly InstrumentEpoch A = new("AppleMusic", 1, 1, 0);
-    static InstrumentWindow Window() => new(A, 0, 1000, 0, 1000, 1000, new float[1000]);
+    static InstrumentWindow Window() => new(A, 0, 1000, 0, 1000, 1000, Enumerable.Repeat(.01f, 1000).ToArray());
+
+    [Fact]
+    public async Task DigitalSilenceCannotInventAnInstrumentAndQuietAudioKeepsItsScores()
+    {
+        var classifier = new DeferredClassifier();
+        classifier.Pending.SetResult(new Dictionary<InstrumentKind, float> { [InstrumentKind.Guitar] = .99f, [InstrumentKind.Drums] = .9f });
+        await using var engine = new InstrumentEngine(classifier);
+        var silent = await engine.AnalyzeAsync(Window() with { Mono = new float[1000] }, default);
+        Assert.All(silent.Scores.Values, score => Assert.Equal(0, score));
+        var quiet = await engine.AnalyzeAsync(Window() with { Mono = Enumerable.Repeat(.0000001f, 1000).ToArray() }, default);
+        Assert.Equal(.99f, quiet.Scores[InstrumentKind.Guitar]);
+        Assert.Equal(.9f, quiet.Scores[InstrumentKind.Drums]);
+    }
 
     [Fact]
     public async Task ASlowOldRecordingCannotPublishEvenWhenInferenceIgnoresCancellation()

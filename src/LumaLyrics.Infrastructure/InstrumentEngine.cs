@@ -28,6 +28,7 @@ public sealed class InstrumentEngine : IAsyncDisposable
         ProfileId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
         {
             ClassifierProfile = classifier.ProfileId, Resampling = InstrumentResampler.Version, Downmix = "mean-all-channels-v1",
+            DigitalSilence = "exact-zero-scores-v1",
             classifier.SampleRate, classifier.WindowSamples, classifier.HopSamples,
             Activity = parameters.OrderBy(pair => pair.Key).ToArray()
         }))).ToLowerInvariant();
@@ -51,6 +52,9 @@ public sealed class InstrumentEngine : IAsyncDisposable
                 throw new ArgumentException("Invalid instrument analysis window.", nameof(window));
             foreach (float sample in window.Mono)
                 if (!float.IsFinite(sample) || sample is < -1 or > 1) throw new ArgumentException("Invalid audio sample.", nameof(window));
+            // A learned prior can be high on an entirely empty waveform. Only
+            // exact digital silence is suppressed; quiet music retains scores.
+            bool digitalSilence = !window.Mono.Any(sample => sample != 0);
             await inferenceGate.WaitAsync(linked.Token);
             try
             {
@@ -62,7 +66,7 @@ public sealed class InstrumentEngine : IAsyncDisposable
                 {
                     if (!Enum.IsDefined(score.Key) || !float.IsFinite(score.Value) || score.Value is < 0 or > 1)
                         throw new InvalidDataException("Invalid instrument classifier output.");
-                    copy.Add(score.Key, score.Value);
+                    copy.Add(score.Key, digitalSilence ? 0 : score.Value);
                 }
                 return new(window.Epoch, window.EndTicks, window.StartMs, window.EndMs, ProfileId,
                     new ReadOnlyDictionary<InstrumentKind, float>(copy));

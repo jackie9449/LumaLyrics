@@ -67,10 +67,10 @@ public partial class MainWindow
                 checks[$"instrument.{app.Id}.settingsUsesAppResources"] = panel.FindResource("AccentBrush") == FindResource("AccentBrush") && panel.IsVisible;
                 settingsDialog.Width = 640; await Task.Delay(60); settingsDialog.UpdateLayout();
                 var models = Descendants<ComboBox>(panel).Single();
-                models.SelectedValue = InstrumentModelCatalog.RockId;
+                models.SelectedValue = InstrumentModelCatalog.GeneralId;
                 await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); settingsDialog.UpdateLayout();
-                checks[$"instrument.{app.Id}.rockSelectionPersists"] = settings.InstrumentModelId == InstrumentModelCatalog.RockId;
-                checks[$"instrument.{app.Id}.modelDisplaysUserName"] = models.SelectedItem?.ToString() == InstrumentModelCatalog.Get(InstrumentModelCatalog.RockId).Name;
+                checks[$"instrument.{app.Id}.generalSelectionPersists"] = settings.InstrumentModelId == InstrumentModelCatalog.GeneralId;
+                checks[$"instrument.{app.Id}.modelDisplaysUserName"] = models.SelectedItem?.ToString() == InstrumentModelCatalog.Get(InstrumentModelCatalog.GeneralId).Name;
                 checks[$"instrument.{app.Id}.modelChoiceFits"] = models.TransformToAncestor(panel).TransformBounds(new Rect(models.RenderSize)).Right <= panel.ActualWidth + .5;
                 checks[$"instrument.{app.Id}.settingsButtonsFit"] = Descendants<Button>(panel).All(button => button.TransformToAncestor(panel).TransformBounds(new Rect(button.RenderSize)).Right <= panel.ActualWidth + .5);
                 VisualVerification.Save((FrameworkElement)settingsDialog.Content, Path.Combine(directory, $"instruments-settings-{app.Id}.png"), true); settingsDialog.Close();
@@ -128,7 +128,7 @@ public partial class MainWindow
         var controller = new InstrumentController(source, () => source.Latest, coordinator.DataRoot, Worker);
         try
         {
-            controller.Configure(true, false); controller.SetDemand(true); source.Publish(Snapshot(1));
+            controller.Configure(true, false, InstrumentModelCatalog.StringsId); controller.SetDemand(true); source.Publish(Snapshot(1));
             await Until(() => Count() == 1); var first = Callback(0); first.Accept(Frame(first.Epoch));
             checks["instrument.ownership.currentFrameVisible"] = controller.View(0).Icons.Values.Contains(InstrumentVisualState.Active);
             source.SetRaw(Snapshot(2)); first.Accept(Frame(first.Epoch));
@@ -159,8 +159,15 @@ public partial class MainWindow
                 new Dictionary<InstrumentKind, float> { [InstrumentKind.Guitar] = .9f, [InstrumentKind.Bass] = .9f, [InstrumentKind.Drums] = .9f });
             sixth.Accept(RockFrame()); await Task.Delay(10); sixth.Accept(RockFrame());
             checks["instrument.ownership.rockThreeCategoriesVisible"] = controller.View(0).Icons.Count == 3 && controller.View(0).Icons.Values.All(value => value == InstrumentVisualState.Active);
+            controller.Configure(true, true, InstrumentModelCatalog.GeneralId);
+            checks["instrument.ownership.generalModelCancelsOldThreeClasses"] = sixth.Token.IsCancellationRequested && controller.View(0).Icons.Count == 0;
+            await Until(() => Count() == 7); var seventh = Callback(6);
+            InstrumentFrame ChamberFrame() => new(seventh.Epoch, System.Diagnostics.Stopwatch.GetTimestamp(), null, null, "self-authored-chamber-fixture",
+                new Dictionary<InstrumentKind, float> { [InstrumentKind.Violin] = .95f, [InstrumentKind.Cello] = .95f });
+            for (int i = 0; i < 3; i++) { seventh.Accept(ChamberFrame()); await Task.Delay(10); }
+            checks["instrument.ownership.songSpecificConcreteInstruments"] = controller.View(0).Icons.Keys.Order().SequenceEqual(new[] { InstrumentKind.Cello, InstrumentKind.Violin });
             controller.Configure(false, true);
-            checks["instrument.ownership.disableCancelsAndHides"] = sixth.Token.IsCancellationRequested && controller.View(0).Status == InstrumentStatus.Disabled;
+            checks["instrument.ownership.disableCancelsAndHides"] = seventh.Token.IsCancellationRequested && controller.View(0).Status == InstrumentStatus.Disabled;
         }
         finally { await Task.WhenAll(controller.DisposeAsync().AsTask(), controller.DisposeAsync().AsTask()); }
         checks["instrument.ownership.disposeUnsubscribes"] = source.Subscribers == 0;

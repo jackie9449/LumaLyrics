@@ -60,7 +60,7 @@ python tools/instruments/prepare_panns.py --reference-dir $privatePannsReference
 PANNs 命令本轮会保存未通过数值门槛的报告并以失败退出；失败权重不会装入主程序。
 
 ```powershell
-Invoke-Dotnet tools/LumaLyrics.Probe/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.Probe.dll --replay-instrument-file --file $licensedWaveFile --model $verifiedOnnxFile --data-dir $existingPrivateReplayDirectory --seconds 60
+Invoke-Dotnet tools/LumaLyrics.Probe/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.Probe.dll --replay-instrument-file --model-id yamnet-chamber-strings-experimental-v1 --file $licensedWaveFile --model $verifiedOnnxFile --data-dir $existingPrivateReplayDirectory --seconds 60
 ```
 
 回放按真实速度在内存中处理，没有声音输出；不要拿它替代原生音频验证。

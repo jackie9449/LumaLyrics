@@ -6,6 +6,53 @@ namespace LumaLyrics.Core.Tests;
 public sealed class InstrumentPresentationTests
 {
     [Fact]
+    public void DetailedVocabularyRetainsPersistedIdsAndOmitsOnlyKnownFamilyFallbacks()
+    {
+        Assert.Equal(Enumerable.Range(0, 8), new[] { InstrumentKind.Drums, InstrumentKind.Bass, InstrumentKind.Guitar, InstrumentKind.Piano,
+            InstrumentKind.Strings, InstrumentKind.Brass, InstrumentKind.Woodwind, InstrumentKind.Synth }.Select(kind => (int)kind));
+        Assert.Equal(new[] { InstrumentKind.Piano, InstrumentKind.Cello, InstrumentKind.Trumpet, InstrumentKind.Violin },
+            InstrumentVocabulary.VisibleKinds([InstrumentKind.Strings, InstrumentKind.Cello, InstrumentKind.Violin, InstrumentKind.Brass, InstrumentKind.Trumpet, InstrumentKind.Piano]));
+        Assert.Equal(new[] { InstrumentKind.Woodwind }, InstrumentVocabulary.VisibleKinds([InstrumentKind.Woodwind]));
+        Assert.Equal("钢琴", InstrumentVocabulary.Name(InstrumentKind.Piano));
+        Assert.Equal("小提琴", InstrumentVocabulary.Name(InstrumentKind.Violin));
+        Assert.Equal(Enum.GetValues<InstrumentKind>().Length, Enum.GetValues<InstrumentKind>().Select(InstrumentVocabulary.Name).Distinct().Count());
+        Assert.Throws<ArgumentOutOfRangeException>(() => InstrumentVocabulary.Name((InstrumentKind)999));
+    }
+
+    [Fact]
+    public void PerSongRostersContainOnlyObservedInstrumentsAndResetForAnotherSong()
+    {
+        var kinds = new[] { InstrumentKind.Flute, InstrumentKind.Violin, InstrumentKind.Guitar, InstrumentKind.Piano };
+        var view = new InstrumentPresentation(kinds.ToDictionary(kind => kind, _ => new ActivityParameters(.5f, .3f, 1, 0)));
+        view.Begin(Epoch, false);
+        view.Apply(new(Epoch, T(1000), null, null, "fixture", new Dictionary<InstrumentKind, float>
+            { [InstrumentKind.Flute] = .9f, [InstrumentKind.Violin] = .8f, [InstrumentKind.Guitar] = .1f, [InstrumentKind.Piano] = .1f }));
+        Assert.Equal(new[] { InstrumentKind.Flute, InstrumentKind.Violin }, view.View(PlayState.Playing, T(1000)).Icons.Keys.Order());
+        view.Begin(Epoch with { Revision = 2 }, false);
+        Assert.Empty(view.View(PlayState.Playing, T(1100)).Icons);
+        view.Apply(new(Epoch with { Revision = 2 }, T(1500), null, null, "fixture", new Dictionary<InstrumentKind, float>
+            { [InstrumentKind.Guitar] = .9f, [InstrumentKind.Piano] = .7f }));
+        Assert.Equal(new[] { InstrumentKind.Guitar, InstrumentKind.Piano }, view.View(PlayState.Playing, T(1500)).Icons.Keys.Order());
+    }
+
+    [Fact]
+    public void WholeFileRosterIsAvailableAtStartAndDetailedFallbacksStayConsistent()
+    {
+        var timeline = new InstrumentTimeline(new("fixture", "ensemble", 10000, null), "fixture", [new(0, 10000)],
+            [new(0, 10000, new() { [InstrumentKind.Strings] = .9f, [InstrumentKind.Violin] = .9f, [InstrumentKind.Cello] = .8f })],
+            [new(InstrumentKind.Violin, 2000, 8000), new(InstrumentKind.Cello, 5000, 9000)],
+            [InstrumentKind.Strings, InstrumentKind.Violin, InstrumentKind.Cello], true, 1);
+        var first = InstrumentPresentation.FromTimeline(timeline, 0, PlayState.Playing);
+        Assert.True(first.Complete);
+        Assert.Equal(new[] { InstrumentKind.Cello, InstrumentKind.Violin }, first.Icons.Keys.Order());
+        Assert.All(first.Icons.Values, value => Assert.Equal(InstrumentVisualState.Dim, value));
+        var later = InstrumentPresentation.FromTimeline(timeline, 3000, PlayState.Playing);
+        Assert.Equal(InstrumentVisualState.Active, later.Icons[InstrumentKind.Violin]);
+        Assert.Equal(InstrumentVisualState.Dim, later.Icons[InstrumentKind.Cello]);
+        Assert.All(InstrumentPresentation.FromTimeline(timeline, null, PlayState.Playing).Icons.Values,
+            value => Assert.Equal(InstrumentVisualState.Unknown, value));
+    }
+    [Fact]
     public void GuitarBassAndDrumsAreIndependentAndCanBeActiveTogether()
     {
         var kinds = new[] { InstrumentKind.Guitar, InstrumentKind.Bass, InstrumentKind.Drums };
