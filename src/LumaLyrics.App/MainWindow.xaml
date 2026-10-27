@@ -62,7 +62,7 @@
           <Image x:Name="Artwork" Stretch="UniformToFill"/>
          </Grid>
         </Border>
-        <Grid x:Name="TrackMetadata" Grid.Row="1"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid x:Name="TrackMetadata" Grid.Row="1"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TextBlock x:Name="TrackTitle" Grid.Row="0" Text="{Binding Title}" ToolTip="{Binding Title}" FontFamily="{DynamicResource DisplayFont}" FontSize="25" FontWeight="{DynamicResource HeadlineWeight}" TextWrapping="Wrap" MaxHeight="70" TextTrimming="CharacterEllipsis" Margin="0,20,0,7"/>
         <TextBlock x:Name="TrackArtist" Grid.Row="1" Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" MaxHeight="36" LineHeight="18"/>
         <TextBlock x:Name="TrackTime" Grid.Row="2" Text="{Binding Time}" FontSize="10" Foreground="{DynamicResource MutedBrush}" Margin="0,18,0,2"/>
@@ -74,6 +74,7 @@
         </StackPanel>
         <TextBlock x:Name="ConnectionStatus" Grid.Row="5" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
         <TextBlock x:Name="QualityStatus" Grid.Row="6" Text="{Binding Quality}" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,5,0,0"/>
+        <ContentControl x:Name="InstrumentHost" Grid.Row="7" HorizontalContentAlignment="Stretch" ClipToBounds="True" Visibility="Collapsed"/>
         </Grid>
        </Grid>
        <Border x:Name="LyricsPanel" Grid.Column="1" CornerRadius="{DynamicResource PanelRadius}" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1">

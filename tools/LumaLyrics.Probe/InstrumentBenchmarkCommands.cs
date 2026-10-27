@@ -14,7 +14,7 @@ internal static class InstrumentBenchmarkCommands
         string root = Path.GetFullPath(directory);
         PersonalLibraryArchive.EnsureOutsideSoftware(root);
         var profile = LoadProfile(root);
-        await using var classifier = new OnnxInstrumentClassifier(Path.Combine(root, "yamnet-waveform.onnx"), profile);
+        await using var classifier = new OnnxInstrumentClassifier(ModelPath(root), profile);
         float[] inputs = ReadFloats(Path.Combine(root, "parity-inputs.f32"));
         float[] expected = ReadFloats(Path.Combine(root, "parity-scores.f32"));
         int count = inputs.Length / profile.WindowSamples;
@@ -51,13 +51,57 @@ internal static class InstrumentBenchmarkCommands
         var labels = data.GetProperty("labelMap").Deserialize<Dictionary<int, InstrumentKind>>(json)!;
         return new InstrumentInferenceProfile
         {
-            Id = "yamnet-waveform-experimental", Sha256 = data.GetProperty("modelSha256").GetString()!,
+            Id = "waveform-experimental", Sha256 = data.GetProperty("modelSha256").GetString()!,
             SampleRate = data.GetProperty("sampleRate").GetInt32(), WindowSamples = data.GetProperty("windowSamples").GetInt32(),
             HopSamples = data.GetProperty("hopSamples").GetInt32(), InputName = data.GetProperty("inputName").GetString()!,
             OutputName = data.GetProperty("outputName").GetString()!, OutputClassCount = data.GetProperty("outputClassCount").GetInt32(),
             PreprocessingVersion = data.GetProperty("preprocessingVersion").GetString()!, LabelMap = labels,
             Thresholds = labels.Values.Distinct().ToDictionary(kind => kind, _ => new ActivityParameters(.65f, .4f, 2, 750))
         };
+    }
+
+    static string ModelPath(string root)
+    {
+        using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "instrument-model-export.json")));
+        string name = metadata.RootElement.TryGetProperty("modelFile", out var file) ? file.GetString()! : "yamnet-waveform.onnx";
+        if (Path.GetFileName(name) != name || Path.GetExtension(name) != ".onnx") throw new InvalidDataException("Invalid model filename.");
+        return Path.Combine(root, name);
+    }
+
+    internal static async Task ScoreDatasetAsync(string[] args)
+    {
+        string Value(string flag)
+        { int index = Array.IndexOf(args, flag); return index >= 0 && index + 1 < args.Length ? args[index + 1] : throw new ArgumentException("Missing " + flag); }
+        string root = Path.GetFullPath(Value("--data-dir")), model = Path.GetFullPath(Value("--model-dir"));
+        PersonalLibraryArchive.EnsureOutsideSoftware(root);
+        using var dataset = JsonDocument.Parse(await File.ReadAllTextAsync(Value("--dataset")));
+        using var modelMetadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(model, "instrument-model-export.json")));
+        if (!modelMetadata.RootElement.GetProperty("numericParityPassed").GetBoolean()) throw new InvalidDataException("Model numerical gate did not pass.");
+        var profile = LoadProfile(model);
+        await using var engine = new InstrumentEngine(new OnnxInstrumentClassifier(ModelPath(model), profile));
+        using var repository = new InstrumentRepository(root);
+        var items = new List<object>(); var watch = Stopwatch.StartNew();
+        foreach (var record in dataset.RootElement.GetProperty("recordings").EnumerateArray())
+        {
+            string path = Path.GetFullPath(record.GetProperty("audioPath").GetString()!);
+            var info = WaveAudioReader.Inspect(path);
+            if (record.GetProperty("startMs").GetDouble() != 0 || Math.Abs(record.GetProperty("durationMs").GetDouble() - info.DurationMs) > 1)
+                throw new InvalidDataException("Dataset scoring requires exact whole-file ranges.");
+            string id = record.GetProperty("recordingId").GetString()!;
+            var key = new InstrumentRecordingKey("public-evaluation", id, (long)Math.Ceiling(info.DurationMs), null);
+            var analysis = new InstrumentFileAnalysis(engine, repository, WaveAudioReader.ReadAsync);
+            var result = await analysis.AnalyzeAsync(path, key, null, default);
+            double span = engine.WindowSamples * (1000d / engine.SampleRate);
+            var points = result.Scores.Where(point => point.EndMs - point.StartMs >= span - .001).ToArray();
+            items.Add(new { recordingId = id, audioSha256 = result.Recording.AudioSha256,
+                centersMs = points.Select(point => point.StartMs + span / 2).ToArray(), endsMs = points.Select(point => point.EndMs).ToArray(),
+                scores = profile.LabelMap.Values.Distinct().ToDictionary(kind => kind.ToString(), kind => points.Select(point => point.Scores[kind]).ToArray()) });
+        }
+        string output = Path.Combine(root, "instrument-csharp-dataset-scores.json");
+        await using var file = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
+        await JsonSerializer.SerializeAsync(file, new { modelSha256 = profile.Sha256, sourcePreprocessing = InstrumentResampler.Version,
+            profileId = engine.ProfileId, elapsedMs = watch.Elapsed.TotalMilliseconds, recordings = items });
+        Console.WriteLine(JsonSerializer.Serialize(new { status = "ScoredExperimental", recordings = items.Count, elapsedMs = watch.Elapsed.TotalMilliseconds, accuracyValidated = false }));
     }
 
     internal static async Task RunFileAsync(string[] args)
@@ -77,7 +121,7 @@ internal static class InstrumentBenchmarkCommands
         {
             using var metadata = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(modelRoot, "instrument-model-export.json"), cancel.Token));
             if (!metadata.RootElement.GetProperty("numericParityPassed").GetBoolean()) throw new InvalidDataException("Model export did not pass the numerical gate.");
-            var classifier = new OnnxInstrumentClassifier(Path.Combine(modelRoot, "yamnet-waveform.onnx"), LoadProfile(modelRoot));
+            var classifier = new OnnxInstrumentClassifier(ModelPath(modelRoot), LoadProfile(modelRoot));
             await using var engine = new InstrumentEngine(classifier);
             var info = WaveAudioReader.Inspect(path);
             string localId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(path))).ToLowerInvariant();

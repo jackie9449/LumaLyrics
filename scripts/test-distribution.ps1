@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $fixtureParent=[IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $fixtureRoot=Join-Path $fixtureParent ('Luma-distribution-test-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
@@ -13,6 +13,7 @@ try {
     $cases+=@('originals/source.json')
     $cases+=@('native-read-safety.json','native-memory-safety.json','native-hang.json')
     $cases+=@('instrument-audio-probe.json','instrument-corpus.json','instrument-review-dataset.json','instrument-stage.log','instrument-model-export.json','yamnet.h5','parity-inputs.f32','capture.pcm','private.wav','private.flac','private.m4a','private.mp3','instruments/timeline.json','instrument-models/profile.json')
+    $cases+=@('cnn6.pth','weights.pt','private.safetensors')
     foreach($name in $cases){
         $fixtureFile=Join-Path $fixtureRoot $name
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($fixtureFile)) | Out-Null

@@ -1,4 +1,4 @@
-param([ValidateSet('win-x64')][string]$Runtime='win-x64',[switch]$Release,[ValidatePattern('^[a-z0-9]+(?:-[a-z0-9]+)*$')][ValidateLength(1,40)][string]$PreviewLabel)
+﻿param([ValidateSet('win-x64')][string]$Runtime='win-x64',[switch]$Release,[ValidatePattern('^[a-z0-9]+(?:-[a-z0-9]+)*$')][ValidateLength(1,40)][string]$PreviewLabel)
 . "$PSScriptRoot/common.ps1"
 if($Release -and $PreviewLabel){throw 'PreviewLabel is only available for preview packages.'}
 $releaseVersion = ([xml](Get-Content -LiteralPath (Join-Path $projectRoot 'Directory.Build.props') -Raw)).Project.PropertyGroup.Version
@@ -41,6 +41,7 @@ Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurs
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/lyrics-review.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/apple-original-lyrics.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/instrument-activity.md,docs/instrument-evaluation.md,docs/instrument-evaluation-urmp.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/release-notes.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force

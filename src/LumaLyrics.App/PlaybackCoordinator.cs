@@ -23,6 +23,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public AppSettings Settings { get; }
     public string DataRoot=>store.Root;
     public GsmtcPlaybackSource Source { get; }
+    public InstrumentController Instruments { get; }
     public PlaybackSnapshot? Snapshot { get; private set; }
     public Track? ManualTrack { get; private set; }
     public Track? ActiveTrack => Snapshot?.Track ?? ManualTrack;
@@ -40,6 +41,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
         this.manualProvider=manualProvider??provider;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
+        Instruments = new(Source, store.Root); Instruments.Configure(settings.ShowInstrumentActivity, settings.AnalyzeInstrumentsInBackground);
         translations=new(store.Root);TranslationProgress=translations.Progress();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
         using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();
@@ -299,7 +301,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public void Resume() => _ = ReconnectAsync();
     public async ValueTask DisposeAsync()
     {
-        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();translationCancellation?.Cancel();lifetime.Cancel();await Source.DisposeAsync();
+        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();translationCancellation?.Cancel();lifetime.Cancel();await Instruments.DisposeAsync();await Source.DisposeAsync();
         if(libraryTask is not null){try{await libraryTask;}catch(OperationCanceledException){}}
         if(artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
         if(libraryMonitor is not null){try{await libraryMonitor;}catch(OperationCanceledException){}}

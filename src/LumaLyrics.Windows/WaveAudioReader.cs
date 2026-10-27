@@ -11,7 +11,7 @@ public sealed record WaveAudioInfo(int SampleRate, int Channels, int BitsPerSamp
     public double DurationMs => SampleFrames * (1000d / SampleRate);
 }
 
-/// <summary>Strict RIFF PCM16/IEEE float32 reader; audio stays in bounded read-only chunks.</summary>
+/// <summary>Strict RIFF PCM16/24 and IEEE float32 reader; audio stays in bounded read-only chunks.</summary>
 public static class WaveAudioReader
 {
     public static WaveAudioInfo Inspect(string path)
@@ -37,6 +37,9 @@ public static class WaveAudioReader
                 stream.ReadExactly(chunk);
                 uint size = BinaryPrimitives.ReadUInt32LittleEndian(chunk[4..]);
                 long payload = stream.Position, next = checked(payload + size + (size & 1));
+                // Some PCM24 writers omit the final data padding byte. Accept only a
+                // complete terminal payload; frame alignment is still checked below.
+                if (next == end + 1 && payload + size == end && chunk[..4].SequenceEqual("data"u8)) next = end;
                 if (next > end) throw new InvalidDataException("WAV chunk exceeds the RIFF boundary.");
                 if (chunk[..4].SequenceEqual("fmt "u8))
                 {
@@ -58,9 +61,9 @@ public static class WaveAudioReader
                     }
                     floating = tag == 3;
                     if (channels is < 1 or > 8 || sampleRate is < 8000 or > 192000
-                        || !(tag == 1 && bits == 16 || tag == 3 && bits == 32)
+                        || !(tag == 1 && bits is 16 or 24 || tag == 3 && bits == 32)
                         || blockAlign != channels * (bits / 8) || byteRate != sampleRate * blockAlign)
-                        throw new InvalidDataException("WAV requires 1–8 channels, 8–192 kHz PCM16 or IEEE float32.");
+                        throw new InvalidDataException("WAV requires 1–8 channels, 8–192 kHz PCM16/24 or IEEE float32.");
                     rate = (int)sampleRate; foundFormat = true;
                 }
                 else if (chunk[..4].SequenceEqual("data"u8))

@@ -85,6 +85,6 @@ C# / WPF，.NET 10，Windows x64。使用仓库的 SDK 选择脚本（有 `.tool
 
 UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.0.0 验证记录](docs/verification-v100/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
 
-乐器活动显示目前处于开发验证阶段：已实现进程音频采集、模型数值检查、精确文件缓存、WAV 实验分析和个人备份，尚未提供主页面图标。准确度需要人工时间标注与独立留出评价；开发探针和私有评估方法见 [乐器验证记录](docs/instrument-evaluation.md)。
+乐器活动显示已加入默认关闭的实验入口：设置 → 乐器识别。当前仅启用古典室内乐范围的弦乐组；实时图标逐步补全清单，完整 WAV 预分析并明确确认当前录音后可从开头显示暗色清单。通用八类识别和完整实机矩阵仍未验收。见 [使用与限制](docs/instrument-activity.md)及[实测记录](docs/instrument-evaluation.md)。
 
 [资料库导入工具](docs/library-assets.md) · [原词校对](docs/lyrics-review.md) · [第三方组件](THIRD-PARTY-NOTICES.md) · [协作规范](AGENTS.md) · [Codex 换机接手](CODEX_HANDOFF.md)

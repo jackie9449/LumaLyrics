@@ -20,14 +20,15 @@ public partial class MainWindow
         double available=bodyWidth-queueWidth;
         double height=Body.ActualHeight>0?Body.ActualHeight:Math.Max(240,ActualHeight-230);
         bool compact=ActualWidth<(settings.ShowPlaybackQueue?1180:940) || height<500;
-        double cover=compact?Math.Clamp(available*.25,96,144):Math.Min(Math.Clamp(available*.34,200,640),Math.Max(160,height-235));
+        double instrumentReserve=InstrumentHost.Visibility==Visibility.Visible?90:0;
+        double cover=compact?Math.Clamp(available*.25,96,144):Math.Min(Math.Clamp(available*.34,200,640),Math.Max(160,height-235-instrumentReserve));
         double dpi=VisualTreeHelper.GetDpi(this).DpiScaleX;cover=Math.Round(cover*dpi)/dpi;
 
         Grid.SetColumn(InfoPanel,0);Grid.SetRow(InfoPanel,0);Grid.SetColumnSpan(InfoPanel,compact?2:1);
         Grid.SetColumn(LyricsPanel,compact?0:1);Grid.SetRow(LyricsPanel,compact?1:0);Grid.SetColumnSpan(LyricsPanel,compact?2:1);
         InfoColumn.Width=compact?new(1,GridUnitType.Star):new(cover+gap);
         PlaybackQueueColumn.Width=new(queueWidth);
-        InfoRow.Height=compact?new(Math.Clamp(height*.29,154,178)):new(1,GridUnitType.Star);
+        InfoRow.Height=compact?new(Math.Clamp(height*.29,154,178)+instrumentReserve):new(1,GridUnitType.Star);
         LyricsRow.Height=compact?new(1,GridUnitType.Star):new(0);
         InfoPanel.Margin=compact?new(0,0,0,12):new(0,0,gap,0);
         foreach(var row in InfoPanel.RowDefinitions)row.Height=GridLength.Auto;
@@ -46,6 +47,15 @@ public partial class MainWindow
         PlaybackControls.Margin=compact?new(0,2,0,0):new(0,8,0,12);
         PlayButton.MinWidth=compact?96:Math.Clamp(cover*.42,100,150);
         ConnectionStatus.Visibility=QualityStatus.Visibility=compact?Visibility.Collapsed:Visibility.Visible;
+        if(!compact && instrumentReserve>0)
+        {
+            // Measure the actual wrapped metadata, including the icon scroll bar.
+            // Fixed reserves alone fail with longer artist names and larger text.
+            TrackMetadata.Measure(new Size(cover,double.PositiveInfinity));
+            cover=Math.Min(cover,Math.Max(120,height-TrackMetadata.DesiredSize.Height-1));
+            cover=Math.Floor(cover*dpi)/dpi;
+            ArtworkBorder.Width=ArtworkBorder.Height=cover;InfoColumn.Width=new(cover+gap);
+        }
         playbackTextScale=Math.Clamp(Math.Min(ActualWidth/1220,ActualHeight/820),.8,1.12);
         double lyricInset=Math.Clamp(ActualWidth*.024,18,44);
         LyricContent.Margin=new(lyricInset,22,lyricInset,20);

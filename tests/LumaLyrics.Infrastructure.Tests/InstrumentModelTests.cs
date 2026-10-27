@@ -6,6 +6,29 @@ namespace LumaLyrics.Infrastructure.Tests;
 
 public sealed class InstrumentModelTests : IDisposable
 {
+    [Fact]
+    public void ExistingSettingsKeepInstrumentAnalysisOffAndCatalogIsRestricted()
+    {
+        var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"ShowPlaybackQueue\":true}")!;
+        Assert.False(settings.ShowInstrumentActivity); Assert.False(settings.AnalyzeInstrumentsInBackground);
+        var profile = InstrumentModelCatalog.Experimental; profile.Validate();
+        Assert.Equal(new[] { InstrumentKind.Strings }, profile.LabelMap.Values.Distinct());
+        Assert.Equal(new ActivityParameters(.1f, .065f, 1, 500), profile.Thresholds[InstrumentKind.Strings]);
+    }
+
+    [Fact]
+    public async Task LocalImportVerifiesPinnedSizeAndHashAndPreservesInstalledModel()
+    {
+        Directory.CreateDirectory(root); string source = Path.Combine(root, "source.onnx"); await File.WriteAllBytesAsync(source, Weights);
+        var store = new InstrumentModelStore(root); var profile = Manifest();
+        string installed = await store.ImportAsync(source, profile, Weights.Length, default);
+        Assert.True(await store.ValidateAsync(installed, profile.Sha256, default));
+        await File.WriteAllBytesAsync(source, [9, 9, 9, 9]);
+        Assert.Equal(installed, await store.ImportAsync(source, profile, Weights.Length, default));
+        var other = profile with { Id = "different" };
+        await Assert.ThrowsAsync<InvalidDataException>(() => store.ImportAsync(source, other, Weights.Length, default));
+        Assert.False(File.Exists(store.LocalPath(other)));
+    }
     readonly string root = Path.Combine(Path.GetTempPath(), "Luma-instrument-model-" + Guid.NewGuid().ToString("N"));
     static readonly byte[] Weights = [1, 2, 3, 4];
     static InstrumentModelManifest Manifest() => new()

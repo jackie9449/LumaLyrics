@@ -7,24 +7,25 @@ public sealed class WaveAudioReaderTests : IDisposable
 {
     readonly string root = Path.Combine(Path.GetTempPath(), "Luma-wav-reader-" + Guid.NewGuid().ToString("N"));
     public WaveAudioReaderTests() => Directory.CreateDirectory(root);
-    string WriteWave(bool floating = false, bool junk = false, int channels = 1, int rate = 16000)
+    string WriteWave(bool floating = false, bool junk = false, int channels = 1, int rate = 16000, int pcmBits = 16)
     {
         string path = Path.Combine(root, Guid.NewGuid().ToString("N") + ".wav");
         using var stream = File.Create(path); using var writer = new BinaryWriter(stream, Encoding.ASCII);
         writer.Write("RIFF"u8); writer.Write(0); writer.Write("WAVE"u8);
         if (junk) { writer.Write("JUNK"u8); writer.Write(3); writer.Write(new byte[] { 1, 2, 3, 0 }); }
         writer.Write("fmt "u8); writer.Write(16); writer.Write((short)(floating ? 3 : 1)); writer.Write((short)channels);
-        writer.Write(rate); writer.Write(rate * channels * (floating ? 4 : 2)); writer.Write((short)(channels * (floating ? 4 : 2))); writer.Write((short)(floating ? 32 : 16));
-        writer.Write("data"u8); writer.Write(floating ? 8 : 4);
-        if (floating) { writer.Write(0f); writer.Write(.5f); } else { writer.Write((short)0); writer.Write((short)16384); }
+        int bytes = floating ? 4 : pcmBits / 8;
+        writer.Write(rate); writer.Write(rate * channels * bytes); writer.Write((short)(channels * bytes)); writer.Write((short)(floating ? 32 : pcmBits));
+        writer.Write("data"u8); writer.Write(bytes * 2);
+        if (floating) { writer.Write(0f); writer.Write(.5f); } else if (pcmBits == 24) writer.Write(new byte[] { 0, 0, 0, 0, 0, 64 }); else { writer.Write((short)0); writer.Write((short)16384); }
         writer.Flush(); stream.Position = 4; writer.Write(checked((int)stream.Length - 8)); return path;
     }
 
     [Theory]
-    [InlineData(false, false)] [InlineData(false, true)] [InlineData(true, false)]
-    public async Task ReadsRealChunkLayoutRatherThanAssumingAFortyFourByteHeader(bool floating, bool junk)
+    [InlineData(false, false, 16)] [InlineData(false, true, 16)] [InlineData(true, false, 16)] [InlineData(false, false, 24)]
+    public async Task ReadsRealChunkLayoutRatherThanAssumingAFortyFourByteHeader(bool floating, bool junk, int pcmBits)
     {
-        string path = WriteWave(floating, junk);
+        string path = WriteWave(floating, junk, pcmBits: pcmBits);
         var chunks = new List<float>();
         await foreach (var chunk in WaveAudioReader.ReadAsync(path, default)) chunks.AddRange(chunk.Samples);
         Assert.Equal(new[] { 0f, .5f }, chunks);
@@ -40,6 +41,19 @@ public sealed class WaveAudioReaderTests : IDisposable
         path = WriteWave();
         using (var file = new FileStream(path, FileMode.Open, FileAccess.Write)) { file.Position = 40; using var writer = new BinaryWriter(file); writer.Write(uint.MaxValue); }
         Assert.Throws<InvalidDataException>(() => WaveAudioReader.Inspect(path));
+    }
+    [Fact]
+    public async Task CompleteTerminalPcm24SampleMayOmitOnlyThePaddingByte()
+    {
+        string path = WriteWave(pcmBits: 24);
+        using (var file = new FileStream(path, FileMode.Open, FileAccess.Write))
+        {
+            file.SetLength(47); using var writer = new BinaryWriter(file);
+            file.Position = 4; writer.Write(39); file.Position = 40; writer.Write(3);
+        }
+        Assert.Equal(1, WaveAudioReader.Inspect(path).SampleFrames);
+        var samples = new List<float>(); await foreach (var chunk in WaveAudioReader.ReadAsync(path, default)) samples.AddRange(chunk.Samples);
+        Assert.Equal(0f, Assert.Single(samples));
     }
 
     [Fact]

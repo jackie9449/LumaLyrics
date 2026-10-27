@@ -24,7 +24,11 @@
 
 图标为本项目用几何图形生成的原生资产；未使用外部照片、字体文件或商业图标包。显示字体使用系统已有字体，不捆绑分发。
 
-乐器识别目前仅提供开发评估工具。`prepare_yamnet.py` 在软件目录外按固定哈希下载 Google YAMNet 原始权重及 TensorFlow Models 参考代码；软件和源码仓库不含这些文件或转换权重。参考代码 revision、文件哈希和模型许可来源见该脚本与 [评估说明](docs/instrument-evaluation.md)。YAMNet 数值对照通过不表示音乐识别准确度通过，也没有已发布的生产模型下载清单。Python 评估依赖独立安装，版本清单不构成这些依赖的分发包。
+乐器识别提供默认关闭、限制类别的实验入口。`prepare_yamnet.py` 在软件目录外按固定哈希下载 Google YAMNet 原始权重及 TensorFlow Models 参考代码；软件和源码仓库不含这些文件或转换权重。参考代码 revision、文件哈希和模型许可来源见该脚本与 [评估说明](docs/instrument-evaluation.md)。数值对照不代表音乐识别准确度或进入／退出时间已通过，当前没有已发布的生产模型下载清单。Python 评估依赖独立安装，版本清单不构成这些依赖的分发包。
+
+公开评价使用 Li、Liu、Dinesh、Duan、Sharma 的 [URMP 数据集发布记录](https://zenodo.org/records/5034983)，发布记录许可 CC0；混音／音符文件来自固定版本的镜像，来源与校验记录保留在个人评估目录，不随软件分发。镜像不被描述为原发布者，作者提供的音符标注不冒充用户人工审核。
+
+候选工具 `prepare_panns.py` 下载 Qiuqiang Kong 等人的 PANNs Cnn6 权重（[Zenodo 3987831](https://zenodo.org/records/3987831)，CC BY 4.0）和固定 revision 的[参考代码](https://github.com/qiuqiangkong/audioset_tagging_cnn/tree/d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4)（`LICENSE.MIT`）。代码、许可和权重只下载到个人开发目录，软件中未采用该模型；本轮转换未通过数值门槛。两套模型、公开音乐与逐曲结果都不包含在 Git 或便携包中。
 
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。
 

@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     readonly AppleMusicPlaybackBridge playbackBridge;
     readonly PlaybackQueueSidebar playbackSidebar;
     readonly OverlayWindow overlay; readonly DispatcherTimer timer;
+    readonly InstrumentActivityView instrumentView = new();
     Forms.NotifyIcon? tray; Hotkeys? hotkeys; bool quitting, scrollProgrammatically;AppearanceEditor? appearanceWindow;
     System.Drawing.Icon? trayIcon;
     SettingsWindow? settingsWindow;
@@ -32,6 +33,8 @@ public partial class MainWindow : Window
     {
         store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        InstrumentHost.Content=instrumentView;
+        IsVisibleChanged+=InstrumentDemandChanged;LyricsPage.IsVisibleChanged+=InstrumentDemandChanged;StateChanged+=InstrumentWindowStateChanged;
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
         ArtworkMat.SizeChanged+=(_,_)=>ClipArtwork();
@@ -180,6 +183,7 @@ public partial class MainWindow : Window
     internal void SetOverlayChineseTranslation(bool enabled)=>coordinator.SetTranslationVisibility(settings.ShowChineseTranslation,enabled);
     void Tick()
     {
+        RefreshInstrumentView();
         var s=coordinator.Snapshot; var p=coordinator.Position;
         static string T(double? ms)=>ms.HasValue?TimeSpan.FromMilliseconds(Math.Max(0,ms.Value)).ToString(ms>=3600000?@"h\:mm\:ss":@"mm\:ss"):"--:--";
         vm.Time=$"{T(SeekSlider.IsEditing?SeekSlider.Value:seekPending?seekTarget:p)} / {T(s?.Track.DurationMs)}";
@@ -331,6 +335,7 @@ public partial class MainWindow : Window
     public async Task QuitAsync()
     {
         if(quitting)return;quitting=true;seekProbe?.Cancel();seekCancellation?.Cancel();SeekSlider.CancelEdit();timer.Stop();hotkeys?.Dispose();DisposeTray();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
+        IsVisibleChanged-=InstrumentDemandChanged;LyricsPage.IsVisibleChanged-=InstrumentDemandChanged;StateChanged-=InstrumentWindowStateChanged;instrumentView.Dispose();
         playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)

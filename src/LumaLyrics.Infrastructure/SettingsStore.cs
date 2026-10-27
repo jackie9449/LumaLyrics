@@ -6,6 +6,8 @@ public sealed class AppSettings
 {
     public string UiTheme { get; set; } = AppThemes.Default;
     public bool ShowPlaybackQueue { get; set; } = true;
+    public bool ShowInstrumentActivity { get; set; }
+    public bool AnalyzeInstrumentsInBackground { get; set; }
     public bool OnlineLookup { get; set; } = true;
     public bool AppleMusicOriginalLyrics {get;set;}=true;
     public bool AutoPrefetchLibrary { get; set; } = true;

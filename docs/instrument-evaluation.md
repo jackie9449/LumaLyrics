@@ -1,8 +1,8 @@
 # 乐器活动显示：执行与验证记录
 
-当前处于计划的 G2 模型校准准备阶段，主播放页尚未加入乐器识别控件。用户已确认没有人工时间标注，G2 保持未通过；继续实现与准确度结论独立的任务 5–6 缓存／WAV 实验后端和任务 9 备份，任务 7–8 正式播放集成／图标 UI 尚未实施。正式准确度、乐器 UI 和完整播放矩阵尚未验收。
+最新状态：已加入默认关闭、仅启用古典室内乐弦乐组的实验图标与设置入口，完成公开标注评价和有界实时调度。通用 G2 与完整实机矩阵仍未通过。请先阅读[本轮 URMP、模型比较与 UI 结果](instrument-evaluation-urmp.md)及[使用说明](instrument-activity.md)。下文保留前两轮基础证据和开发命令，不将早期验证替代本轮结果。
 
-## 已有证据
+## 前两轮基础证据（截至 9160557）
 
 - Core 已有独立的活动迟滞、覆盖区间、代次与样本窗口测试；覆盖缺口不能因重播、重叠或 seek 被填平。
 - Windows 进程回环已实现在 Windows build 26100 上实际取得 Apple Music 音乐信号。一次 10 秒检查取得 995 个缓冲、992 个有效信号块，无原始音频落盘。
@@ -22,13 +22,13 @@
 - 个人备份包含 `state/instruments.db` 一致快照和从同一快照生成的可阅读 JSON。恢复只到新目录；校验 JSON 的录音、profile、修订、覆盖和绑定与 DB 一致，修改 JSON 及其清单哈希仍不能冒充快照。旧备份继续兼容，源音乐和模型权重不打入备份。
 - 当前 500 项 .NET 测试、8 项 Python 评估规则测试通过；locked restore／Release App／Probe 构建零警告。本次既有应用／Settings／导入界面的六主题隔离检查 253/253 通过，并检查 Liquid、Material 页面实际渲染；此前播放滑条专项为 124/124。这不是新增乐器 UI 验收。分发隔离测试拒绝全部 53 种个人文件样例。
 
-## 尚未通过的检查
+## 前两轮遗留检查与本轮进度
 
-- 各乐器类别的人工时间标注、独立校准集和留出集准确度；不公布支持类别或“识别所有乐器”。
-- 实时丢帧／最新窗口调度、持续资源与实际进入／退出延迟；评估工具尚未实现人工边界误差汇总。
+- 通用场景的独立人工声学复核与逐类准确度仍不足；本轮发布者标注评价只支持室内乐弦乐实验，不宣称“识别所有乐器”。
+- 有界窗口、积压、取消与短时回放已经实现；长时资源和真实进入／退出延迟仍待验证。名义音符边界汇总已实现，保留未匹配数量。
 - 其他应用声音隔离的实际对照、最小化／暂停恢复／输出设备切换、不同音质及保护状态，以及 30 分钟稳定性矩阵。
-- 当前媒体会话到精确录音身份的连接、主页面 UI、Settings 操作与最终分发集成。
-- PANNs 候选尚未实现；传入 `--model panns` 会明确记录 `CandidateNotImplemented`。不能据此声称已经完成模型比较或锁定生产类别。
+- 当前媒体会话到持久精确录音身份的自动连接仍未完成；本轮已加入主页面、Settings 与仅限本次会话的明确文件绑定。
+- PANNs 已实现下载、导出及独立标签映射，但数值一致性失败，没有进行虚假的准确率比较或锁定生产类别。
 
 ## 运行方式
 
@@ -65,7 +65,7 @@ python -m unittest discover -s tools/instruments -p 'test_*.py' -v
 
 当前候选中 `Piano` 实际为键盘族，包含钢琴、管风琴和羽管键琴，不能把它解释为精确钢琴识别；其他族同样按原始标签映射。模型独立输出多类别，分数取族内标签最大值，不使用 argmax 排除同时演奏的乐器。阈值、attack 和 release 只从校准集选择；留出集只用于报告，应在下一轮调参前重新划分。无正例时 recall 为 null，不能报 100%。图表级音乐时间按窗口中心对齐，同时保留窗口结束的可用时间；进入／退出及端到端延迟仍待实测。
 
-评价报告使用独占创建，避免覆盖之前的留出结果。少于 30 个确认独立的录音，或缺少密集混音、钢琴、弦乐、电子、轻伴奏和负例场景时，只报告 `InsufficientCorpus`。即便某个类别达到 precision ≥ 0.85、recall ≥ 0.65，也不自动发布生产模型；完整 G2、生命周期、缓存和 UI 验收仍须继续。当前没有人工已审标签，正式识别 UI 按原计划的 G2 条件暂不推进。
+评价报告使用独占创建，避免覆盖之前的留出结果。少于 30 个确认独立录音，或缺少密集混音、钢琴、弦乐、电子、轻伴奏和负例场景时，只报告 `InsufficientCorpus`。即便某类达到 precision ≥ 0.85、recall ≥ 0.65，也不自动发布生产模型。用户要求继续实现后，已加入明确限制类别与场景、默认关闭的实验 UI；正式通用 G2 与完整实机验收仍保持未通过。
 
 公开资料核对：[OpenMIC 官方仓库](https://github.com/cosmir/openmic-2018)提供片段级聚合乐器标签，不能直接充当进入／退出时间真值。[MedleyDB 官方仓库](https://github.com/marl/medleydb)提供活动标注与工具，但此次尚未取得对应音频并核对其使用条款；代码仓库的许可不能自动代表音频许可。因此两者目前都没有计入本功能的准确度通过证据。
 
@@ -79,6 +79,6 @@ Invoke-Dotnet build tools/LumaLyrics.Probe -c Release
 Invoke-Dotnet tools/LumaLyrics.Probe/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.Probe.dll --analyze-instrument-file --experimental --file $authorizedWaveFile --model-dir "$env:LOCALAPPDATA/LumaLyrics-InstrumentChecks/yamnet-fft-export" --data-dir $instrumentPrivateDirectory
 ```
 
-支持 RIFF PCM16、IEEE float32（含对应 extensible 子格式）、1–8 声道、8–192 kHz；少数不常见采样率比例超过相位表上限时明确拒绝。RF64、压缩 WAV 和重复 data 区块尚不支持。原文件以只读共享方式保持打开，分析前后校验内容；结果写入指定个人目录的 `instruments.db` 和唯一的 `instrument-file-analysis-*.json`。取消或失败时保留先前已提交的分析，不保存当前未完成的新事务，也不提供断点续算。
+支持 RIFF PCM16／PCM24、IEEE float32（含对应 extensible 子格式）、1–8 声道、8–192 kHz；少数不常见采样率比例超过相位表上限时明确拒绝。RF64、压缩 WAV 和重复 data 区块尚不支持。原文件以只读共享方式保持打开，分析前后校验内容；结果写入指定个人目录的 `instruments.db` 和唯一的 `instrument-file-analysis-*.json`。取消或失败时保留先前已提交的分析，不保存当前未完成的新事务，也不提供断点续算。
 
 `--experimental` 是明确的未校准实验入口，固定默认阈值没有得到人工验证，报告始终保留 `accuracyValidated=false`、`productionReady=false`。这里只建立用户选中文件的内容身份，不以文件名、歌名或相近时长确认它就是当前媒体会话的录音。

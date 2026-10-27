@@ -50,6 +50,9 @@ instrument-*.jsonl
 instrument-*.log
 *.onnx
 *.h5
+*.pth
+*.pt
+*.safetensors
 *.f32
 *.pcm
 __pycache__/

@@ -98,6 +98,7 @@ public sealed class SettingsWindow : Window
         PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab("个人资料",PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();
         ChineseTranslations=new(coordinator);tabs.Items.Add(Tab("中文译文",ChineseTranslations));Closed+=(_,_)=>ChineseTranslations.Dispose();
         Library=new(coordinator);tabs.Items.Add(Tab("资料库",Library));Closed+=(_,_)=>Library.Dispose();
+        var instruments=new InstrumentSettingsPanel(coordinator);tabs.Items.Add(Tab("乐器识别",instruments));Closed+=(_,_)=>instruments.Dispose();
         var done=new Button{Content="完成",MinWidth=88,HorizontalAlignment=HorizontalAlignment.Right,Margin=new(0,20,0,0),IsCancel=true};
         done.Click+=(_,_)=>Close();Grid.SetRow(done,2);root.Children.Add(done);
         Loaded+=(_,_)=>{

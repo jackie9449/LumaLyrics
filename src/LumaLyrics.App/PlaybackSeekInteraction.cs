@@ -30,6 +30,7 @@ public partial class MainWindow
     }
     void SeekStarted(object? sender,EventArgs e)
     {
+        coordinator.Instruments.SetSeeking(true);
         seekCancellation?.Cancel();seekCancellation=null;seekPending=false;
         seekRecording=coordinator.Source.Latest??coordinator.Snapshot;
     }

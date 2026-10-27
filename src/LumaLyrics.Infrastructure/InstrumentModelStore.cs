@@ -89,6 +89,43 @@ public sealed class InstrumentModelStore
         }
     }
 
+    public string LocalPath(InstrumentInferenceProfile profile)
+    {
+        profile.Validate();
+        string directory = Path.Combine(root, "models", "instruments", profile.Id, profile.Sha256.ToLowerInvariant());
+        RejectLinks(directory);
+        string path = Path.Combine(directory, "model.onnx");
+        if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidDataException("Model destination cannot be a link.");
+        return path;
+    }
+
+    /// <summary>Copies only a catalogue-pinned graph; does not trust a user supplied profile.</summary>
+    public async Task<string> ImportAsync(string source, InstrumentInferenceProfile profile, long bytes, CancellationToken token)
+    {
+        profile.Validate();
+        if (bytes is <= 0 or > MaximumModelBytes) throw new ArgumentOutOfRangeException(nameof(bytes));
+        await installGate.WaitAsync(token);
+        string? partial = null;
+        try
+        {
+            string destination = LocalPath(profile);
+            if (await ValidateAsync(destination, profile.Sha256, token) && new FileInfo(destination).Length == bytes) return destination;
+            await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true);
+            if (input.Length != bytes) throw new InvalidDataException("Model size differs from the catalogue.");
+            string directory = Path.GetDirectoryName(destination)!;
+            Directory.CreateDirectory(directory); RejectLinks(directory);
+            partial = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".partial");
+            await using (var output = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+            { await input.CopyToAsync(output, token); await output.FlushAsync(token); }
+            if (!await ValidateAsync(partial, profile.Sha256, token)) throw new InvalidDataException("Model checksum failed.");
+            token.ThrowIfCancellationRequested(); _ = LocalPath(profile);
+            File.Move(partial, destination, true); partial = null; return destination;
+        }
+        finally
+        { try { if (partial is not null) File.Delete(partial); } finally { installGate.Release(); } }
+    }
+
     async Task<HttpResponseMessage> DownloadAsync(Uri uri, CancellationToken token)
     {
         for (int hop = 0; hop < 4; hop++)

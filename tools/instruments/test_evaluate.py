@@ -62,11 +62,41 @@ class EvaluationTests(unittest.TestCase):
             record["events"][0]["endMs"] = end
             with self.assertRaises(ValueError):
                 evaluate.validate_dataset({"schemaVersion": 1, "recordings": [record]})
+        record = reviewed_record()
+        record["uncertain"][0]["kind"] = "unrecognised-family"
+        with self.assertRaises(ValueError):
+            evaluate.validate_dataset({"schemaVersion": 1, "recordings": [record]})
 
     def test_causal_attack_and_release(self):
         states = evaluate.activity_states([.9, .9, .3, .3, .3], [500, 1000, 1500, 2000, 2500],
                                           {"on": .8, "off": .4, "attackFrames": 2, "releaseMs": 750})
         self.assertEqual(states, [False, True, True, False, False])
+
+    def test_family_uncertainty_does_not_hide_other_family_negatives(self):
+        record = reviewed_record()
+        record["uncertain"][0]["kind"] = "Piano"
+        self.assertEqual(evaluate.truth_grid(record, "Strings")[2], 0)
+        self.assertEqual(evaluate.truth_grid(record, "Piano")[2], 1)
+
+    def test_composition_arrangements_stay_in_one_split(self):
+        first = reviewed_record()
+        first["compositionId"] = "authored-composition"
+        second = dict(first, recordingId="other", verifiedRecordingId="other", audioPath="other.wav", split="holdout")
+        with self.assertRaises(ValueError):
+            evaluate.validate_dataset({"schemaVersion": 1, "recordings": [first, second]})
+
+    def test_calibration_must_also_pass_before_enabling_a_candidate(self):
+        self.assertFalse(evaluate.passes({"precision": .5, "recall": .57}))
+        self.assertFalse(evaluate.passes({"precision": None, "recall": None}))
+        self.assertTrue(evaluate.passes({"precision": .99, "recall": .89}))
+
+    def test_unmatched_boundaries_are_not_omitted_from_report(self):
+        record = reviewed_record()
+        sample = {"Piano": [0, 0, 0], "centersMs": [250, 750, 1250], "endsMs": [500, 1000, 1500]}
+        result = evaluate.boundary_metrics([record], {record["recordingId"]: sample}, "Piano",
+                                            {"on": .5, "off": .3, "attackFrames": 1, "releaseMs": 0})
+        self.assertEqual(result["offset"]["unmatchedReferenceEdges"], 1)
+        self.assertIsNone(result["offset"]["medianAbsoluteErrorMs"])
 
 
 if __name__ == "__main__":
