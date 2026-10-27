@@ -41,7 +41,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
         this.manualProvider=manualProvider??provider;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
-        Instruments = new(Source, store.Root); Instruments.Configure(settings.ShowInstrumentActivity, settings.AnalyzeInstrumentsInBackground);
+        Instruments = new(Source, store.Root); Instruments.Configure(settings.ShowInstrumentActivity, settings.AnalyzeInstrumentsInBackground, settings.InstrumentModelId);
         translations=new(store.Root);TranslationProgress=translations.Progress();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
         using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();

@@ -18,7 +18,7 @@ $privateFiles=@(Get-ChildItem -LiteralPath $distributionRoot -Recurse -Force -Fi
     $privateQueue=$_.Name -match '^(playback[-_.]?queue|current[-_.]?queue|queue)([-_.].*)?\.json$|^native-(playback|queue|read-safety|memory-safety|hang).*\.(json|jsonl)$'
     $privateReview=$_.Name -match '^(review|lyrics-review|ocr|native-ocr|native-lyrics|native-ttml|apple-original|coverage-audit|library-coverage)([-_.].*)?\.(json|png|jpe?g)$'
     $privateInstrument=$_.Name -match '^instrument([-.].*)?\.(json|jsonl|log)$|^(yamnet|panns)([-_.].*)?\.(json|h5|pth|pt)$'
-    $privateExtension=$_.Name -match '\.db([-.].*)?$|\.sqlite3?(-(wal|shm|journal))?$|\.(musicdb|backup|bak|lrc|ttml|img|jsonl|zip|onnx|safetensors|h5|pth|pt|f32|pcm|wav|flac|m4a|mp3)$'
+    $privateExtension=$_.Name -match '\.db([-.].*)?$|\.sqlite3?(-(wal|shm|journal))?$|\.(musicdb|backup|bak|lrc|ttml|img|jsonl|zip|onnx|pb|safetensors|h5|pth|pt|f32|pcm|wav|flac|m4a|mp3)$'
     $privateText=$_.Extension -eq '.txt' -and $relative -notmatch '^licenses/' -and $_.Name -notin @('LICENSE.txt','ThirdPartyNotices.txt')
     $unexpectedImage=$_.Extension -match '^\.(png|jpe?g|webp|avif|bmp)$' -and $relative -notmatch '^docs/screenshots-ui-v(041|050|051|060|061|070|071|080|090|091|0100|0101|0110|0120|0130|0140|0150|0160|0161|0162|0164|0165|0166|0167|0170|0180)/[^/]+\.png$|^docs/verification-v100/floating-playback-controls\.png$|^docs/verification-seek-motion/ranges-(liquid|frost)\.png$'
     $privateDirectory -or $privateName -or $privateQueue -or $privateReview -or $privateInstrument -or $privateExtension -or $privateText -or $unexpectedImage

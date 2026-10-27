@@ -28,6 +28,8 @@
 
 公开评价使用 Li、Liu、Dinesh、Duan、Sharma 的 [URMP 数据集发布记录](https://zenodo.org/records/5034983)，发布记录许可 CC0；混音／音符文件来自固定版本的镜像，来源与校验记录保留在个人评估目录，不随软件分发。镜像不被描述为原发布者，作者提供的音符标注不冒充用户人工审核。
 
+摇滚三类实验使用 MTG/UPF 的 Discogs Effnet 和 MTG Jamendo instrument 模型资产，[官方来源及许可](https://essentia.upf.edu/models.html)为 CC BY-NC-SA 4.0。原始文件及转换权重只在个人目录下载／生成，不随仓库或软件包分发；须遵守模型的署名、非商业和相同方式共享条件。自行实现的前端没有复制 Essentia 源码；参考原始模型、哈希与验证范围见 [摇滚说明](docs/instrument-rock.md)。Black Sabbath《Paranoid》的 Apple 官方试听仅供本机验证，不随软件分发。另有 EfficientAT MN10（Florian Schmid，固定源码 MIT）候选工具，2 秒候选因静音／负样本误报被拒绝，未加入应用清单；其参考代码和权重同样只保存于个人目录。
+
 候选工具 `prepare_panns.py` 下载 Qiuqiang Kong 等人的 PANNs Cnn6 权重（[Zenodo 3987831](https://zenodo.org/records/3987831)，CC BY 4.0）和固定 revision 的[参考代码](https://github.com/qiuqiangkong/audioset_tagging_cnn/tree/d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4)（`LICENSE.MIT`）。代码、许可和权重只下载到个人开发目录，软件中未采用该模型；本轮转换未通过数值门槛。两套模型、公开音乐与逐曲结果都不包含在 Git 或便携包中。
 
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。

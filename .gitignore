@@ -49,6 +49,7 @@ instrument-*.json
 instrument-*.jsonl
 instrument-*.log
 *.onnx
+*.pb
 *.h5
 *.pth
 *.pt

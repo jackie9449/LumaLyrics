@@ -28,6 +28,7 @@ public sealed class InstrumentController : IAsyncDisposable
     long serial;
     DateTime retryAfter;
     string message = "等待 Apple Music 播放";
+    string modelId = InstrumentModelCatalog.StringsId;
     InstrumentStatus status = InstrumentStatus.Preparing;
 
     public InstrumentController(GsmtcPlaybackSource source, string root)
@@ -40,11 +41,13 @@ public sealed class InstrumentController : IAsyncDisposable
         Observe(latest());
         supervisor = Task.Run(SuperviseAsync);
     }
-    public void Configure(bool enabled, bool background)
+    public void Configure(bool enabled, bool background, string? requestedModelId = null)
     {
         lock (gate)
         {
-            if (disposed || this.enabled == enabled && this.background == background) return;
+            string nextModelId = requestedModelId is null ? modelId : InstrumentModelCatalog.Get(requestedModelId).Id;
+            if (disposed || this.enabled == enabled && this.background == background && modelId == nextModelId) return;
+            if (modelId != nextModelId) { modelId = nextModelId; presentation = null; presentationEpoch = null; binding = null; bindingEpoch = null; }
             this.enabled = enabled; this.background = background; Invalidate();
         }
     }
@@ -105,7 +108,7 @@ public sealed class InstrumentController : IAsyncDisposable
             if (binding is not null && bindingEpoch == Epoch(current!))
                 return Experimental(InstrumentPresentation.FromTimeline(binding, position, current!.Status));
             if (current!.Status != PlayState.Playing)
-                return presentation is not null ? Experimental(presentation.View(current.Status, Stopwatch.GetTimestamp())) : Empty(InstrumentStatus.Paused, "实验弦乐 · 播放后开始识别");
+                return Experimental(presentation is not null ? presentation.View(current.Status, Stopwatch.GetTimestamp()) : Empty(InstrumentStatus.Paused, "播放后开始识别"));
             if (!demand && !background) return Empty(InstrumentStatus.Paused, "页面隐藏，识别已暂停");
             if (status == InstrumentStatus.Learning && presentation is not null && guard.Current is not null)
                 return Experimental(presentation.View(current.Status, Stopwatch.GetTimestamp()));
@@ -118,7 +121,7 @@ public sealed class InstrumentController : IAsyncDisposable
         }
     }
     static InstrumentViewState Empty(InstrumentStatus state, string text) => new(state, false, new Dictionary<InstrumentKind, InstrumentVisualState>(), text);
-    static InstrumentViewState Experimental(InstrumentViewState state) => state with { Message = "实验弦乐 · " + state.Message };
+    InstrumentViewState Experimental(InstrumentViewState state) => state with { Message = (modelId == InstrumentModelCatalog.RockId ? "实验摇滚三类 · " : "实验弦乐 · ") + state.Message };
     async Task SuperviseAsync()
     {
         try
@@ -141,7 +144,7 @@ public sealed class InstrumentController : IAsyncDisposable
                     { status = InstrumentStatus.Unavailable; message = "变速播放暂不支持乐器识别"; continue; }
                     owner = serial; running = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); token = running.Token;
                     var epoch = Epoch(snapshot); guard.Set(epoch);
-                    presentation ??= new(InstrumentModelCatalog.Experimental.Thresholds);
+                    presentation ??= new(InstrumentModelCatalog.Get(modelId).Profile.Thresholds);
                     presentation.Begin(epoch, retainRoster: true);
                     status = InstrumentStatus.Preparing; message = "正在连接 Apple Music 音频…";
                     run = Task.Run(() => RunAsync(snapshot, owner, token), CancellationToken.None);
@@ -159,7 +162,7 @@ public sealed class InstrumentController : IAsyncDisposable
             token.ThrowIfCancellationRequested();
             if (worker is not null)
             { await worker(snapshot, guard.Current!, frame => Accept(frame, snapshot, owner, token), token); return; }
-            var profile = InstrumentModelCatalog.Experimental;
+            InstrumentInferenceProfile profile; lock (gate) profile = InstrumentModelCatalog.Get(modelId).Profile;
             var models = new InstrumentModelStore(root); string path = models.LocalPath(profile);
             if (!await models.ValidateAsync(path, profile.Sha256, token))
             { State(InstrumentStatus.Unavailable, "请在设置 → 乐器识别中准备实验模型"); return; }

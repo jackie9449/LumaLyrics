@@ -16,6 +16,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
     readonly PlaybackCoordinator coordinator;
     readonly CancellationTokenSource lifetime = new();
     readonly TextBlock status = Label("准备模型后可开启。", 12);
+    readonly ComboBox modelChoice = new() { HorizontalAlignment = HorizontalAlignment.Stretch, MaxWidth = 620, DisplayMemberPath = nameof(InstrumentModelOption.Name), SelectedValuePath = nameof(InstrumentModelOption.Id), Margin = new(0, 0, 0, 12) };
     readonly ProgressBar progress = new() { Minimum = 0, Maximum = 100, Height = 5, Visibility = Visibility.Collapsed, Margin = new(0, 8, 0, 10) };
     readonly DispatcherTimer timer;
     CancellationTokenSource? work;
@@ -26,20 +27,28 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
     {
         this.coordinator = coordinator;
         Children.Add(Label("听见正在演奏的乐器", 20));
-        Children.Add(Label(InstrumentModelCatalog.Scope, 12));
-        Children.Add(Label("弦乐包含弦乐组、小提琴和大提琴，暂不区分具体件数。其他乐器尚未通过验证，当前不会亮起。通用八类识别仍在验证中。", 12));
+        var scope = Label(CurrentModel.Scope, 12); Children.Add(scope);
+        modelChoice.ItemsSource = InstrumentModelCatalog.All; modelChoice.SelectedValue = CurrentModel.Id;
+        System.Windows.Automation.AutomationProperties.SetName(modelChoice, "乐器识别模型"); Children.Add(modelChoice);
+        Children.Add(Label("摇滚／金属选项分别判断电／木吉他、贝斯和鼓，允许多件乐器同时亮起。它是尚未完成广泛准确度与进入／退出验收的实验模型，不会根据歌曲名预设结果。", 12));
         var enabled = DialogUi.Check(this, "在播放页显示实验乐器识别（本机处理）", coordinator.Settings.ShowInstrumentActivity);
         var background = DialogUi.Check(this, "隐藏播放页或最小化后继续分析", coordinator.Settings.AnalyzeInstrumentsInBackground);
         void Changed()
         {
             coordinator.Settings.ShowInstrumentActivity = enabled.IsChecked == true;
             coordinator.Settings.AnalyzeInstrumentsInBackground = background.IsChecked == true;
-            coordinator.Instruments.Configure(enabled.IsChecked == true, background.IsChecked == true);
+            coordinator.Instruments.Configure(enabled.IsChecked == true, background.IsChecked == true, coordinator.Settings.InstrumentModelId);
             coordinator.SaveSettings();
         }
         enabled.Checked += (_, _) => Changed(); enabled.Unchecked += (_, _) => Changed();
         background.Checked += (_, _) => Changed(); background.Unchecked += (_, _) => Changed();
-        Children.Add(Label("模型需要约 1 秒音频上下文，实际响应还受活动平滑和音色影响。首次播放的清单会逐步补全；暂停时图标变暗，无有效音频时显示等待。音频只在内存中处理。", 12));
+        modelChoice.SelectionChanged += (_, _) =>
+        {
+            if (modelChoice.SelectedItem is not InstrumentModelOption option || disposed) return;
+            work?.Cancel(); analyzed = null; expected = null; coordinator.Settings.InstrumentModelId = option.Id;
+            scope.Text = option.Scope; Changed(); Refresh();
+        };
+        Children.Add(Label("弦乐模型需要约 1 秒、摇滚模型约 2 秒音频上下文，实际响应还受活动平滑和音色影响。首次播放的清单逐步补全；暂停时图标变暗。音频只在内存中处理。", 12));
         Children.Add(status); Children.Add(progress);
         DialogUi.Button(this, "准备本机已下载模型", async () => await PrepareAsync());
         Children.Add(Label("模型保存在个人数据目录。只导入经过版本和 SHA-256 校验的实验模型；安装说明见项目的乐器识别文档。", 11));
@@ -52,6 +61,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
         timer = new(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Refresh(), Dispatcher);
         Loaded += OnLoaded; Unloaded += OnUnloaded;
     }
+    InstrumentModelOption CurrentModel => InstrumentModelCatalog.Get(coordinator.Settings.InstrumentModelId);
     static TextBlock Label(string text, double size)
     {
         var label = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 12) };
@@ -62,7 +72,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
     void Refresh()
     {
         if (disposed || busy) return;
-        string path = new InstrumentModelStore(coordinator.DataRoot).LocalPath(InstrumentModelCatalog.Experimental);
+        string path = new InstrumentModelStore(coordinator.DataRoot).LocalPath(CurrentModel.Profile);
         status.Text = File.Exists(path) ? "实验模型已就绪 · " + coordinator.Instruments.View(coordinator.Position).Message : "尚未准备实验模型";
     }
     async Task WorkAsync(Func<CancellationToken, Task> action)
@@ -78,7 +88,8 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
     async Task PrepareAsync()
     {
         if (busy) return;
-        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LumaLyrics-InstrumentChecks", "yamnet-fft-export", "yamnet-waveform.onnx");
+        var option = CurrentModel;
+        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LumaLyrics-InstrumentChecks", option.ExportFolder, option.ExportFile);
         if (!File.Exists(path))
         {
             var choose = new OpenFileDialog { Title = "选择经过校验的实验 ONNX 模型", Filter = "ONNX 模型|*.onnx", CheckFileExists = true };
@@ -88,7 +99,8 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
         await WorkAsync(async token =>
         {
             status.Text = "正在校验和安装模型…";
-            await new InstrumentModelStore(coordinator.DataRoot).ImportAsync(path, InstrumentModelCatalog.Experimental, InstrumentModelCatalog.ModelBytes, token);
+            await new InstrumentModelStore(coordinator.DataRoot).ImportAsync(path, option.Profile, option.Bytes, token);
+            token.ThrowIfCancellationRequested();
             coordinator.Instruments.Restart(); status.Text = "模型准备完成。可开启实验识别。";
         });
     }
@@ -101,7 +113,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
         await WorkAsync(async token =>
         {
             status.Text = "正在分析本地文件…"; progress.Value = 0; progress.Visibility = Visibility.Visible;
-            var profile = InstrumentModelCatalog.Experimental;
+            var profile = CurrentModel.Profile;
             string model = new InstrumentModelStore(coordinator.DataRoot).LocalPath(profile);
             string path = Path.GetFullPath(choose.FileName);
             var result = await Task.Run(async () =>

@@ -34,6 +34,8 @@ internal static class InstrumentAudioProbe
             ["windowStateManipulated"] = false,
             ["createdUtc"] = DateTimeOffset.UtcNow
         };
+        report["appleMusicProcessPresent"] = InstrumentMusicProbe.Present("AppleMusic");
+        report["rendererProcessPresent"] = InstrumentMusicProbe.Present("AMPLibraryAgent");
         var elapsed = Stopwatch.StartNew();
         try
         {
@@ -42,6 +44,7 @@ internal static class InstrumentAudioProbe
             Trace("media-start");
             await source.StartAsync(cancel.Token).WaitAsync(TimeSpan.FromSeconds(5), cancel.Token);
             var expected = source.Latest;
+            report["mediaSessionPresent"] = expected is not null;
             Trace("media-ready");
             if (expected is null) { report["status"] = "NoAppleMusicSession"; return; }
             report["initialPlayState"] = expected.Status.ToString();
@@ -126,7 +129,7 @@ internal static class InstrumentAudioProbe
             report["elapsedSeconds"] = elapsed.Elapsed.TotalSeconds;
             report["notVerified"] = new[] { "OtherApplicationsExcluded", "MinimizedPlayback", "OutputDeviceChanges", "PauseResume", "ProtectedContentVariants", "SustainedPlayback" };
             await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
-            Console.WriteLine(JsonSerializer.Serialize(new { status = report.GetValueOrDefault("status"), packets = report.GetValueOrDefault("packets"), effectiveChunks = report.GetValueOrDefault("effectiveChunks"), rawAudioSaved = false }));
+            Console.WriteLine(JsonSerializer.Serialize(new { status = report.GetValueOrDefault("status"), appleMusicProcessPresent = report["appleMusicProcessPresent"], rendererProcessPresent = report["rendererProcessPresent"], mediaSessionPresent = report.GetValueOrDefault("mediaSessionPresent"), packets = report.GetValueOrDefault("packets"), effectiveChunks = report.GetValueOrDefault("effectiveChunks"), rawAudioSaved = false }));
         }
     }
 }

@@ -93,7 +93,7 @@ public sealed class InstrumentActivityView : UserControl, IDisposable
 internal static class InstrumentIcons
 {
     internal static string Name(InstrumentKind kind) => kind switch
-    { InstrumentKind.Drums => "打击乐", InstrumentKind.Bass => "贝斯", InstrumentKind.Guitar => "吉他", InstrumentKind.Piano => "键盘", InstrumentKind.Strings => "弦乐", InstrumentKind.Brass => "铜管", InstrumentKind.Woodwind => "木管", _ => "合成器" };
+    { InstrumentKind.Drums => "鼓", InstrumentKind.Bass => "贝斯", InstrumentKind.Guitar => "吉他", InstrumentKind.Piano => "键盘", InstrumentKind.Strings => "弦乐", InstrumentKind.Brass => "铜管", InstrumentKind.Woodwind => "木管", _ => "合成器" };
     internal static Geometry For(InstrumentKind kind)
     {
         string path = kind switch

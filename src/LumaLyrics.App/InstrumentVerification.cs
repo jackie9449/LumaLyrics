@@ -16,7 +16,7 @@ public partial class MainWindow
     async Task VerifyInstrumentsAsync(string directory, Dictionary<string, object?> checks)
     {
         bool shown = settings.ShowInstrumentActivity, queue = settings.ShowPlaybackQueue;
-        string theme = settings.UiTheme; double width = Width, height = Height;
+        string theme = settings.UiTheme, modelId = settings.InstrumentModelId; double width = Width, height = Height;
         var appearance = OverlayAppearance.From(settings);
         async Task Settle() { ApplyPlaybackLayout(); await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); await Task.Delay(50); UpdateLayout(); }
         Rect Bounds(FrameworkElement element) => element.TransformToAncestor(Body).TransformBounds(new Rect(element.RenderSize));
@@ -66,6 +66,12 @@ public partial class MainWindow
                 var panel = Descendants<InstrumentSettingsPanel>(settingsDialog).Single();
                 checks[$"instrument.{app.Id}.settingsUsesAppResources"] = panel.FindResource("AccentBrush") == FindResource("AccentBrush") && panel.IsVisible;
                 settingsDialog.Width = 640; await Task.Delay(60); settingsDialog.UpdateLayout();
+                var models = Descendants<ComboBox>(panel).Single();
+                models.SelectedValue = InstrumentModelCatalog.RockId;
+                await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle); settingsDialog.UpdateLayout();
+                checks[$"instrument.{app.Id}.rockSelectionPersists"] = settings.InstrumentModelId == InstrumentModelCatalog.RockId;
+                checks[$"instrument.{app.Id}.modelDisplaysUserName"] = models.SelectedItem?.ToString() == InstrumentModelCatalog.Get(InstrumentModelCatalog.RockId).Name;
+                checks[$"instrument.{app.Id}.modelChoiceFits"] = models.TransformToAncestor(panel).TransformBounds(new Rect(models.RenderSize)).Right <= panel.ActualWidth + .5;
                 checks[$"instrument.{app.Id}.settingsButtonsFit"] = Descendants<Button>(panel).All(button => button.TransformToAncestor(panel).TransformBounds(new Rect(button.RenderSize)).Right <= panel.ActualWidth + .5);
                 VisualVerification.Save((FrameworkElement)settingsDialog.Content, Path.Combine(directory, $"instruments-settings-{app.Id}.png"), true); settingsDialog.Close();
                 checks[$"instrument.{app.Id}.floatingAppearanceUnchanged"] = OverlayAppearance.From(settings) == appearance;
@@ -92,7 +98,7 @@ public partial class MainWindow
             checks["instrument.generalAccuracyValidated"] = false; // Metadata, excluded from pass/fail assertions below.
         }
         finally
-        { settings.ShowInstrumentActivity = shown; InstrumentHost.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; Width = width; Height = height; SetPlaybackQueueVisible(queue, false); SelectUiTheme(theme, false); }
+        { settings.InstrumentModelId = modelId; coordinator.Instruments.Configure(shown, settings.AnalyzeInstrumentsInBackground, modelId); settings.ShowInstrumentActivity = shown; InstrumentHost.Visibility = shown ? Visibility.Visible : Visibility.Collapsed; Width = width; Height = height; SetPlaybackQueueVisible(queue, false); SelectUiTheme(theme, false); }
         checks.Remove("instrument.generalAccuracyValidated");
         checks["instrument.validationScope"] = "Self-authored WPF state/layout fixtures only. No media session, audio, accuracy or physical monitor DPI proof.";
     }
@@ -144,8 +150,17 @@ public partial class MainWindow
             checks["instrument.ownership.seekImmediatelyCancelsWorker"] = fourth.Token.IsCancellationRequested;
             await Task.Delay(300); checks["instrument.ownership.seekDoesNotRestartWhileEditing"] = Count() == 4;
             controller.SetSeeking(false); await Until(() => Count() == 5); var fifth = Callback(4);
+            controller.Configure(true, true, InstrumentModelCatalog.RockId);
+            checks["instrument.ownership.modelSwitchCancelsOldWorker"] = fifth.Token.IsCancellationRequested;
+            fifth.Accept(Frame(fifth.Epoch));
+            checks["instrument.ownership.modelSwitchRejectsOldCategories"] = !controller.View(0).Icons.ContainsKey(InstrumentKind.Strings);
+            await Until(() => Count() == 6); var sixth = Callback(5);
+            InstrumentFrame RockFrame() => new(sixth.Epoch, System.Diagnostics.Stopwatch.GetTimestamp(), null, null, "self-authored-rock-fixture",
+                new Dictionary<InstrumentKind, float> { [InstrumentKind.Guitar] = .9f, [InstrumentKind.Bass] = .9f, [InstrumentKind.Drums] = .9f });
+            sixth.Accept(RockFrame()); await Task.Delay(10); sixth.Accept(RockFrame());
+            checks["instrument.ownership.rockThreeCategoriesVisible"] = controller.View(0).Icons.Count == 3 && controller.View(0).Icons.Values.All(value => value == InstrumentVisualState.Active);
             controller.Configure(false, true);
-            checks["instrument.ownership.disableCancelsAndHides"] = fifth.Token.IsCancellationRequested && controller.View(0).Status == InstrumentStatus.Disabled;
+            checks["instrument.ownership.disableCancelsAndHides"] = sixth.Token.IsCancellationRequested && controller.View(0).Status == InstrumentStatus.Disabled;
         }
         finally { await Task.WhenAll(controller.DisposeAsync().AsTask(), controller.DisposeAsync().AsTask()); }
         checks["instrument.ownership.disposeUnsubscribes"] = source.Subscribers == 0;

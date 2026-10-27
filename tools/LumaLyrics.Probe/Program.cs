@@ -1,12 +1,16 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--probe-instrument-music")
+{
+    await LumaLyrics.Probe.InstrumentMusicProbe.RunAsync(args);return;
+}
 if(args.ElementAtOrDefault(0)=="--install-instrument-model")
 {
     string Value(string flag){int index=Array.IndexOf(args,flag);return index>=0 && index+1<args.Length?args[index+1]:throw new ArgumentException("Missing "+flag);}
     string root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.Contains("--data-dir")?Value("--data-dir"):null);
     if(!Directory.Exists(root))throw new DirectoryNotFoundException("Select an existing personal directory.");
-    var profile=LumaLyrics.Infrastructure.InstrumentModelCatalog.Experimental;
-    await new LumaLyrics.Infrastructure.InstrumentModelStore(root).ImportAsync(Value("--file"),profile,LumaLyrics.Infrastructure.InstrumentModelCatalog.ModelBytes,default);
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{status="InstalledExperimental",scope=LumaLyrics.Infrastructure.InstrumentModelCatalog.Scope,enabledByDefault=false}));return;
+    var option=LumaLyrics.Infrastructure.InstrumentModelCatalog.Get(args.Contains("--model-id")?Value("--model-id"):null);
+    await new LumaLyrics.Infrastructure.InstrumentModelStore(root).ImportAsync(Value("--file"),option.Profile,option.Bytes,default);
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{status="InstalledExperimental",scope=option.Scope,enabledByDefault=false}));return;
 }
 if(args.ElementAtOrDefault(0)=="--replay-instrument-file")
 {

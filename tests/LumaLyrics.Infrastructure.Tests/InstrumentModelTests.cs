@@ -7,6 +7,18 @@ namespace LumaLyrics.Infrastructure.Tests;
 public sealed class InstrumentModelTests : IDisposable
 {
     [Fact]
+    public void RockProfileSeparatesGuitarBassAndDrumsAndOldSettingsRemainCompatible()
+    {
+        var old = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{}")!;
+        Assert.Equal(InstrumentModelCatalog.StringsId, old.InstrumentModelId);
+        var profile = InstrumentModelCatalog.Get(InstrumentModelCatalog.RockId).Profile; profile.Validate();
+        Assert.Equal(new[] { InstrumentKind.Drums, InstrumentKind.Bass, InstrumentKind.Guitar }, profile.LabelMap.Values.Distinct().Order());
+        Assert.Equal(InstrumentKind.Bass, profile.LabelMap[3]); Assert.Equal(InstrumentKind.Guitar, profile.LabelMap[15]);
+        Assert.Equal(InstrumentKind.Drums, profile.LabelMap[14]); Assert.Equal(33024, profile.WindowSamples);
+        Assert.NotEqual(profile.ProfileId, InstrumentModelCatalog.Experimental.ProfileId);
+        Assert.Equal(InstrumentModelCatalog.StringsId, InstrumentModelCatalog.Get("unknown").Id);
+    }
+    [Fact]
     public void ExistingSettingsKeepInstrumentAnalysisOffAndCatalogIsRestricted()
     {
         var settings = System.Text.Json.JsonSerializer.Deserialize<AppSettings>("{\"ShowPlaybackQueue\":true}")!;

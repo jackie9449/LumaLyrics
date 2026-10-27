@@ -8,6 +8,7 @@ public sealed class AppSettings
     public bool ShowPlaybackQueue { get; set; } = true;
     public bool ShowInstrumentActivity { get; set; }
     public bool AnalyzeInstrumentsInBackground { get; set; }
+    public string InstrumentModelId { get; set; } = InstrumentModelCatalog.StringsId;
     public bool OnlineLookup { get; set; } = true;
     public bool AppleMusicOriginalLyrics {get;set;}=true;
     public bool AutoPrefetchLibrary { get; set; } = true;

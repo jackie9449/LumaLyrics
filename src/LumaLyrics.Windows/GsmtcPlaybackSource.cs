@@ -128,7 +128,7 @@ public sealed class GsmtcPlaybackSource : IPlaybackSource
     public async ValueTask DisposeAsync()
     {
         lifetime.Cancel(); if (manager is not null) manager.SessionsChanged -= OnSessions;
-        if (poll is not null) await poll;
+        if (poll is not null) { try { await poll; } catch(OperationCanceledException) when(lifetime.IsCancellationRequested) { } }
         await gate.WaitAsync(); try { Detach(); } finally { gate.Release(); }
         lifetime.Dispose();
     }

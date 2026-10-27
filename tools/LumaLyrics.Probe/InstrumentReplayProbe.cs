@@ -18,9 +18,10 @@ internal static class InstrumentReplayProbe
         PersonalLibraryArchive.EnsureOutsideSoftware(root);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException("Select an existing personal directory.");
         int seconds = int.Parse(Value("--seconds")); if (seconds is < 5 or > 1800) throw new ArgumentOutOfRangeException(nameof(seconds));
-        var profile = InstrumentModelCatalog.Experimental;
+        var option = InstrumentModelCatalog.Get(args.Contains("--model-id") ? Value("--model-id") : null);
+        var profile = option.Profile;
         var store = new InstrumentModelStore(root);
-        await store.ImportAsync(Value("--model"), profile, InstrumentModelCatalog.ModelBytes, default);
+        await store.ImportAsync(Value("--model"), profile, option.Bytes, default);
         using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(seconds));
         var epoch = new InstrumentEpoch("file-paced-fixture", 1, 1, 0); var guard = new InstrumentEpochGuard(); guard.Set(epoch);
         await using var engine = new InstrumentEngine(new OnnxInstrumentClassifier(store.LocalPath(profile), profile));
