@@ -32,7 +32,7 @@
 
 ## 使用方式与执行顺序
 
-执行中：任务 1 已完成，Core 全部 106 项测试通过（其中乐器相关 18 项）。任务 2 开始实现；G1 仍待实际播放验证。仓库检查基线为 `4cc273f7b8d4ed842915071a3d9e0a81d8fa3da1`，编写时本地与远端 main 一致、工作区干净；实现时重新检查。
+执行中：任务 1 已完成。任务 2 已取得实际音乐信号、核对同包独立渲染进程，并用独立辅助进程约束原生停止等待；完整实机矩阵仍待验证。任务 3 已实现模型安装协议、固定 YAMNet 实验导出、Python／C# 数值对照和私有评价入口；30 个片段尚未人工标注，PANNs 比较和正式类别校准尚未完成，G2 未通过。任务 4 已实现固定窗口、串行引擎和过期结果保护，尚缺完整流式重采样／调度与端到端测试。任务 5–10 未实施，不发布正式识别 UI。当前 476 项 .NET 测试、8 项 Python 测试、124 项隔离滑条 UI 回归通过；详细证据与剩余限制见 [执行记录](../../instrument-evaluation.md)。仓库检查基线为 `4cc273f7b8d4ed842915071a3d9e0a81d8fa3da1`，实现时重新检查远端。
 
 上方技能提示是 writing-plans 的标准交接格式。当前已提供的技能目录没有列出那两个 `superpowers` 执行技能；选择执行方式时先检查可用性，不能声称已经调用。任务本身包含独立的操作和验收步骤，用户若直接要求按计划执行，可按本计划逐项执行；子代理方式需遵守当时的用户授权和会话规则。
 
@@ -75,7 +75,7 @@ public sealed record InstrumentSpan(double StartMs, double EndMs);
 public sealed record InstrumentInterval(InstrumentKind Kind, double StartMs, double EndMs);
 public sealed record InstrumentScorePoint(double StartMs, double EndMs, Dictionary<InstrumentKind, float> Scores);
 public sealed record ActivityParameters(float On, float Off, int AttackFrames, double ReleaseMs);
-public sealed record AudioTarget(uint ProcessId, DateTime StartTimeUtc, string PackageFamily);
+public sealed record AudioTarget(uint ProcessId, DateTime StartTimeUtc, string PackageFamily, string? SourceAppId = null);
 public sealed record PcmChunk(float[] Samples, int SampleRate, int Channels, long FirstSampleTicks,
     bool Discontinuous, bool Silent);
 public sealed record InstrumentWindow(InstrumentEpoch Epoch, long StartTicks, long EndTicks,
@@ -212,7 +212,7 @@ public bool IsCurrent(InstrumentEpoch value) => Equals(Volatile.Read(ref current
 
 **Interfaces:** `AppleMusicAudioTargetResolver.ResolveAsync(PlaybackSnapshot expected, CancellationToken token)` 返回 `Task<AudioTarget?>`；`PcmNormalizer.ToFloat(byte[] bytes, int bitsPerSample, bool ieeeFloat)` 返回 `float[]`；捕获实现 `IProcessAudioCapture`。Probe 命令为 `--probe-instrument-audio --data-dir <目录> --seconds 30`。
 
-- [ ] **Step 1：先写 PCM 测试与取消测试并确认失败。**
+- [x] **Step 1：先写 PCM 测试与取消测试并确认失败。**
 
 ```csharp
 [Fact]
@@ -237,8 +237,8 @@ public async Task AlreadyCancelledCaptureDoesNotOpenNativeClient()
 }
 ```
 
-- [ ] **Step 2：实现目标解析和系统能力判定。** 使用当前媒体会话应用身份核对进程包身份及启动时间；无法唯一确认则返回 null。禁止固定 PID、窗口标题或全系统音频替代。新增 Windows.Tests 项目目标与 Windows 项目一致，并引用 Windows、Core；测试库版本沿用现有 xUnit 项目。
-- [ ] **Step 3：按微软官方样例移植进程回环。** 原生顺序固定如下，COM 声明按 Windows SDK 头文件核对布局与 HRESULT；不凭猜测抄写 GUID。
+- [x] **Step 2：实现目标解析和系统能力判定。** 使用当前媒体会话应用身份核对主进程，再通过原生活动音频会话确定同包实际渲染进程及启动时间；本机 AMPLibraryAgent 是独立同包进程，不能假设它在 AppleMusic 主进程树中。无法唯一确认则返回 null。禁止固定 PID、窗口标题或全系统音频替代。新增 Windows.Tests 项目目标与 Windows 项目一致，并引用 Windows、Core；测试库版本沿用现有 xUnit 项目。
+- [x] **Step 3：按微软官方样例移植进程回环。** 原生顺序固定如下，COM 声明按 Windows SDK 头文件核对布局与 HRESULT；不凭猜测抄写 GUID。
 
 ```text
 ActivateAudioInterfaceAsync("VAD\\Process_Loopback", IID_IAudioClient,
@@ -255,10 +255,10 @@ ActivateAudioInterfaceAsync("VAD\\Process_Loopback", IID_IAudioClient,
 
 实现每次激活／停止的有限等待，启动超时 5 秒；取消后不得有遗留启动回调重新启动客户端。采集回调只复制缓冲并投递；正确处理 float32、PCM16、PCM24、PCM32 及 `WAVEFORMATEXTENSIBLE` 的有效位，无法识别的格式报告不可用。QPC 时间戳错误、断续及丢包标记为 discontinuity。为边界检查增加各格式的合成测试，不能拿正弦波测试当作模型准确度测试。
 
-- [ ] **Step 4：增加私有探针命令。** 校验目录在软件目录外，输出 `instrument-audio-probe.json`，包括系统 build、目标验证结果、采样格式、packet 数、有效帧数、RMS 分位数、掉帧数、启动／释放耗时及错误分类。默认不写 PCM、不在 stdout 打印曲名、PID 或完整路径。
+- [x] **Step 4：增加私有探针命令。** 校验目录在软件目录外，输出 `instrument-audio-probe.json`，包括系统 build、目标验证结果、采样格式、packet 数、有效帧数、RMS 分位数、掉帧数、启动／释放耗时及错误分类。默认不写 PCM、不在 stdout 打印曲名、PID 或完整路径。
 
 ```powershell
-Invoke-Dotnet run --project tools/LumaLyrics.Probe -c Release -- --probe-instrument-audio --data-dir $instrumentCheckRoot --seconds 30
+powershell -NoProfile -File scripts/verify-instruments.ps1 -DataDirectory $instrumentCheckRoot -Native -Seconds 30
 ```
 
 - [ ] **Step 5：实测并记录 G1。** 实际播放 Apple Music，分别检查最小化、暂停恢复、输出设备切换、目标进程退出；另一个应用播放测试音时，Apple Music 目标捕获不得包含该应用声音。受保护内容、音质及蓝牙组合按实际环境记录，未测试的组合明确标记。全零只记录“未获得可验证有效音频”，不自动归因为 DRM。测试不主动改变用户歌曲或原生窗口状态，必要操作由显式探针参数或用户实际操作触发。
@@ -309,7 +309,7 @@ python tools/instruments/evaluate.py --dataset "$instrumentCheckRoot\dataset.jso
 ```
 
 - [ ] **Step 3：选定一个模型并导出 ONNX。** 固定原始实现 revision、Python 依赖及转换命令，记录到公开复现说明。至少 20 个短窗口对比原始模型与 C# ONNX 输出，最大绝对分数差目标 ≤ `1e-4`；超出时定位预处理／算子／精度差异，不静默放宽。模型与标签必须配对，错误标签数应拒绝启动。
-- [ ] **Step 4：先写校验失败测试，再实现模型安装。** 测试用固定字节生成哈希，不能将测试哈希填入生产 manifest。
+- [x] **Step 4：先写校验失败测试，再实现模型安装。** 测试用固定字节生成哈希，不能将测试哈希填入生产 manifest。
 
 ```csharp
 [Fact]

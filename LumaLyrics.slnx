@@ -8,6 +8,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/LumaLyrics.Core.Tests/LumaLyrics.Core.Tests.csproj" />
     <Project Path="tests/LumaLyrics.Infrastructure.Tests/LumaLyrics.Infrastructure.Tests.csproj" />
+    <Project Path="tests/LumaLyrics.Windows.Tests/LumaLyrics.Windows.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/LumaLyrics.Probe/LumaLyrics.Probe.csproj" />

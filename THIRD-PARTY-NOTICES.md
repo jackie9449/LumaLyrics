@@ -6,6 +6,7 @@
 |---|---|---|
 | .NET Runtime / Windows Desktop Runtime / WPF | 10.0.13 | [dotnet/runtime](https://github.com/dotnet/runtime)、[dotnet/wpf](https://github.com/dotnet/wpf)，保留发行版原始许可与 notices |
 | Microsoft.Data.Sqlite / Core | 10.0.13 | [dotnet/efcore](https://github.com/dotnet/efcore)，MIT |
+| Microsoft.ML.OnnxRuntime / Managed | 1.31.0 | [microsoft/onnxruntime](https://github.com/microsoft/onnxruntime)，MIT；原始许可和完整 notices 见 `licenses/ONNX-Runtime-*` |
 | SQLitePCLRaw core / bundle / provider / native bundle | 2.1.13 | [SQLitePCL.raw](https://github.com/ericsink/SQLitePCL.raw)，Apache-2.0（以具体包的许可说明为准） |
 | SQLite | 包内 e_sqlite3 | [SQLite copyright](https://sqlite.org/copyright.html)，SQLite 核心 public domain；保留包装组件自身许可 |
 | Windows SDK .NET 投影 / WinRT.Runtime | SDK 按 net10.0-windows10.0.19041.0 解析 | Microsoft Windows SDK / [CsWinRT](https://github.com/microsoft/CsWinRT)，保留相应许可 |
@@ -22,6 +23,8 @@
 歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。新增公开截图使用原创几何封面与自写歌词，不含个人资料库内容。
 
 图标为本项目用几何图形生成的原生资产；未使用外部照片、字体文件或商业图标包。显示字体使用系统已有字体，不捆绑分发。
+
+乐器识别目前仅提供开发评估工具。`prepare_yamnet.py` 在软件目录外按固定哈希下载 Google YAMNet 原始权重及 TensorFlow Models 参考代码；软件和源码仓库不含这些文件或转换权重。参考代码 revision、文件哈希和模型许可来源见该脚本与 [评估说明](docs/instrument-evaluation.md)。YAMNet 数值对照通过不表示音乐识别准确度通过，也没有已发布的生产模型下载清单。Python 评估依赖独立安装，版本清单不构成这些依赖的分发包。
 
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。
 

@@ -42,3 +42,14 @@ native-memory-safety*.json
 native-hang*.json
 apple-original*.json
 **/originals/*.json
+**/instruments/
+!tools/instruments/
+**/instrument-models/
+instrument-*.json
+instrument-*.jsonl
+instrument-*.log
+*.onnx
+*.h5
+*.f32
+*.pcm
+__pycache__/

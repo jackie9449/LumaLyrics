@@ -9,7 +9,7 @@ public sealed record InstrumentSpan(double StartMs, double EndMs);
 public sealed record InstrumentInterval(InstrumentKind Kind, double StartMs, double EndMs);
 public sealed record InstrumentScorePoint(double StartMs, double EndMs, Dictionary<InstrumentKind, float> Scores);
 public sealed record ActivityParameters(float On, float Off, int AttackFrames, double ReleaseMs);
-public sealed record AudioTarget(uint ProcessId, DateTime StartTimeUtc, string PackageFamily);
+public sealed record AudioTarget(uint ProcessId, DateTime StartTimeUtc, string PackageFamily, string? SourceAppId = null);
 
 /// <summary>Owned interleaved samples. Timestamps use Stopwatch ticks, never UTC.</summary>
 public sealed record PcmChunk(float[] Samples, int SampleRate, int Channels, long FirstSampleTicks,

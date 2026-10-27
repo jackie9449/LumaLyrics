@@ -1,4 +1,16 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--verify-instrument-model")
+{
+    await LumaLyrics.Probe.InstrumentBenchmarkCommands.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify a private converted model directory."));return;
+}
+if(args.ElementAtOrDefault(0)=="--stream-instrument-audio")
+{
+    await LumaLyrics.Probe.InstrumentAudioStream.RunAsync(args);return;
+}
+if(args.ElementAtOrDefault(0)=="--probe-instrument-audio")
+{
+    await LumaLyrics.Probe.InstrumentAudioProbe.RunAsync(args);return;
+}
 if(args.ElementAtOrDefault(0)=="--probe-native-memory-safety")
 {
     await LumaLyrics.Probe.NativeMemorySafetyProbe.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify an external private report directory."));return;
