@@ -15,7 +15,7 @@ internal static class InstrumentMusicProbe
         string root = Path.GetFullPath(Required("--data-dir")); PersonalLibraryArchive.EnsureOutsideSoftware(root);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException("Select an existing personal directory.");
         int seconds = int.TryParse(Optional("--seconds"), out int length) ? length : 30;
-        if (seconds is < 3 or > 120) throw new ArgumentOutOfRangeException(nameof(seconds));
+        if (seconds is < 3 or > 300) throw new ArgumentOutOfRangeException(nameof(seconds));
         var report = new Dictionary<string, object?> { ["rawAudioSaved"] = false, ["windowStateManipulated"] = false,
             ["appleMusicProcessPresent"] = Present("AppleMusic"), ["rendererProcessPresent"] = Present("AMPLibraryAgent"),
             ["createdUtc"] = DateTimeOffset.UtcNow, ["accuracyValidated"] = false };
@@ -26,6 +26,14 @@ internal static class InstrumentMusicProbe
             var snapshot = source.Latest;
             report["mediaSessionPresent"] = snapshot is not null; report["recording"] = snapshot;
             if (snapshot is null) { report["status"] = "NoReadableAppleMusicSession"; return; }
+            report["requestedSeconds"] = seconds;
+            var observations = new List<object>(); var observationGate = new object();
+            void RecordPosition(PlaybackSnapshot current)
+            {
+                lock (observationGate) observations.Add(new { current.MonotonicTicks, current.CapturedUtc, current.PositionMs, current.Status,
+                    current.Generation, current.Revision });
+            }
+            RecordPosition(snapshot);
             if (Optional("--expect-title") is { } title && MatchRules.Normalize(title) != MatchRules.Normalize(snapshot.Track.Title)
                 || Optional("--expect-artist") is { } artist && MatchRules.Normalize(artist) != MatchRules.Normalize(snapshot.Track.Artist))
             { report["status"] = "RequestedRecordingMismatch"; return; }
@@ -40,6 +48,7 @@ internal static class InstrumentMusicProbe
             bool changed = false;
             void Observe(PlaybackSnapshot? next)
             {
+                if (next is not null) RecordPosition(next);
                 if (next?.SessionId == snapshot.SessionId && next.Generation == snapshot.Generation && next.Revision == snapshot.Revision && next.Status == PlayState.Playing) return;
                 changed = true; guard.Clear(); stop.Cancel();
             }
@@ -61,7 +70,7 @@ internal static class InstrumentMusicProbe
                         if (stop.IsCancellationRequested || !guard.IsCurrent(frame.Epoch)) return;
                         if (presented != frame.Epoch) { presentation.Begin(frame.Epoch, true); presented = frame.Epoch; }
                         presentation.Apply(frame); delays.Add(Stopwatch.GetElapsedTime(frame.EndTicks).TotalMilliseconds);
-                        frames.Add(new { endTicks = frame.EndTicks, frame.Scores, view = presentation.View(PlayState.Playing, Stopwatch.GetTimestamp()) });
+                        frames.Add(new { endTicks = frame.EndTicks, frame.Epoch, frame.Scores, view = presentation.View(PlayState.Playing, Stopwatch.GetTimestamp()) });
                     }, stop.Token);
                 }
                 catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
@@ -71,7 +80,11 @@ internal static class InstrumentMusicProbe
                 report["windowEndToResultP95Ms"] = delays.Count == 0 ? null : delays[(int)Math.Ceiling(delays.Count * .95) - 1];
                 report["observationWindowMs"] = engine.WindowSamples * (1000d / engine.SampleRate);
             }
-            finally { source.Changed -= Observe; }
+            finally
+            {
+                source.Changed -= Observe;
+                lock (observationGate) report["playbackObservations"] = observations.ToArray();
+            }
         }
         catch (Exception error) { report["status"] = "Unavailable"; report["errorType"] = error.GetType().Name; }
         finally
