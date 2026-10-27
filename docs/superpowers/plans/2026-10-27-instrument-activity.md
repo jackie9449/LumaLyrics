@@ -32,7 +32,7 @@
 
 ## 使用方式与执行顺序
 
-本次交付为计划，下面所有复选框均未执行。仓库检查基线为 `4cc273f7b8d4ed842915071a3d9e0a81d8fa3da1`，编写时本地与远端 main 一致、工作区干净；实现时重新检查。
+执行中：任务 1 已完成，Core 全部 106 项测试通过（其中乐器相关 18 项）。任务 2 开始实现；G1 仍待实际播放验证。仓库检查基线为 `4cc273f7b8d4ed842915071a3d9e0a81d8fa3da1`，编写时本地与远端 main 一致、工作区干净；实现时重新检查。
 
 上方技能提示是 writing-plans 的标准交接格式。当前已提供的技能目录没有列出那两个 `superpowers` 执行技能；选择执行方式时先检查可用性，不能声称已经调用。任务本身包含独立的操作和验收步骤，用户若直接要求按计划执行，可按本计划逐项执行；子代理方式需遵守当时的用户授权和会话规则。
 
@@ -157,7 +157,7 @@ Invoke-Dotnet test tests/LumaLyrics.Infrastructure.Tests -c Release --filter 'Fu
 
 **Interfaces:** 输入为上面的 `ActivityParameters`、`InstrumentEpoch` 和区间；输出为稳定活动状态、合并覆盖区间、当前代次判断。
 
-- [ ] **Step 1：先添加以下行为测试。**
+- [x] **Step 1：先添加以下行为测试。**
 
 ```csharp
 [Fact]
@@ -193,8 +193,8 @@ public void SameRecordingAfterSeekRejectsOldEpoch()
 }
 ```
 
-- [ ] **Step 2：运行 Core 的 Instrument 测试，确认缺少实现导致失败。** 使用统一命令；失败不得来自无关 SDK 或依赖错误。
-- [ ] **Step 3：实现规则。** `Update` 检查分数有限且在 `[0,1]`、时间单调；连续 `AttackFrames` 个分数 ≥ On 才进入活动。活动期间分数 ≥ Off 更新最后有效时间，低于 Off 达到 ReleaseMs 后熄灭；Reset 清空全部状态。生产阈值从任务 3 的逐类别配置取得，测试数值不作为准确度结论。覆盖按起点排序合并相接／重叠区间，只有首尾采样边界使用 50 ms 容差，内部实际缺口始终保留。
+- [x] **Step 2：运行 Core 的 Instrument 测试，确认缺少实现导致失败。** 使用统一命令；失败不得来自无关 SDK 或依赖错误。
+- [x] **Step 3：实现规则。** `Update` 检查分数有限且在 `[0,1]`、时间单调；连续 `AttackFrames` 个分数 ≥ On 才进入活动。活动期间分数 ≥ Off 更新最后有效时间，低于 Off 达到 ReleaseMs 后熄灭；Reset 清空全部状态。生产阈值从任务 3 的逐类别配置取得，测试数值不作为准确度结论。覆盖按起点排序合并相接／重叠区间，只有首尾采样边界使用 50 ms 容差，内部实际缺口始终保留。
 
 ```csharp
 // EpochGuard 的并发发布与读取核心。
@@ -203,8 +203,8 @@ public void Set(InstrumentEpoch value) => Volatile.Write(ref current, value);
 public bool IsCurrent(InstrumentEpoch value) => Equals(Volatile.Read(ref current), value);
 ```
 
-- [ ] **Step 4：补齐并运行边界测试。** `NaN`、无限值、负时间、反向区间、零长度、越界分数必须被拒绝；没有任何覆盖不能 Complete；首尾容差不能吞掉内部 1 ms 缺口。不同乐器分别使用 filter，互不排斥。
-- [ ] **Step 5：检查 diff 并提交。** `feat: define instrument activity and coverage rules`。交付是可独立测试的纯状态逻辑。
+- [x] **Step 4：补齐并运行边界测试。** `NaN`、无限值、负时间、反向区间、零长度、越界分数必须被拒绝；没有任何覆盖不能 Complete；首尾容差不能吞掉内部 1 ms 缺口。不同乐器分别使用 filter，互不排斥。
+- [x] **Step 5：检查 diff 并提交。** `feat: define instrument activity and coverage rules`。交付是可独立测试的纯状态逻辑。
 
 ### Task 2：验证 Apple Music 进程回环（G1）
 
