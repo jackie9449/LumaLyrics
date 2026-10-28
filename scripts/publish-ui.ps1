@@ -41,7 +41,7 @@ Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurs
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/lyrics-review.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/apple-original-lyrics.md -Destination $guide -Force
-Copy-Item -LiteralPath docs/instrument-activity.md,docs/instrument-roster.md,docs/instrument-rock.md,docs/instrument-evaluation.md,docs/instrument-evaluation-urmp.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/instrument-activity.md,docs/instrument-response.md,docs/instrument-roster.md,docs/instrument-rock.md,docs/instrument-evaluation.md,docs/instrument-evaluation-urmp.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/release-notes.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force

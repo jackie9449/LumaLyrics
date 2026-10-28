@@ -6,6 +6,46 @@ namespace LumaLyrics.Core.Tests;
 public sealed class InstrumentPresentationTests
 {
     [Fact]
+    public void OmittedScoresBreakConsecutiveAdmissionEvidence()
+    {
+        var view = Presenter(); view.Begin(Epoch, false); view.Apply(Frame(1000, .9f));
+        view.Apply(new(Epoch, T(1200), null, null, "fixture", new Dictionary<InstrumentKind, float>()));
+        view.Apply(Frame(1400, .9f)); Assert.Empty(view.ConfirmedRoster);
+        view.Apply(Frame(1600, .9f)); Assert.Single(view.ConfirmedRoster);
+    }
+
+    [Fact]
+    public void RosterAdmissionIsStrictWhileKnownInstrumentRespondsWithoutRequalifying()
+    {
+        var activity = new Dictionary<InstrumentKind, ActivityParameters> { [InstrumentKind.Guitar] = new(.6f, .5f, 1, 200) };
+        var admission = new Dictionary<InstrumentKind, ActivityParameters> { [InstrumentKind.Guitar] = new(.9f, .8f, 3, 0) };
+        var view = new InstrumentPresentation(activity, admission); view.Begin(Epoch, false);
+        InstrumentFrame Guitar(double time, float score) => new(Epoch, T(time), null, null, "fixture", new Dictionary<InstrumentKind, float> { [InstrumentKind.Guitar] = score });
+        for (int i = 0; i < 6; i++) view.Apply(Guitar(1000 + i * 200, .8f));
+        Assert.Empty(view.View(PlayState.Playing, T(2000)).Icons);
+        view.Apply(Guitar(2200, .99f)); view.Apply(Guitar(2400, .99f));
+        Assert.Empty(view.View(PlayState.Playing, T(2400)).Icons);
+        view.Apply(Guitar(2600, .99f));
+        Assert.Equal(InstrumentVisualState.Active, view.View(PlayState.Playing, T(2600)).Icons[InstrumentKind.Guitar]);
+        view.Apply(Guitar(2800, .1f));
+        Assert.Equal(InstrumentVisualState.Dim, view.View(PlayState.Playing, T(2800)).Icons[InstrumentKind.Guitar]);
+        view.Apply(Guitar(3000, .7f));
+        Assert.Equal(InstrumentVisualState.Active, view.View(PlayState.Playing, T(3000)).Icons[InstrumentKind.Guitar]);
+    }
+
+    [Fact]
+    public void MissingWindowsCannotAccumulateRosterEvidenceAndKnownIconsBecomeUnknown()
+    {
+        var rules = new Dictionary<InstrumentKind, ActivityParameters> { [InstrumentKind.Piano] = new(.7f, .4f, 2, 0) };
+        var view = new InstrumentPresentation(rules, rules, freshnessMs: 750); view.Begin(Epoch, false);
+        view.Apply(Frame(1000, .99f)); view.Apply(Frame(2000, .99f));
+        Assert.Empty(view.ConfirmedRoster);
+        view.Apply(Frame(2200, .99f));
+        Assert.Single(view.ConfirmedRoster);
+        Assert.Equal(InstrumentVisualState.Unknown, view.View(PlayState.Playing, T(3000)).Icons[InstrumentKind.Piano]);
+    }
+
+    [Fact]
     public void DetailedVocabularyRetainsPersistedIdsAndOmitsOnlyKnownFamilyFallbacks()
     {
         Assert.Equal(Enumerable.Range(0, 8), new[] { InstrumentKind.Drums, InstrumentKind.Bass, InstrumentKind.Guitar, InstrumentKind.Piano,

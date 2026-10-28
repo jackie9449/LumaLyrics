@@ -30,7 +30,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
         var scope = Label(CurrentModel.Scope, 12); Children.Add(scope);
         modelChoice.ItemsSource = InstrumentModelCatalog.All; modelChoice.SelectedValue = CurrentModel.Id;
         System.Windows.Automation.AutomationProperties.SetName(modelChoice, "乐器识别模型"); Children.Add(modelChoice);
-        Children.Add(Label("清单根据当前录音的音频生成，只有检出的乐器才会出现，允许多件乐器同时亮起。检测范围取决于当前模型；不会根据歌名、曲风或全部可支持类别预设本曲清单。识别仍可能漏报或误报。", 12));
+        Children.Add(Label("清单根据当前录音的音频生成，先用较强的持续证据确认本曲乐器，确认后独立跟随当前声音亮灭。允许多件乐器同时亮起，不会根据歌名或曲风预设清单。短暂声音仍可能漏检，也可能认错乐器。", 12));
         var enabled = DialogUi.Check(this, "在播放页显示实验乐器识别（本机处理）", coordinator.Settings.ShowInstrumentActivity);
         var background = DialogUi.Check(this, "隐藏播放页或最小化后继续分析", coordinator.Settings.AnalyzeInstrumentsInBackground);
         void Changed()
@@ -63,7 +63,7 @@ public sealed class InstrumentSettingsPanel : StackPanel, IDisposable
         Loaded += OnLoaded; Unloaded += OnUnloaded;
     }
     InstrumentModelOption CurrentModel => InstrumentModelCatalog.Get(coordinator.Settings.InstrumentModelId);
-    string ContextMessage() => $"当前模型需要约 {CurrentModel.Profile.WindowSamples / (double)CurrentModel.Profile.SampleRate:0.##} 秒音频上下文，实际响应还受计算和活动平滑影响。首次实时播放时清单逐步补全；暂停时图标变暗。音频只在内存中处理。";
+    string ContextMessage() => $"当前模型需要约 {CurrentModel.Profile.WindowSamples / (double)CurrentModel.Profile.SampleRate:0.##} 秒音频上下文，每 {CurrentModel.Profile.HopSamples / (double)CurrentModel.Profile.SampleRate:0.##} 秒更新；启动时还需确认本曲清单。实际响应受计算和声音重叠影响，暂停时图标变暗。音频只在内存中处理。";
     static TextBlock Label(string text, double size)
     {
         var label = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = new(0, 0, 0, 12) };

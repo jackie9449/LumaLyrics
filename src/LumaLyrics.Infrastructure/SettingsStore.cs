@@ -67,7 +67,7 @@ public sealed class SettingsStore
         {
             var settings = File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? new() : new();
             // The three-class product option is superseded by the per-song model.
-            if (settings.InstrumentModelId == InstrumentModelCatalog.RockId) settings.InstrumentModelId = InstrumentModelCatalog.GeneralId;
+            if (settings.InstrumentModelId is InstrumentModelCatalog.RockId or InstrumentModelCatalog.LegacyGeneralId) settings.InstrumentModelId = InstrumentModelCatalog.GeneralId;
             return settings;
         }
         catch (Exception e) when (e is JsonException or IOException) { if (File.Exists(path)) File.Copy(path, path + $".corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}", true); return new(); }

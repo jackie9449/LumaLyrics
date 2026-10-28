@@ -19,6 +19,8 @@ public record InstrumentInferenceProfile
     public required string PreprocessingVersion { get; init; }
     public Dictionary<int, InstrumentKind> LabelMap { get; init; } = [];
     public Dictionary<InstrumentKind, ActivityParameters> Thresholds { get; init; } = [];
+    public Dictionary<InstrumentKind, ActivityParameters> RosterThresholds { get; init; } = [];
+    public int RecentSilenceSamples { get; init; }
 
     [JsonIgnore]
     public string ProfileId
@@ -29,9 +31,10 @@ public record InstrumentInferenceProfile
             return Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
             {
                 Id, Sha256 = Sha256.ToLowerInvariant(), SampleRate, WindowSamples, HopSamples, InputName, OutputName,
-                OutputClassCount, PreprocessingVersion,
+                OutputClassCount, PreprocessingVersion, RecentSilenceSamples,
                 LabelMap = LabelMap.OrderBy(item => item.Key).ToArray(),
-                Thresholds = Thresholds.OrderBy(item => item.Key).ToArray()
+                Thresholds = Thresholds.OrderBy(item => item.Key).ToArray(),
+                RosterThresholds = RosterThresholds.OrderBy(item => item.Key).ToArray()
             }))).ToLowerInvariant();
         }
     }
@@ -43,8 +46,9 @@ public record InstrumentInferenceProfile
         if (!IsHex(Sha256, 64)) throw new ArgumentException("Invalid model content hash.");
         if (SampleRate is < 8000 or > 192000 || WindowSamples < 1 || WindowSamples > SampleRate * 30
             || HopSamples < 1 || HopSamples > WindowSamples || OutputClassCount is < 1 or > 10000
+            || RecentSilenceSamples < 0 || RecentSilenceSamples > WindowSamples
             || string.IsNullOrWhiteSpace(InputName) || string.IsNullOrWhiteSpace(OutputName)
-            || string.IsNullOrWhiteSpace(PreprocessingVersion) || LabelMap is null || Thresholds is null || LabelMap.Count == 0)
+            || string.IsNullOrWhiteSpace(PreprocessingVersion) || LabelMap is null || Thresholds is null || RosterThresholds is null || LabelMap.Count == 0)
             throw new ArgumentException("Invalid model inference configuration.");
         foreach (var label in LabelMap)
             if (label.Key < 0 || label.Key >= OutputClassCount || !Enum.IsDefined(label.Value))
@@ -52,6 +56,9 @@ public record InstrumentInferenceProfile
         if (!LabelMap.Values.Distinct().Order().SequenceEqual(Thresholds.Keys.Order()))
             throw new ArgumentException("Every mapped instrument requires activity parameters.");
         foreach (var parameters in Thresholds.Values) _ = new InstrumentActivityFilter(parameters);
+        if (RosterThresholds.Count > 0 && !RosterThresholds.Keys.Order().SequenceEqual(Thresholds.Keys.Order()))
+            throw new ArgumentException("Roster admission must cover every mapped instrument.");
+        foreach (var parameters in RosterThresholds.Values) _ = new InstrumentActivityFilter(parameters);
     }
 
     internal static bool IsHttps(Uri? uri) => uri is { IsAbsoluteUri: true, Scheme: "https", Port: 443 }

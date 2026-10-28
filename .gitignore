@@ -55,5 +55,7 @@ instrument-*.log
 *.pt
 *.safetensors
 *.f32
+*.npz
+*.npy
 *.pcm
 __pycache__/

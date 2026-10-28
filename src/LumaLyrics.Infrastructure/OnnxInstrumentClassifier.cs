@@ -15,13 +15,17 @@ public sealed class OnnxInstrumentClassifier : IInstrumentClassifier
     public int SampleRate => profile.SampleRate;
     public int WindowSamples => profile.WindowSamples;
     public int HopSamples => profile.HopSamples;
+    public int RecentSilenceSamples => profile.RecentSilenceSamples;
     public IReadOnlyDictionary<InstrumentKind, ActivityParameters> ActivityParameters { get; }
+    public IReadOnlyDictionary<InstrumentKind, ActivityParameters> RosterParameters { get; }
 
     public OnnxInstrumentClassifier(string modelPath, InstrumentInferenceProfile profile)
     {
         profile.Validate();
-        this.profile = profile with { LabelMap = new(profile.LabelMap), Thresholds = new(profile.Thresholds) };
+        this.profile = profile with { LabelMap = new(profile.LabelMap), Thresholds = new(profile.Thresholds), RosterThresholds = new(profile.RosterThresholds) };
         ActivityParameters = new System.Collections.ObjectModel.ReadOnlyDictionary<InstrumentKind, ActivityParameters>(this.profile.Thresholds);
+        RosterParameters = new System.Collections.ObjectModel.ReadOnlyDictionary<InstrumentKind, ActivityParameters>(
+            this.profile.RosterThresholds.Count > 0 ? this.profile.RosterThresholds : this.profile.Thresholds);
         ProfileId = this.profile.ProfileId;
         using var file = new FileStream(modelPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         if (file.Length is <= 0 or > InstrumentModelStore.MaximumModelBytes

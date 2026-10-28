@@ -75,7 +75,7 @@ public sealed class InstrumentActivityView : UserControl, IDisposable
             ThemeManager.Bind(Root, Border.BorderBrushProperty, state == InstrumentVisualState.Active ? "AccentBrush" : "BorderBrush");
             Root.SetResourceReference(Border.BackgroundProperty, state == InstrumentVisualState.Active ? "AccentSoftBrush" : "PanelBrush");
             Drawing.StrokeDashArray = state == InstrumentVisualState.Unknown ? new DoubleCollection { 2, 2 } : null;
-            string description = state == InstrumentVisualState.Active ? "正在演奏（模型判断）" : state == InstrumentVisualState.Dim ? "本曲包含，当前未活动" : "当前区间未识别";
+            string description = state == InstrumentVisualState.Active ? "正在演奏（模型判断）" : state == InstrumentVisualState.Dim ? "本曲已识别，当前未活动" : "当前区间未识别";
             AutomationProperties.SetName(Root, name + "，" + description); Root.ToolTip = name + " · " + description;
             AutomationProperties.SetName(text, name + "，" + description);
             double from = Drawing.Opacity, to = state == InstrumentVisualState.Active ? 1 : state == InstrumentVisualState.Dim ? .38 : .7;

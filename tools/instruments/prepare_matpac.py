@@ -96,6 +96,8 @@ def main():
     parser.add_argument("--reference-dir", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--validation-wav", action="append", default=[])
+    parser.add_argument("--response-gate", help="Private frozen calibration gate; requires its exact SHA-256.")
+    parser.add_argument("--gate-sha256")
     args = parser.parse_args()
     reference, output = private_directory(args.reference_dir), private_directory(args.output_dir)
     fetch_assets(reference)
@@ -110,11 +112,31 @@ def main():
     torch.set_num_threads(2)
     model = AutoModel.from_pretrained(str(reference), trust_remote_code=True, local_files_only=True).eval()
     head = load_file(reference / "openmic-head.safetensors", device="cpu")
+    responsive = args.response_gate is not None
+    patches = 9 if responsive else 19
+    window_samples = patches * 16 * 160 + 240
+    if responsive:
+        if not args.gate_sha256 or sha256(args.response_gate) != args.gate_sha256:
+            raise ValueError("Frozen response gate checksum mismatch")
+        gate_data = np.load(args.response_gate)
+        if not np.array_equal(gate_data["indices"], [3, 4, 7, 13, 15, 16, 18]) or gate_data["weight"].shape != (7, 3840) or gate_data["bias"].shape != (7,):
+            raise ValueError("Unexpected response gate schema")
+        if float(gate_data["floor"]) != .5 or not all(np.isfinite(gate_data[k]).all() for k in ["weight", "bias"]):
+            raise ValueError("Invalid response gate values")
+        gate_weight, gate_bias = torch.from_numpy(gate_data["weight"]), torch.from_numpy(gate_data["bias"])
+        projection = torch.zeros(7, 20)
+        projection[torch.arange(7), torch.from_numpy(gate_data["indices"])] = 1
+
+    def correct(scores, emb):
+        if not responsive:
+            return scores
+        attenuation = torch.clamp(torch.sigmoid(emb @ gate_weight.T + gate_bias) / .5, 0, 1)
+        return scores * (1 + (attenuation - 1) @ projection)
 
     def original(vector):
         emb = model(vector.unsqueeze(0)).hidden_states[10]
         hidden = torch.relu(((emb - head["mu"]) / head["sd"]) @ head["w1"] + head["b1"])
-        return torch.sigmoid(hidden @ head["w2"] + head["b2"])[0]
+        return correct(torch.sigmoid(hidden @ head["w2"] + head["b2"]), emb)[0]
 
     class Waveform(torch.nn.Module):
         def __init__(self):
@@ -127,6 +149,10 @@ def main():
             self.register_buffer("mel", model.log_mel.MelSpectrogram.mel_scale.fb)
             for name, value in head.items():
                 self.register_buffer(name, value)
+            if responsive:
+                self.register_buffer("gate_weight", gate_weight)
+                self.register_buffer("gate_bias", gate_bias)
+                self.register_buffer("gate_projection", projection)
 
         def forward(self, waveform):
             frames = (waveform.unfold(0, 400, 160) * self.window).double()
@@ -135,27 +161,31 @@ def main():
             lms = torch.log(power @ self.mel + torch.finfo(torch.float32).eps)
             x = ((lms.T - self.encoder.config.lms_mean) / self.encoder.config.lms_std)[None, None, :, :]
             x = self.encoder.patch_embed(x)
-            positions = self.encoder.pos_embed[:, 1:, :].reshape(1, 5, 38, 768)[:, :, :19, :].reshape(1, 95, 768)
+            positions = self.encoder.pos_embed[:, 1:, :].reshape(1, 5, 38, 768)[:, :, :patches, :].reshape(1, 5 * patches, 768)
             x = x + positions
             x = torch.cat((self.encoder.cls_token + self.encoder.pos_embed[:, :1, :], x), dim=1)
             # Head consumes layer 10 (zero based), prior to the final layer norm.
             for block in self.encoder.student_encoder.blocks[:11]:
                 x = block(x)
-            emb = x[:, 1:, :].reshape(1, 5, 19, 768).permute(0, 2, 1, 3).reshape(1, 19, 3840).mean(1)
+            emb = x[:, 1:, :].reshape(1, 5, patches, 768).permute(0, 2, 1, 3).reshape(1, patches, 3840).mean(1)
             hidden = torch.relu(((emb - self.mu) / self.sd) @ self.w1 + self.b1)
-            return torch.clamp(torch.sigmoid(hidden @ self.w2 + self.b2)[0], 0, 1)
+            scores = torch.sigmoid(hidden @ self.w2 + self.b2)
+            if responsive:
+                attenuation = torch.clamp(torch.sigmoid(emb @ self.gate_weight.T + self.gate_bias) / .5, 0, 1)
+                scores = scores * (1 + (attenuation - 1) @ self.gate_projection)
+            return torch.clamp(scores[0], 0, 1)
 
     wrapper = Waveform().eval()
-    path = output / "matpac-openmic-waveform.onnx"
+    path = output / ("matpac-responsive-waveform.onnx" if responsive else "matpac-openmic-waveform.onnx")
     with torch.inference_mode():
-        torch.onnx.export(wrapper, torch.zeros(WINDOW), str(path), input_names=["waveform"], output_names=["scores"], opset_version=17, dynamo=False)
+        torch.onnx.export(wrapper, torch.zeros(window_samples), str(path), input_names=["waveform"], output_names=["scores"], opset_version=17, dynamo=False)
     options = ort.SessionOptions()
     options.intra_op_num_threads, options.inter_op_num_threads = 2, 1
     session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])
     rng = np.random.default_rng(4727)
-    vectors = [np.zeros(WINDOW, np.float32)]
-    vectors += [(.1 * np.sin(np.arange(WINDOW) * 2 * np.pi * f / 16000)).astype(np.float32) for f in [110, 220, 440, 880, 1760]]
-    vectors += [rng.normal(0, .03, WINDOW).astype(np.float32) for _ in range(14)]
+    vectors = [np.zeros(window_samples, np.float32)]
+    vectors += [(.1 * np.sin(np.arange(window_samples) * 2 * np.pi * f / 16000)).astype(np.float32) for f in [110, 220, 440, 880, 1760]]
+    vectors += [rng.normal(0, .03, window_samples).astype(np.float32) for _ in range(14)]
     expected, errors, timings, rewrite_errors = [], [], [], []
     with torch.inference_mode():
         for vector in vectors:
@@ -174,16 +204,17 @@ def main():
             from math import gcd
             audio, rate = sf.read(audio_path, dtype="float32", always_2d=True)
             audio = resample_poly(audio.mean(1), 16000 // gcd(rate, 16000), rate // gcd(rate, 16000)).astype(np.float32)
-            for start in range(0, min(len(audio) - WINDOW + 1, 16000 * 30), 16000):
-                vector = audio[start:start + WINDOW]
+            for start in range(0, min(len(audio) - window_samples + 1, 16000 * 30), 16000):
+                vector = audio[start:start + window_samples]
                 music_errors.append(float(np.max(np.abs(original(torch.from_numpy(vector)).numpy() - session.run(None, {"waveform": vector})[0]))))
     np.stack(vectors).tofile(output / "parity-inputs.f32")
     np.stack(expected).tofile(output / "parity-scores.f32")
     report = dict(modelFile=path.name, modelSha256=sha256(path), modelBytes=path.stat().st_size,
                   sourceAssets={name: dict(url=url, sha256=digest, bytes=size) for name, (url, digest, size) in ASSETS.items()},
                   encoderRevision=ENCODER_REVISION, headRevision=HEAD_REVISION, sourceLicenses=["Apache-2.0", "CC BY 4.0"],
-                  inputName="waveform", outputName="scores", sampleRate=16000, windowSamples=WINDOW, hopSamples=8000, outputClassCount=20,
-                  preprocessingVersion="matpac-304-slaney-power-ln-f64dft-layer10-v1", labelMap=LABELS,
+                  inputName="waveform", outputName="scores", sampleRate=16000, windowSamples=window_samples, hopSamples=3200 if responsive else 8000, outputClassCount=20,
+                  preprocessingVersion="matpac-144-slaney-power-ln-f64dft-layer10-gate-v2" if responsive else "matpac-304-slaney-power-ln-f64dft-layer10-v1", labelMap=LABELS,
+                  responseGateSha256=args.gate_sha256 if responsive else None,
                   paritySamples=20, parityVectorSamples=20, parityVectorsContainUserAudio=False,
                   maximumRewriteError=max(rewrite_errors), maximumAbsoluteError=max(errors + music_errors),
                   numericParityPassed=max(errors + music_errors) <= 1e-4, musicParityWindows=len(music_errors),

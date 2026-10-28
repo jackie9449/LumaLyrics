@@ -144,7 +144,9 @@ public sealed class InstrumentController : IAsyncDisposable
                     { status = InstrumentStatus.Unavailable; message = "变速播放暂不支持乐器识别"; continue; }
                     owner = serial; running = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); token = running.Token;
                     var epoch = Epoch(snapshot); guard.Set(epoch);
-                    presentation ??= new(InstrumentModelCatalog.Get(modelId).Profile.Thresholds);
+                    var profile = InstrumentModelCatalog.Get(modelId).Profile;
+                    presentation ??= new(profile.Thresholds, profile.RosterThresholds.Count > 0 ? profile.RosterThresholds : null,
+                        Math.Clamp(profile.HopSamples * (3000d / profile.SampleRate), 750, 2000));
                     presentation.Begin(epoch, retainRoster: true);
                     status = InstrumentStatus.Preparing; message = "正在连接 Apple Music 音频…";
                     run = Task.Run(() => RunAsync(snapshot, owner, token), CancellationToken.None);

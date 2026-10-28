@@ -27,6 +27,9 @@ public sealed class InstrumentModelTests : IDisposable
         Assert.Equal(InstrumentKind.Violin, profile.LabelMap[18]); Assert.Equal(InstrumentKind.Piano, profile.LabelMap[12]);
         Assert.Equal(InstrumentKind.Flute, profile.LabelMap[7]); Assert.Equal(InstrumentKind.Guitar, profile.LabelMap[8]);
         Assert.NotEqual(profile.ProfileId, InstrumentModelCatalog.RockExperimental.ProfileId);
+        Assert.NotEqual(profile.ProfileId, InstrumentModelCatalog.LegacyGeneralExperimental.ProfileId);
+        Assert.Equal(23280, profile.WindowSamples); Assert.Equal(3200, profile.HopSamples);
+        Assert.Equal(19, profile.RosterThresholds.Count);
         Assert.DoesNotContain(InstrumentModelCatalog.All, option => option.Id == InstrumentModelCatalog.RockId);
     }
 
@@ -37,6 +40,10 @@ public sealed class InstrumentModelTests : IDisposable
         File.WriteAllText(Path.Combine(root, "settings.json"), "{\"InstrumentModelId\":\"" + InstrumentModelCatalog.RockId + "\",\"ShowInstrumentActivity\":false}");
         var loaded = new SettingsStore(root).Load();
         Assert.Equal(InstrumentModelCatalog.GeneralId, loaded.InstrumentModelId); Assert.False(loaded.ShowInstrumentActivity);
+        File.WriteAllText(Path.Combine(root, "settings.json"), "{\"InstrumentModelId\":\"" + InstrumentModelCatalog.LegacyGeneralId + "\",\"ShowInstrumentActivity\":true,\"AnalyzeInstrumentsInBackground\":true}");
+        loaded = new SettingsStore(root).Load();
+        Assert.Equal(InstrumentModelCatalog.GeneralId, loaded.InstrumentModelId);
+        Assert.True(loaded.ShowInstrumentActivity); Assert.True(loaded.AnalyzeInstrumentsInBackground);
         File.WriteAllText(Path.Combine(root, "settings.json"), "{\"InstrumentModelId\":\"" + InstrumentModelCatalog.StringsId + "\"}");
         Assert.Equal(InstrumentModelCatalog.StringsId, new SettingsStore(root).Load().InstrumentModelId);
     }
@@ -147,6 +154,9 @@ public sealed class InstrumentModelTests : IDisposable
         Assert.NotEqual(first.ProfileId, (first with { PreprocessingVersion = "fixture-2" }).ProfileId);
         Assert.NotEqual(first.ProfileId, (first with { LabelMap = new() { [1] = InstrumentKind.Piano } }).ProfileId);
         Assert.NotEqual(first.ProfileId, (first with { Thresholds = new() { [InstrumentKind.Piano] = new(.7f, .4f, 2, 750) } }).ProfileId);
+        Assert.NotEqual(first.ProfileId, (first with { RosterThresholds = new() { [InstrumentKind.Piano] = new(.95f, .8f, 4, 0) } }).ProfileId);
+        Assert.NotEqual(first.ProfileId, (first with { RecentSilenceSamples = 1280 }).ProfileId);
+        Assert.Throws<ArgumentException>(() => (first with { RosterThresholds = new() { [InstrumentKind.Guitar] = new(.9f, .8f, 2, 0) } }).Validate());
         Assert.Throws<ArgumentException>(() => (first with { Id = "../escape" }).Validate());
         Assert.Throws<ArgumentException>(() => (first with { Sha256 = "bad" }).Validate());
     }

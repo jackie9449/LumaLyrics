@@ -164,7 +164,9 @@ public partial class MainWindow
             await Until(() => Count() == 7); var seventh = Callback(6);
             InstrumentFrame ChamberFrame() => new(seventh.Epoch, System.Diagnostics.Stopwatch.GetTimestamp(), null, null, "self-authored-chamber-fixture",
                 new Dictionary<InstrumentKind, float> { [InstrumentKind.Violin] = .95f, [InstrumentKind.Cello] = .95f });
-            for (int i = 0; i < 3; i++) { seventh.Accept(ChamberFrame()); await Task.Delay(10); }
+            for (int i = 0; i < 4; i++) { seventh.Accept(ChamberFrame()); await Task.Delay(10); }
+            checks["instrument.ownership.strictAdmissionBeforeRoster"] = controller.View(0).Icons.Count == 0;
+            seventh.Accept(ChamberFrame());
             checks["instrument.ownership.songSpecificConcreteInstruments"] = controller.View(0).Icons.Keys.Order().SequenceEqual(new[] { InstrumentKind.Cello, InstrumentKind.Violin });
             controller.Configure(false, true);
             checks["instrument.ownership.disableCancelsAndHides"] = seventh.Token.IsCancellationRequested && controller.View(0).Status == InstrumentStatus.Disabled;

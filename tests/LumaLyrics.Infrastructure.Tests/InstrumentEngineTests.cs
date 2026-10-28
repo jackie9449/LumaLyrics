@@ -21,6 +21,22 @@ public sealed class InstrumentEngineTests
     static InstrumentWindow Window() => new(A, 0, 1000, 0, 1000, 1000, Enumerable.Repeat(.01f, 1000).ToArray());
 
     [Fact]
+    public async Task RecentSilenceSuppressesCarryoverWithoutTreatingOfflinePaddingAsAudio()
+    {
+        var classifier = new DeferredClassifier();
+        classifier.Pending.SetResult(new Dictionary<InstrumentKind, float> { [InstrumentKind.Guitar] = .99f });
+        await using var engine = new InstrumentEngine(classifier, recentSilenceSamples: 80);
+        var samples = Enumerable.Repeat(.1f, 1000).ToArray(); Array.Clear(samples, 920, 80);
+        Assert.Equal(0, (await engine.AnalyzeAsync(Window() with { Mono = samples }, default)).Scores[InstrumentKind.Guitar]);
+        // The last 150 values are only a model's padded tail, outside the WAV range.
+        samples = Enumerable.Repeat(.1f, 1000).ToArray(); Array.Clear(samples, 850, 150);
+        var padded = Window() with { Mono = samples, EndMs = 850 };
+        Assert.Equal(.99f, (await engine.AnalyzeAsync(padded, default)).Scores[InstrumentKind.Guitar]);
+        Array.Clear(samples, 770, 80);
+        Assert.Equal(0, (await engine.AnalyzeAsync(padded, default)).Scores[InstrumentKind.Guitar]);
+    }
+
+    [Fact]
     public async Task DigitalSilenceCannotInventAnInstrumentAndQuietAudioKeepsItsScores()
     {
         var classifier = new DeferredClassifier();

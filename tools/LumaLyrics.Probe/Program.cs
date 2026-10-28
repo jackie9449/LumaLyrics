@@ -1,4 +1,8 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--compare-instrument-transitions")
+{
+    await LumaLyrics.Probe.InstrumentTransitionProbe.RunAsync(args);return;
+}
 if(args.ElementAtOrDefault(0)=="--probe-instrument-music")
 {
     await LumaLyrics.Probe.InstrumentMusicProbe.RunAsync(args);return;

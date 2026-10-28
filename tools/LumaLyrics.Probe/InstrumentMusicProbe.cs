@@ -61,7 +61,8 @@ internal static class InstrumentMusicProbe
                 await using var engine = new InstrumentEngine(new OnnxInstrumentClassifier(model, option.Profile));
                 await using var capture = new ProcessAudioCaptureBroker(host, typeof(InstrumentMusicProbe).Assembly.Location);
                 var analysis = new InstrumentLiveAnalysis(engine, guard);
-                var presentation = new InstrumentPresentation(option.Profile.Thresholds); presentation.Begin(epoch, false);
+                var presentation = new InstrumentPresentation(engine.ActivityParameters, engine.RosterParameters,
+                    Math.Clamp(engine.HopSamples * (3000d / engine.SampleRate), 750, 2000)); presentation.Begin(epoch, false);
                 var frames = new List<object>(); var delays = new List<double>(); InstrumentEpoch presented = epoch;
                 try
                 {

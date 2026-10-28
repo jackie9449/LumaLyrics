@@ -34,6 +34,21 @@ public sealed class InstrumentFileAnalysisTests : IDisposable
         }
     }
     [Fact]
+    public async Task WholeFileUsesTheSameStrictRosterRulesAndKeepsRawWeakEvidence()
+    {
+        var classifier = new AuthoredClassifier();
+        await using var engine = new InstrumentEngine(classifier,
+            new Dictionary<InstrumentKind, ActivityParameters> { [InstrumentKind.Piano] = new(.7f, .4f, 1, 0) },
+            new Dictionary<InstrumentKind, ActivityParameters> { [InstrumentKind.Piano] = new(.95f, .8f, 2, 0) });
+        using var repository = new InstrumentRepository(root);
+        var analysis = new InstrumentFileAnalysis(engine, repository, (_, token) => Audio(24000, 137, token));
+        var result = await analysis.AnalyzeAsync(source, key, null, default);
+        Assert.True(result.Complete); Assert.Empty(result.Roster); Assert.Empty(result.Intervals);
+        Assert.All(result.Scores, point => Assert.Equal(.9f, point.Scores[InstrumentKind.Piano]));
+        Assert.Empty(repository.Load(result.Recording, engine.ProfileId)!.Roster);
+    }
+
+    [Fact]
     public async Task CompleteAnalysisUsesActualSamplesHashAndOwnedTailPadding()
     {
         var classifier = new AuthoredClassifier(); await using var engine = Engine(classifier);

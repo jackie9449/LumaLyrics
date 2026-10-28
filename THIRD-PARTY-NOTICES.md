@@ -30,6 +30,8 @@
 
 通用多乐器实验采用 Aurian Quelennec 的 [MATPAC++ 编码器发布](https://huggingface.co/auriankelen/matpac_music)（Apache-2.0）与 [vaclis/AMTFlow 的 OpenMIC 分类头](https://huggingface.co/vaclis/amtflow)（CC BY 4.0）。本项目将固定版本组合并转换为包含波形前端的 ONNX，修改与数值核对见[通用清单说明](docs/instrument-roster.md)。参考代码及原始／转换权重全部保留在个人目录，不随 Git 或软件 ZIP 分发。固定 revision、来源、SHA-256 见 `tools/instruments/prepare_matpac.py`；模型许可不改写成应用源码许可，作者的原任务指标不代表本机实时准确度已通过。
 
+快速响应 v2 使用相同固定来源，并由本项目在 URMP 的 26 首 calibration 录音上训练七类乐器的线性误报抑制器；分组选择与 18 首公开保留组结果见[快速响应说明](docs/instrument-response.md)。这是本项目的实验改动，不是原作者的官方更新。抑制器、训练特征、NPZ／NPY 文件与实际音频仅在个人目录，不随源码或软件包分发；组合模型仍保留原资产的署名和许可，不据此宣称通用准确度通过。
+
 摇滚三类实验使用 MTG/UPF 的 Discogs Effnet 和 MTG Jamendo instrument 模型资产，[官方来源及许可](https://essentia.upf.edu/models.html)为 CC BY-NC-SA 4.0。原始文件及转换权重只在个人目录下载／生成，不随仓库或软件包分发；须遵守模型的署名、非商业和相同方式共享条件。自行实现的前端没有复制 Essentia 源码；参考原始模型、哈希与验证范围见 [摇滚说明](docs/instrument-rock.md)。Black Sabbath《Paranoid》的 Apple 官方试听仅供本机验证，不随软件分发。另有 EfficientAT MN10（Florian Schmid，固定源码 MIT）候选工具，2 秒候选因静音／负样本误报被拒绝，未加入应用清单；其参考代码和权重同样只保存于个人目录。
 
 候选工具 `prepare_panns.py` 下载 Qiuqiang Kong 等人的 PANNs Cnn6 权重（[Zenodo 3987831](https://zenodo.org/records/3987831)，CC BY 4.0）和固定 revision 的[参考代码](https://github.com/qiuqiangkong/audioset_tagging_cnn/tree/d2f4b8c18eab44737fcc0de1248ae21eb43f6aa4)（`LICENSE.MIT`）。代码、许可和权重只下载到个人开发目录，软件中未采用该模型；本轮转换未通过数值门槛。两套模型、公开音乐与逐曲结果都不包含在 Git 或便携包中。

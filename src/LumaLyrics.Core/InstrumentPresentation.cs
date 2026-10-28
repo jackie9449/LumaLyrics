@@ -7,19 +7,29 @@ public sealed class InstrumentPresentation
 {
     readonly IReadOnlyDictionary<InstrumentKind, ActivityParameters> parameters;
     readonly Dictionary<InstrumentKind, InstrumentActivityFilter> filters = [];
+    readonly Dictionary<InstrumentKind, InstrumentActivityFilter> admission = [];
     readonly SortedSet<InstrumentKind> roster = [];
     readonly Dictionary<InstrumentKind, bool> active = [];
     InstrumentEpoch? epoch;
     long lastTicks = -1;
-    public InstrumentPresentation(IReadOnlyDictionary<InstrumentKind, ActivityParameters> parameters)
+    readonly double freshnessMs;
+    public IReadOnlyList<InstrumentKind> ConfirmedRoster => roster.ToArray();
+    public InstrumentPresentation(IReadOnlyDictionary<InstrumentKind, ActivityParameters> parameters,
+        IReadOnlyDictionary<InstrumentKind, ActivityParameters>? rosterParameters = null, double freshnessMs = 2000)
     {
+        if (!double.IsFinite(freshnessMs) || freshnessMs <= 0) throw new ArgumentOutOfRangeException(nameof(freshnessMs));
+        this.freshnessMs = freshnessMs;
         this.parameters = parameters.ToDictionary();
         foreach (var pair in parameters) { if (!Enum.IsDefined(pair.Key)) throw new ArgumentException("Invalid instrument family."); filters[pair.Key] = new(pair.Value); }
+        rosterParameters ??= parameters;
+        if (!rosterParameters.Keys.Order().SequenceEqual(parameters.Keys.Order())) throw new ArgumentException("Roster rules must cover the same instruments.");
+        foreach (var pair in rosterParameters) admission[pair.Key] = new(pair.Value);
     }
     public void Begin(InstrumentEpoch next, bool retainRoster)
     {
         epoch = next; lastTicks = -1; active.Clear();
         foreach (var filter in filters.Values) filter.Reset();
+        foreach (var filter in admission.Values) filter.Reset();
         if (!retainRoster) roster.Clear();
     }
     public bool Apply(InstrumentFrame frame)
@@ -27,20 +37,25 @@ public sealed class InstrumentPresentation
         if (frame.Epoch != epoch || frame.EndTicks <= lastTicks) return false;
         if (frame.Scores.Any(pair => !parameters.ContainsKey(pair.Key) || !float.IsFinite(pair.Value) || pair.Value is < 0 or > 1))
             throw new InvalidDataException("Invalid instrument presentation scores.");
-        if (lastTicks >= 0 && Stopwatch.GetElapsedTime(lastTicks, frame.EndTicks).TotalMilliseconds > 2000)
+        if (lastTicks >= 0 && Stopwatch.GetElapsedTime(lastTicks, frame.EndTicks).TotalMilliseconds > freshnessMs)
+        {
             foreach (var filter in filters.Values) filter.Reset();
+            foreach (var filter in admission.Values) filter.Reset();
+        }
         active.Clear();
+        foreach (var kind in parameters.Keys.Except(frame.Scores.Keys)) { filters[kind].Reset(); admission[kind].Reset(); }
         foreach (var pair in frame.Scores)
         {
             bool value = filters[pair.Key].Update(pair.Value, frame.EndTicks * (1000d / Stopwatch.Frequency));
-            active[pair.Key] = value; if (value) roster.Add(pair.Key);
+            active[pair.Key] = value;
+            if (admission[pair.Key].Update(pair.Value, frame.EndTicks * (1000d / Stopwatch.Frequency))) roster.Add(pair.Key);
         }
         lastTicks = frame.EndTicks; return true;
     }
     public InstrumentViewState View(PlayState state, long nowTicks)
     {
         bool paused = state != PlayState.Playing;
-        bool fresh = lastTicks >= 0 && nowTicks >= lastTicks && Stopwatch.GetElapsedTime(lastTicks, nowTicks).TotalMilliseconds <= 2000;
+        bool fresh = lastTicks >= 0 && nowTicks >= lastTicks && Stopwatch.GetElapsedTime(lastTicks, nowTicks).TotalMilliseconds <= freshnessMs;
         var icons = InstrumentVocabulary.VisibleKinds(roster).ToDictionary(kind => kind, kind => paused ? InstrumentVisualState.Dim
             : !fresh || !active.TryGetValue(kind, out _) ? InstrumentVisualState.Unknown
             : active[kind] ? InstrumentVisualState.Active : InstrumentVisualState.Dim);

@@ -34,6 +34,8 @@ public sealed class InstrumentFileAnalysis(InstrumentEngine engine, InstrumentRe
             var epoch = new InstrumentEpoch("local-file:" + Guid.NewGuid().ToString("N"), 1, 1, 0);
             var windows = new InstrumentWindowBuilder(engine.SampleRate, engine.WindowSamples, engine.HopSamples);
             var filters = engine.ActivityParameters.ToDictionary(pair => pair.Key, pair => new InstrumentActivityFilter(pair.Value));
+            var admission = new InstrumentPresentation(engine.ActivityParameters, engine.RosterParameters);
+            admission.Begin(epoch, false);
             var results = new List<(InstrumentFrame Frame, InstrumentInterval[] Intervals)>();
             InstrumentResampler? resampler = null;
             int sourceRate = 0, channels = 0, lastPercent = -1;
@@ -44,6 +46,7 @@ public sealed class InstrumentFileAnalysis(InstrumentEngine engine, InstrumentRe
                 token.ThrowIfCancellationRequested();
                 if (window.EndMs!.Value <= lastObservation) return;
                 var frame = await engine.AnalyzeAsync(window, token);
+                admission.Apply(frame);
                 var active = new List<InstrumentInterval>();
                 double center = window.StartMs!.Value + engine.WindowSamples * (500d / engine.SampleRate);
                 double begin = Math.Max(window.StartMs.Value, center - engine.HopSamples * (500d / engine.SampleRate));
@@ -108,6 +111,8 @@ public sealed class InstrumentFileAnalysis(InstrumentEngine engine, InstrumentRe
             var builder = new InstrumentTimelineBuilder(actual, engine.ProfileId);
             foreach (var result in results) { token.ThrowIfCancellationRequested(); builder.Add(result.Frame, result.Intervals); }
             var timeline = builder.Build();
+            var confirmed = admission.ConfirmedRoster.ToHashSet();
+            timeline = timeline with { Roster = confirmed.Order().ToArray(), Intervals = timeline.Intervals.Where(interval => confirmed.Contains(interval.Kind)).ToArray() };
             long revision = checked((repository.Load(actual, engine.ProfileId)?.Revision ?? 0) + 1);
             timeline = timeline with { Revision = revision };
             token.ThrowIfCancellationRequested();

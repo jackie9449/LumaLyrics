@@ -12,25 +12,34 @@ public sealed class InstrumentEngine : IAsyncDisposable
     readonly object gate = new();
     Task? disposal;
     bool disposed;
+    readonly int recentSilenceSamples;
 
     public string ProfileId { get; }
     public int SampleRate => classifier.SampleRate;
     public int WindowSamples => classifier.WindowSamples;
     public int HopSamples => classifier.HopSamples;
     public IReadOnlyDictionary<InstrumentKind, ActivityParameters> ActivityParameters { get; }
-    public InstrumentEngine(IInstrumentClassifier classifier, IReadOnlyDictionary<InstrumentKind, ActivityParameters>? activityParameters = null)
+    public IReadOnlyDictionary<InstrumentKind, ActivityParameters> RosterParameters { get; }
+    public InstrumentEngine(IInstrumentClassifier classifier, IReadOnlyDictionary<InstrumentKind, ActivityParameters>? activityParameters = null,
+        IReadOnlyDictionary<InstrumentKind, ActivityParameters>? rosterParameters = null, int? recentSilenceSamples = null)
     {
         this.classifier = classifier;
+        this.recentSilenceSamples = recentSilenceSamples ?? (classifier as OnnxInstrumentClassifier)?.RecentSilenceSamples ?? 0;
+        if (this.recentSilenceSamples < 0 || this.recentSilenceSamples > classifier.WindowSamples) throw new ArgumentOutOfRangeException(nameof(recentSilenceSamples));
         var parameters = activityParameters ?? (classifier as OnnxInstrumentClassifier)?.ActivityParameters ?? new Dictionary<InstrumentKind, ActivityParameters>();
         foreach (var pair in parameters)
         { if (!Enum.IsDefined(pair.Key)) throw new ArgumentException("Invalid instrument family."); _ = new InstrumentActivityFilter(pair.Value); }
         ActivityParameters = new ReadOnlyDictionary<InstrumentKind, ActivityParameters>(parameters.ToDictionary());
+        var roster = rosterParameters ?? (classifier as OnnxInstrumentClassifier)?.RosterParameters ?? parameters;
+        if (!roster.Keys.Order().SequenceEqual(parameters.Keys.Order())) throw new ArgumentException("Roster rules must cover the activity vocabulary.");
+        foreach (var rule in roster.Values) _ = new InstrumentActivityFilter(rule);
+        RosterParameters = new ReadOnlyDictionary<InstrumentKind, ActivityParameters>(roster.ToDictionary());
         ProfileId = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
         {
             ClassifierProfile = classifier.ProfileId, Resampling = InstrumentResampler.Version, Downmix = "mean-all-channels-v1",
-            DigitalSilence = "exact-zero-scores-v1",
+            DigitalSilence = "observed-zero-scores-v2", RecentSilenceSamples = this.recentSilenceSamples,
             classifier.SampleRate, classifier.WindowSamples, classifier.HopSamples,
-            Activity = parameters.OrderBy(pair => pair.Key).ToArray()
+            Activity = parameters.OrderBy(pair => pair.Key).ToArray(), Roster = roster.OrderBy(pair => pair.Key).ToArray()
         }))).ToLowerInvariant();
     }
 
@@ -55,6 +64,20 @@ public sealed class InstrumentEngine : IAsyncDisposable
             // A learned prior can be high on an entirely empty waveform. Only
             // exact digital silence is suppressed; quiet music retains scores.
             bool digitalSilence = !window.Mono.Any(sample => sample != 0);
+            if (!digitalSilence && recentSilenceSamples > 0)
+            {
+                // Ignore offline padding beyond the observed range. Zero padding
+                // cannot claim that the actual last music samples were silent.
+                double duration = window.StartMs is { } start && window.EndMs is { } end ? end - start
+                    : (window.EndTicks - window.StartTicks) * (1000d / System.Diagnostics.Stopwatch.Frequency);
+                int observedSamples = (int)Math.Clamp(Math.Round(duration * SampleRate / 1000), 0, WindowSamples);
+                if (observedSamples >= recentSilenceSamples)
+                {
+                    digitalSilence = true;
+                    for (int i = observedSamples - recentSilenceSamples; i < observedSamples; i++)
+                        if (window.Mono[i] != 0) { digitalSilence = false; break; }
+                }
+            }
             await inferenceGate.WaitAsync(linked.Token);
             try
             {
