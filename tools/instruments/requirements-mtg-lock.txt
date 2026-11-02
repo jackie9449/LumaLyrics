@@ -1,2 +1,0 @@
-# The MTG exporter uses the same fixed TensorFlow/ONNX toolchain.
--r requirements-yamnet-lock.txt

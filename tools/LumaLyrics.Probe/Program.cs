@@ -1,45 +1,4 @@
 using LumaLyrics.Windows;
-if(args.ElementAtOrDefault(0)=="--compare-instrument-transitions")
-{
-    await LumaLyrics.Probe.InstrumentTransitionProbe.RunAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--probe-instrument-music")
-{
-    await LumaLyrics.Probe.InstrumentMusicProbe.RunAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--install-instrument-model")
-{
-    string Value(string flag){int index=Array.IndexOf(args,flag);return index>=0 && index+1<args.Length?args[index+1]:throw new ArgumentException("Missing "+flag);}
-    string root=LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(args.Contains("--data-dir")?Value("--data-dir"):null);
-    if(!Directory.Exists(root))throw new DirectoryNotFoundException("Select an existing personal directory.");
-    var option=LumaLyrics.Infrastructure.InstrumentModelCatalog.Get(args.Contains("--model-id")?Value("--model-id"):null);
-    await new LumaLyrics.Infrastructure.InstrumentModelStore(root).ImportAsync(Value("--file"),option.Profile,option.Bytes,default);
-    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new{status="InstalledExperimental",scope=option.Scope,enabledByDefault=false}));return;
-}
-if(args.ElementAtOrDefault(0)=="--replay-instrument-file")
-{
-    await LumaLyrics.Probe.InstrumentReplayProbe.RunAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--score-instrument-dataset")
-{
-    await LumaLyrics.Probe.InstrumentBenchmarkCommands.ScoreDatasetAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--analyze-instrument-file")
-{
-    await LumaLyrics.Probe.InstrumentBenchmarkCommands.RunFileAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--verify-instrument-model")
-{
-    await LumaLyrics.Probe.InstrumentBenchmarkCommands.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify a private converted model directory."));return;
-}
-if(args.ElementAtOrDefault(0)=="--stream-instrument-audio")
-{
-    await LumaLyrics.Probe.InstrumentAudioStream.RunAsync(args);return;
-}
-if(args.ElementAtOrDefault(0)=="--probe-instrument-audio")
-{
-    await LumaLyrics.Probe.InstrumentAudioProbe.RunAsync(args);return;
-}
 if(args.ElementAtOrDefault(0)=="--probe-native-memory-safety")
 {
     await LumaLyrics.Probe.NativeMemorySafetyProbe.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify an external private report directory."));return;
