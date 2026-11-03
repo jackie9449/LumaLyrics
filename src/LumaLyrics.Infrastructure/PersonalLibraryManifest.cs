@@ -5,7 +5,7 @@ public sealed class PersonalLibraryManifest
 {
     public const string FileName="personal-library.json";
     public string Format {get;init;}="LumaLyrics.PersonalLibrary";
-    public int Version {get;init;}=1;
+    public int Version {get;init;}=2;
     public DateTimeOffset CreatedUtc {get;init;}=DateTimeOffset.UtcNow;
     public List<PersonalLibraryFile> Files {get;init;}=[];
     public List<PersonalLibraryImage> Images {get;init;}=[];

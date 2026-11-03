@@ -7,9 +7,10 @@ namespace LumaLyrics.Infrastructure;
 public sealed class LyricsRepository : ILyricsRepository, IDisposable
 {
     readonly SqliteConnection db;
-    public LyricsRepository(string path)
+    public LyricsRepository(string path,bool readOnly=false)
     {
-        db = new(new SqliteConnectionStringBuilder{DataSource=path}.ToString()); db.Open();
+        db = new(new SqliteConnectionStringBuilder{DataSource=path,Mode=readOnly?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWriteCreate}.ToString()); db.Open();
+        if(readOnly){using var check=db.CreateCommand();check.CommandText="PRAGMA user_version";if(Convert.ToInt32(check.ExecuteScalar())!=5)throw new InvalidDataException("原词库版本不兼容。");return;}
         using(var version=db.CreateCommand())
         {
             version.CommandText="PRAGMA user_version";var old=Convert.ToInt32(version.ExecuteScalar());
@@ -58,14 +59,16 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         while (r.Read()) if (!track.DurationMs.HasValue || r.IsDBNull(1) || Math.Abs(r.GetDouble(1) - track.DurationMs.Value) <= 5000) return r.GetString(0);
         return null;
     }
-    public LyricsBinding? Find(Track track)
+    public LyricsBinding? Find(Track track)=>FindCore(track,true);
+    public LyricsBinding? FindReadOnly(Track track)=>FindCore(track,false);
+    LyricsBinding? FindCore(Track track,bool updateDuration)
     {
         track=TrackMetadata.FromAppleSession(track);
         var id = FindTrack(track);
         // Keep bindings created by 0.1's combined GSMTC artist field usable.
         if(id is null)id=FindTrack(track with{Artist=track.Artist+" — "+track.Album,Album=""});
         if (id is null) return null;
-        if (track.DurationMs.HasValue) Execute("UPDATE Tracks SET Duration=$d WHERE Id=$id", ("$d", track.DurationMs), ("$id", id));
+        if (updateDuration && track.DurationMs.HasValue) Execute("UPDATE Tracks SET Duration=$d WHERE Id=$id", ("$d", track.DurationMs), ("$id", id));
         using var c = Command("SELECT b.Id,b.TrackId,d.Raw,d.Source,b.Manual,COALESCE(o.Offset,0),d.Instrumental,d.Plain,d.ProviderJson FROM TrackLyricsBindings b JOIN LyricsDocuments d ON b.DocumentId=d.Id LEFT JOIN SyncOffsets o ON o.BindingId=b.Id WHERE b.TrackId=$id", ("$id", id));
         using var r = c.ExecuteReader();
         return r.Read() ? new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetBoolean(4), r.GetDouble(5), r.GetBoolean(6), r.GetBoolean(7),r.IsDBNull(8)?null:r.GetString(8)) : null;

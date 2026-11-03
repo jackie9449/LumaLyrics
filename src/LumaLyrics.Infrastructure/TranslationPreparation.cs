@@ -78,7 +78,7 @@ public sealed class TranslationPreparation(string root,ITranslationProvider prov
                                 document=parser.Parse(binding.Raw,binding.Plain) with{Instrumental=binding.Instrumental};
                                 if(TranslationAlignment.Hash(document.Raw)!=aligned.SourceHash)continue;
                             }
-                            translations.Save(item.Track,aligned);translations.SetState(item,"Prepared",aligned.Review,aligned.SourceHash);Prepared?.Invoke(item.Track);saved=true;break;
+                            translations.SaveMissing(item.Track,aligned);translations.SetState(item,"Prepared",aligned.Review,aligned.SourceHash);Prepared?.Invoke(item.Track);saved=true;break;
                         }
                         if(!saved)
                         {

@@ -19,14 +19,16 @@ public sealed class TranslationRepository : IDisposable
     {
         if(!readOnly){PersonalLibraryArchive.EnsureOutsideSoftware(root);Directory.CreateDirectory(root);DataDirectoryConfiguration.ProtectFromGit(root);}
         db=new(new SqliteConnectionStringBuilder{DataSource=Path.Combine(root,"translations.db"),Mode=readOnly?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWriteCreate,Pooling=false}.ToString());
-        db.Open();using(var version=Command("PRAGMA user_version")){int v=Convert.ToInt32(version.ExecuteScalar());if(v>1 || readOnly&&v!=1){db.Dispose();throw new InvalidDataException("中文译文资料库版本不兼容，请升级浮光歌词。");}}
-        if(!readOnly)Execute("""
+        db.Open();using(var version=Command("PRAGMA user_version")){int v=Convert.ToInt32(version.ExecuteScalar());if(v>2 || readOnly&&v is not (1 or 2)){db.Dispose();throw new InvalidDataException("中文译文资料库版本不兼容，请升级浮光歌词。");}}
+        if(!readOnly){Execute("""
             PRAGMA journal_mode=WAL;
             CREATE TABLE IF NOT EXISTS Translations(Fingerprint TEXT,SourceHash TEXT,Duration REAL,Title TEXT,Artist TEXT,Album TEXT,Content TEXT NOT NULL,Manual INTEGER DEFAULT 0,PRIMARY KEY(Fingerprint,SourceHash));
             CREATE TABLE IF NOT EXISTS PreparationQueue(Id TEXT PRIMARY KEY,Fingerprint TEXT,Title TEXT,Artist TEXT,Album TEXT,Duration REAL,OriginalHash TEXT,Priority INTEGER,State TEXT DEFAULT 'Pending',Detail TEXT DEFAULT '',RetryUtc TEXT,Active INTEGER DEFAULT 1);
             CREATE INDEX IF NOT EXISTS IX_TranslationQueue ON PreparationQueue(Active,State,Priority);
-            PRAGMA user_version=1;
+
             """);
+            TranslationJobRepository.Migrate(db);
+        }
     }
     SqliteCommand Command(string sql,params (string,object?)[] parameters)
     {var c=db.CreateCommand();c.CommandText=sql;foreach(var (key,value) in parameters)c.Parameters.AddWithValue(key,value??DBNull.Value);return c;}
@@ -101,8 +103,22 @@ public sealed class TranslationRepository : IDisposable
     public static void CheckDatabase(string path)
     {
         using var db=PersonalLibrarySnapshot.Open(path);using var c=db.CreateCommand();c.CommandText="PRAGMA quick_check";if(c.ExecuteScalar() is not "ok")throw new InvalidDataException("中文译文数据库校验失败。");
-        c.CommandText="PRAGMA user_version";if(Convert.ToInt32(c.ExecuteScalar())!=1)throw new InvalidDataException("中文译文数据库版本不受支持。");
+        c.CommandText="PRAGMA user_version";if(Convert.ToInt32(c.ExecuteScalar()) is not (1 or 2))throw new InvalidDataException("中文译文数据库版本不受支持。");
         c.CommandText="SELECT Content FROM Translations";using var r=c.ExecuteReader();while(r.Read())Read(r.GetString(0));
+    }
+    public ActiveTranslationRevision? FindActive(Track track,LyricsDocument document)
+    {
+        var translation=Find(track,document);if(translation is null)return null;
+        track=TrackMetadata.FromAppleSession(track);
+        using var c=Command("SELECT Revision,Manual FROM Translations WHERE Fingerprint=$f AND SourceHash=$h",("$f",track.Fingerprint),("$h",translation.SourceHash));
+        using var r=c.ExecuteReader();return r.Read()?new(r.GetString(0),new(track,translation,r.GetBoolean(1))):null;
+    }
+    public IReadOnlyList<TranslationHistoryEntry> ReadHistory(Track track,string hash)
+    {
+        var rows=new List<TranslationHistoryEntry>();
+        using var version=Command("PRAGMA user_version");if(Convert.ToInt32(version.ExecuteScalar())<2)return rows;
+        using var c=Command("SELECT Revision,Title,Artist,Album,Duration,Content,Manual,ReplacedUtc FROM TranslationHistory WHERE Fingerprint=$f AND SourceHash=$h ORDER BY rowid DESC",("$f",TrackMetadata.FromAppleSession(track).Fingerprint),("$h",hash));
+        using var r=c.ExecuteReader();while(r.Read())rows.Add(new(r.GetString(0),new(new(r.GetString(1),r.GetString(2),r.GetString(3),r.IsDBNull(4)?null:r.GetDouble(4)),Read(r.GetString(5)),r.GetBoolean(6)),"替换前版本",DateTimeOffset.Parse(r.GetString(7)),null));return rows;
     }
     public void Dispose()=>db.Dispose();
 }

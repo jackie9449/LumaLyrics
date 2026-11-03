@@ -11,7 +11,7 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
 {
     readonly PlaybackCoordinator coordinator;readonly CheckBox main,floating;readonly TextBlock progress=new(),source=new();
     readonly Button prepare,pause,retry,import;
-    bool syncing;
+    bool syncing; readonly TranslationJobListPanel jobs;
     public ChineseTranslationPanel(PlaybackCoordinator coordinator)
     {
         this.coordinator=coordinator;
@@ -40,7 +40,8 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         {
             if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);
         });AutomationProperties.SetName(review,"打开 Apple Music 原词校对");
-        coordinator.Updated+=Refresh;Refresh();
+        jobs=new(coordinator);Children.Add(jobs);
+        Loaded+=(_,_)=>{coordinator.Updated+=Refresh;Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;Refresh();
     }
     void AddText(string text,double size)
     {var label=new TextBlock{Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,size>=15?9:7)};if(size<15)ThemeManager.Bind(label,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(label);}
@@ -67,5 +68,5 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         catch(Exception e) when(e is IOException or InvalidDataException or DecoderFallbackException){MessageBox.Show(Window.GetWindow(this),e.Message,"中文译文导入");}
     }
     internal void SetVisibility(bool showMain,bool showFloating){main.IsChecked=showMain;floating.IsChecked=showFloating;}
-    public void Dispose()=>coordinator.Updated-=Refresh;
+    public void Dispose(){coordinator.Updated-=Refresh;jobs.Dispose();}
 }

@@ -39,6 +39,11 @@ Copy-Item -LiteralPath docs/music-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/playback-controls.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
+foreach($agentDocKind in @('specs','plans')){
+    $agentDocTarget=Join-Path $guide "superpowers/$agentDocKind"
+    New-Item -ItemType Directory -Force -Path $agentDocTarget | Out-Null
+    Copy-Item -LiteralPath (Join-Path $projectRoot "docs/superpowers/$agentDocKind/2026-11-03-local-agent-chinese-translations.md") -Destination $agentDocTarget -Force
+}
 Copy-Item -LiteralPath docs/lyrics-review.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/apple-original-lyrics.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/release-notes.md -Destination $guide -Force

@@ -56,7 +56,7 @@ public static class TranslationDraftExchange
             if(lines.Count==0)throw new InvalidDataException("译稿尚无可显示的中文行，未导入。");
             var translation=new ChineseTranslation(record.SourceHash,lines,"AI 中文译稿（待校对）"+engine,"local:ai",$"AI 译稿 · 待校对 · {lines.Count}/{expected.Length} 行 · 已核对原文哈希与逐行编号"+(lines.Count<expected.Length?" · 未译行留空":""),DateTimeOffset.UtcNow,true);TranslationRepository.Validate(translation);checkedRecords.Add((record.Track,translation));
         }
-        foreach(var (track,translation) in checkedRecords){translations.Save(track,translation);translations.MarkDraft(track,translation.SourceHash);}
-        return checkedRecords.Count;
+        int saved=0;foreach(var (track,translation) in checkedRecords){if(translations.SaveMissing(track,translation)){translations.MarkDraft(track,translation.SourceHash);saved++;}}
+        return saved;
     }
 }

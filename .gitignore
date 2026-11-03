@@ -59,3 +59,12 @@ instrument-*.log
 *.npy
 *.pcm
 __pycache__/
+
+**/translation-jobs/
+**/translation-batches/
+**/translation-state/
+agent-progress.json
+batch-task.md
+batch.json
+translation-result.json
+receipt.json

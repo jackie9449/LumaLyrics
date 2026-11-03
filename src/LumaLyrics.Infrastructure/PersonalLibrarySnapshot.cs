@@ -131,6 +131,7 @@ internal static class PersonalLibrarySnapshot
                 PersonalLibraryArchive.AddFile(staging,relative,"translation",manifest);
             }
             PersonalLibraryArchive.AddFile(staging,"state/translations.db","state",manifest);
+            TranslationJobBackup.Export(state,staging,manifest);
         }
         string reviews=Path.Combine(dataRoot,"lyrics-review");
         if(Directory.Exists(reviews))

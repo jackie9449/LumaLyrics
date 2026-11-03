@@ -49,6 +49,26 @@
 
 来源与个人原词只存在换行方式差别时，可将连续、完整对应的来源译句合并到既有原词组；逐个原文字符与顺序仍须一致，不猜测中文句子的分割位置。`--reconcile-translations` 可离线重新检查已经缓存的配对，仅填补缺失译文，保留已有手动与 AI 资料。完整文本与逐行对应通过仍不等于语义已由人工逐首核实。
 
-## 后续设计：本地 agent 制作中文译文（尚未实现）
+## 本地 agent 批量翻译
 
-2026-11-03 的[设计规格](superpowers/specs/2026-11-03-local-agent-chinese-translations.md)与[详细执行计划](superpowers/plans/2026-11-03-local-agent-chinese-translations.md)规划了已有来源优先、缺失时生成自足任务 MD、用户不满意时定向重译、结果自动校验接收和历史恢复。批量使用只需交给 agent 一份 `batch-task.md`，由其按清单逐曲处理、记录进度并支持中断续做，用户不逐首发送文件。当前版本仍使用本页上述来源准备、中文 LRC 导入与译稿交换工具；新任务入口和命令需实施计划完成后才能使用。
+在「设置 → 中文译文」向下滚动到「本地 agent · 批量中文译文」。
+
+1. 默认勾选「优先查找现有来源译文」；要完全离线制作，可取消此项。点击「全部缺失：生成批量任务」，或用 Ctrl / Shift 多选歌曲后点击「为所选歌曲生成任务」。没有可靠动态原词的项目会列出跳过原因。
+2. 点击「打开批量入口 MD」或「复制任务路径」，将这一份 `batch-task.md` 交给能读写本机文件的 agent，让它完整阅读并执行。用户无需逐首发送文件、查找路径或操作数据库。
+3. agent 按入口读取分块和每首任务，填写指定 JSON，逐首保存；默认每块 5 首，完成后自动继续。应用运行时自动检查，退出后下次启动接收。显示译文仍取决于主窗口／悬浮独立开关。
+4. agent 中断时，把同一份入口再次交给它并说“继续未完成项”。它应复核自己的 `agent-progress.json`、已提交文件与应用回执，跳过已提交项；没有回执只能称“已提交，待接收”。重新打开 Settings 可继续打开最近的批量入口。
+
+已有译文不满意时，多选歌曲并点击「重新制作所选译文…」，一次确认这批歌曲的替换。当前歌曲也可点击「当前歌曲制作 / 重译…」。旧版保留到完整新稿通过检查后再替换；有未译行的替换稿需要用户明确采用。可以恢复当前歌曲的上一版，或取消其未完成任务。任务期间原词或当前译文改变时，晚到结果不会覆盖新版本。
+
+任务位于实际个人目录的 `translation-jobs` 与 `translation-batches`，agent只写指定结果及自己的进度，不写数据库。软件检查录音、原词哈希、完整逐组映射、格式、授权及预期修订；这些检查不等于人工语义校对，AI属性和来源始终保留。仅能聊天而不能读写本机的模型需要用户手工保存 JSON，无法自动落盘。软件不安装或调用翻译模型。
+
+个人备份保存一致的译文数据库、当前译文、修订历史、任务和批次的可读记录。未最终提交的临时文件和 agent自行记录的进度不作为已接收成果备份；恢复后旧路径任务暂停，应重新生成入口。新版备份 manifest 为 2、译文库 schema 为 2，新版仍读取旧备份；旧软件不能打开新版资料，请保留可用备份并使用新版恢复到新目录。
+
+可选只读校验及显式接收（使用运行包内 Microsoft host；路径参数均指实际个人目录和任务结果）：
+
+```powershell
+./runtime/dotnet.exe exec ./LumaLyrics.Probe.dll --validate-translation-job-result 'D:/个人资料' 'D:/个人资料/translation-jobs/实际任务ID/translation-result.json'
+./runtime/dotnet.exe exec ./LumaLyrics.Probe.dll --import-translation-job-result 'D:/个人资料' 'D:/个人资料/translation-jobs/实际任务ID/translation-result.json'
+```
+
+基本流程不要求执行命令；不要原样执行上述示例路径。详细协议和实现步骤见[设计规格](superpowers/specs/2026-11-03-local-agent-chinese-translations.md)及[执行计划](superpowers/plans/2026-11-03-local-agent-chinese-translations.md)。

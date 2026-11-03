@@ -120,7 +120,7 @@ public sealed class PersonalLibraryTests : IDisposable
     [Fact] public void FutureManifestVersionsAreRejected()
     {
         using var source=Seed();PersonalLibraryArchive.Export(PathOf("source"),PathOf("collection"));string file=PathOf("collection/"+PersonalLibraryManifest.FileName);
-        var json=JsonNode.Parse(File.ReadAllText(file))!;json["version"]=2;File.WriteAllText(file,json.ToJsonString());
+        var json=JsonNode.Parse(File.ReadAllText(file))!;json["version"]=999;File.WriteAllText(file,json.ToJsonString());
         Assert.Throws<InvalidDataException>(()=>PersonalLibraryArchive.Validate(PathOf("collection")));
     }
     [Theory] [InlineData("../outside.txt")] [InlineData("C:/outside.txt")] [InlineData("state/../../outside.txt")] [InlineData("state\\outside.txt")]

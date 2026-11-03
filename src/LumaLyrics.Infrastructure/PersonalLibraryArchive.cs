@@ -75,7 +75,7 @@ public static class PersonalLibraryArchive
     static PersonalLibraryManifest ReadManifest(Stream stream)
     {
         var manifest=JsonSerializer.Deserialize<PersonalLibraryManifest>(stream,Json)??throw new InvalidDataException("个人资料清单为空。");
-        if(manifest.Format!="LumaLyrics.PersonalLibrary"||manifest.Version!=1)throw new InvalidDataException("个人资料格式或版本不受支持，请使用对应版本软件。");
+        if(manifest.Format!="LumaLyrics.PersonalLibrary"||manifest.Version is not (1 or 2))throw new InvalidDataException("个人资料格式或版本不受支持，请使用对应版本软件。");
         if(manifest.Files is null || manifest.Images is null || manifest.Tracks is null || manifest.Warnings is null || manifest.Files.Count>250000 || manifest.Tracks.Count>1000000)throw new InvalidDataException("个人资料清单无效。");
         if(!manifest.Files.Any(f=>f is not null && f.Path=="state/lyrics.db"))throw new InvalidDataException("备份缺少歌词数据库快照。");
         var paths=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -85,6 +85,7 @@ public static class PersonalLibraryArchive
             bool valid=file.Kind switch {
                 "state"=>StateFiles.Contains(file.Path),
                 "lyric"=>file.Path.StartsWith("lyrics/",StringComparison.Ordinal) && Path.GetExtension(file.Path) is ".lrc" or ".txt",
+                "translation-state"=>file.Path.StartsWith("translation-state/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
                 "translation"=>file.Path.StartsWith("translations/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
                 "original"=>file.Path.StartsWith("originals/",StringComparison.Ordinal) && Path.GetExtension(file.Path)==".json",
                 "review"=>file.Path.Split('/') is ["lyrics-review",{Length:>0},"review.json" or "capture.png"],
@@ -119,6 +120,7 @@ public static class PersonalLibraryArchive
         PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/lyrics.db"),true);
         if(files.ContainsKey("state/artwork.db"))PersonalLibrarySnapshot.CheckDatabase(AssetPath(root,"state/artwork.db"),false);
         if(files.ContainsKey("state/translations.db"))TranslationRepository.CheckDatabase(AssetPath(root,"state/translations.db"));
+        TranslationJobBackup.Validate(root,manifest.Files);
         foreach(var original in manifest.Files.Where(f=>f.Kind=="original"))
         {
             if(original.Bytes>16*1024*1024)throw new InvalidDataException("原词来源文件过大。");

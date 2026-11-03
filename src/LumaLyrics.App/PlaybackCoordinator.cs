@@ -40,7 +40,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         this.dispatcher = dispatcher; this.store = store; Settings = settings;
         this.manualProvider=manualProvider??provider;
         repository = new(Path.Combine(store.Root,"lyrics.db")); Source = new(settings.PreferredSession);
-        translations=new(store.Root);TranslationProgress=translations.Progress();
+        translations=new(store.Root);TranslationProgress=translations.Progress();StartTranslationInbox();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
         using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();
         Source.Changed += s => dispatcher.BeginInvoke(() => Receive(s));
@@ -304,6 +304,9 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         if(artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
         if(libraryMonitor is not null){try{await libraryMonitor;}catch(OperationCanceledException){}}
         if(translationTask is not null){try{await translationTask;}catch(OperationCanceledException){}}
+        if(translationActivated is not null)System.Windows.Application.Current.Activated-=translationActivated;
+        if(translationInbox is not null)await translationInbox.DisposeAsync();
+        if(translationInboxTask is not null)await translationInboxTask;
         translations.Dispose();translationCancellation?.Dispose();
         // Let a canceled HTTP continuation finish before disposing its semaphore.
         provider.Dispose();repository.Dispose();libraryCancellation?.Dispose();artworkCancellation?.Dispose();lifetime.Dispose();store.Save(Settings);
