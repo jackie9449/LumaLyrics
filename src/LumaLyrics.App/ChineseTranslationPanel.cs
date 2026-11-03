@@ -11,8 +11,8 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
 {
     readonly PlaybackCoordinator coordinator;readonly CheckBox main,floating;readonly TextBlock progress=new(),source=new();
     readonly Button prepare,pause,retry,import;
-    bool syncing; readonly TranslationJobListPanel jobs;
-    public ChineseTranslationPanel(PlaybackCoordinator coordinator)
+    bool syncing; readonly TranslationJobListPanel? jobs;
+    public ChineseTranslationPanel(PlaybackCoordinator coordinator,bool includeJobs=true)
     {
         this.coordinator=coordinator;
         var title=new TextBlock{Text="听见原词，也读懂心意。",FontSize=20,Margin=new(0,0,0,12)};ThemeManager.BindDisplay(title);Children.Add(title);
@@ -40,7 +40,8 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         {
             if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);
         });AutomationProperties.SetName(review,"打开 Apple Music 原词校对");
-        jobs=new(coordinator);Children.Add(jobs);
+        if(includeJobs){jobs=new(coordinator);Children.Add(jobs);}
+        else{for(int i=Children.Count-1;i>=5;i--)if(!ReferenceEquals(Children[i],source))Children.RemoveAt(i);}
         Loaded+=(_,_)=>{coordinator.Updated+=Refresh;Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;Refresh();
     }
     void AddText(string text,double size)
@@ -68,5 +69,5 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         catch(Exception e) when(e is IOException or InvalidDataException or DecoderFallbackException){MessageBox.Show(Window.GetWindow(this),e.Message,"中文译文导入");}
     }
     internal void SetVisibility(bool showMain,bool showFloating){main.IsChecked=showMain;floating.IsChecked=showFloating;}
-    public void Dispose(){coordinator.Updated-=Refresh;jobs.Dispose();}
+    public void Dispose(){coordinator.Updated-=Refresh;jobs?.Dispose();}
 }

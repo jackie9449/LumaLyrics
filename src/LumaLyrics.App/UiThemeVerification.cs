@@ -16,7 +16,7 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
-        if(Environment.GetCommandLineArgs().Contains("--verify-translation-jobs"))
+        if(Environment.GetCommandLineArgs().Contains("--verify-translation-jobs")||Environment.GetCommandLineArgs().Contains("--verify-library-workspace")||Environment.GetCommandLineArgs().Contains("--verify-library-workspace-navigation"))
         {
             await VerifyTranslationJobsAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }

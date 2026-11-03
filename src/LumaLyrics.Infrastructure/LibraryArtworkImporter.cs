@@ -21,7 +21,7 @@ public sealed class LibraryArtworkImporter : IDisposable
         var snapshot=await Task.Run(()=>new AppleMusicLibraryReader().Read(libraryPath),token);
         await RunAsync(snapshot,token,maximum);
     }
-    public async Task RunAsync(LibrarySnapshot snapshot,CancellationToken token,int? maximum=null,IReadOnlyDictionary<string,AppleArtworkSource>? sources=null)
+    public async Task RunAsync(LibrarySnapshot snapshot,CancellationToken token,int? maximum=null,IReadOnlyDictionary<string,AppleArtworkSource>? sources=null,IReadOnlySet<LibrarySongKey>? selectedKeys=null)
     {
         Directory.CreateDirectory(root);using var cache=new ArtworkCache(root);FileStream lease;
         try{lease=new(Path.Combine(root,"artwork-prefetch.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);}
@@ -38,7 +38,7 @@ public sealed class LibraryArtworkImporter : IDisposable
         {
             token.ThrowIfCancellationRequested();sources??=new AppleMusicArtworkReader().Read(snapshot.Path);cache.Sync(snapshot,sources);
             Report("已按 Apple Music 持久 ID 读取封面索引",true);int processed=0;var attempted=new HashSet<string>();
-            foreach(var item in cache.GetQueue())
+            foreach(var item in cache.GetQueue().Where(item=>selectedKeys is null||selectedKeys.Contains(new(item.Source,item.PersistentId))))
             {
                 token.ThrowIfCancellationRequested();if(Paused() || maximum.HasValue&&processed>=maximum)break;
                 if(!attempted.Add(item.ImageKey))continue;

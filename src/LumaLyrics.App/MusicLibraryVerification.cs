@@ -35,7 +35,7 @@ public partial class MainWindow
             new("fixture","three",new("静静的海面","浮光","海面",180000),coverPaths[2],"Instrumental")
         };
         fixture.AddRange(Enumerable.Range(1,3000).Select(i=>new MusicLibrarySong("fixture",i.ToString(),new("片段 "+i.ToString("0000"),"工作室 "+(i%8),"创作集 "+(i%12),120000+i*10),coverPaths[i%3])));
-        int mode=0,cancelled=0,manageCount=0,transportCount=0,loadCount=0;bool playbackUnavailable=false;var played=new List<string>();
+        int mode=0,cancelled=0,manageCount=0,transportCount=0,loadCount=0;bool playbackUnavailable=false;var played=new List<string>();IReadOnlyList<MusicLibrarySong>? managedSongs=null;
         int albumCancelled=0;bool albumUnavailable=false;var playedAlbums=new List<MusicAlbum>();
         async Task<MusicLibraryResult> Load(CancellationToken token)
         {
@@ -57,7 +57,7 @@ public partial class MainWindow
             }
             catch(OperationCanceledException){albumCancelled++;throw;}
         }
-        var browser=new MusicLibraryView(Load,Play,()=>manageCount++,ShowLyricsPage,()=>{},vm,()=>transportCount++,()=>transportCount++,()=>transportCount++,PlayAlbum);
+        var browser=new MusicLibraryView(Load,Play,()=>manageCount++,ShowLyricsPage,()=>{},vm,()=>transportCount++,()=>transportCount++,()=>transportCount++,PlayAlbum,manageSongs:selected=>managedSongs=selected);
         musicLibrary=browser;MainPageHost.Children.Add(browser);
         Button ButtonWith(string text)=>Descendants<Button>(browser).First(b=>b.Content?.ToString()==text);
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
@@ -73,7 +73,11 @@ public partial class MainWindow
             checks["musicLibrary.lazyThumbnails"]=browser.CachedThumbnailCount is >0 and <=3;
             await Search("微光 浮光");checks["musicLibrary.multiFieldSearch"]=browser.SongList.Items.Count==1 && ((MusicLibraryView.MusicRow)browser.SongList.Items[0]).Song.PersistentId=="one";
             SelectSong("one");var row=(ListBoxItem)browser.SongList.ItemContainerGenerator.ContainerFromItem(browser.SongList.SelectedItem);
-            Click(Descendants<Button>(row).Single());await browser.ActivePlayback!;
+            var manager=Descendants<Button>(row).Single(b=>b.Content?.ToString()=="管理");Click(manager);
+            checks["musicLibrary.managementExactSongWithoutPlayback"]=managedSongs?.Single().PersistentId=="one"&&played.Count==0;
+            managedSongs=null;manager.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(this),0,Key.Enter){RoutedEvent=Keyboard.PreviewKeyDownEvent});
+            checks["musicLibrary.managementEnterDoesNotPlay"]=managedSongs?.Single().PersistentId=="one"&&played.Count==0;
+            Click(Descendants<Button>(row).Single(b=>b.Content?.ToString()=="▷"));await browser.ActivePlayback!;
             checks["musicLibrary.rowPlayUsesSelectedRecording"]=played.SequenceEqual(new[]{"one"}) && browser.StatusText=="已确认 · 微光之间";
             browser.SongList.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(this),0,Key.Enter){RoutedEvent=Keyboard.PreviewKeyDownEvent});await browser.ActivePlayback!;
             checks["musicLibrary.enterPlaysSelectedSong"]=played.Count==2;
@@ -88,7 +92,7 @@ public partial class MainWindow
             checks["musicLibrary.nowPlayingTracksActualRecording"]=browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Single(r=>r.NowPlaying).Song.PersistentId=="two";
             browser.SortChoice.SelectedIndex=2;UpdateLayout();
             checks["musicLibrary.albumSort"]=browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Select(r=>r.Song.Album).SequenceEqual(browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Select(r=>r.Song.Album).OrderBy(s=>s,StringComparer.CurrentCulture));
-            Click(ButtonWith("缓存管理"));checks["musicLibrary.cacheManagementPreserved"]=manageCount==1;
+            Click(ButtonWith("歌词与译文管理"));checks["musicLibrary.cacheManagementPreserved"]=manageCount==1;
             vm.CanPlay=vm.CanPrevious=vm.CanNext=true;Click(ButtonWith("‹"));Click(ButtonWith("Ⅱ"));Click(ButtonWith("›"));checks["musicLibrary.transportCallbacks"]=transportCount==3;
             foreach(var app in AppThemes.All)
             {
@@ -117,7 +121,7 @@ public partial class MainWindow
             checks["musicLibrary.thumbnailCacheBounded"]=cache.Count==128;
             string bad=Path.Combine(fixtureRoot,"invalid.png");File.WriteAllText(bad,"invalid fixture");checks["musicLibrary.corruptCoverHandled"]=cache.Get(bad) is null;
             await VerifyAlbumBrowserAsync(browser,directory,checks,async large=>{mode=large?3:0;await browser.RefreshAsync();});
-            await VerifyAlbumPlaybackAsync(browser,directory,checks,()=>playedAlbums,()=>albumCancelled,value=>albumUnavailable=value);
+            await VerifyAlbumPlaybackAsync(browser,directory,checks,()=>playedAlbums,()=>albumCancelled,value=>albumUnavailable=value,()=>managedSongs);
             await VerifyNativeSelectorIsolationAsync(checks);
             await VerifyAlbumArtworkAsync(browser,directory,checks,coverPaths,value=>mode=value,()=>loadCount);
             browser.ShowAllSongs();

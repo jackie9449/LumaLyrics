@@ -21,11 +21,17 @@ public static class LibraryCoverageAudit
             token.ThrowIfCancellationRequested();var bound=byTrack.GetValueOrDefault(item.Track.Fingerprint)?.FirstOrDefault(x=>item.Track.DurationMs is null || x.Track.DurationMs is null || Math.Abs(item.Track.DurationMs.Value-x.Track.DurationMs.Value)<=5000).Binding;
             bool valid=bound is not null && (bound.Manual || LibraryPrefetcher.QualityOf(bound,item.Track));var document=valid?parser.Parse(bound!.Raw,bound.Plain) with{Instrumental=bound.Instrumental}:null;
             string state=document?.Instrumental==true?"Instrumental":document?.IsSynced==true?bound!.Manual?"ManualTimed":"CheckedTimed":bound is null?"Missing":"Unconfirmed";
-            var required=document is {IsSynced:true,Instrumental:false}?document.Groups.Select((g,i)=>(g,i)).Where(x=>TranslationAlignment.NeedsChineseTranslation(document,x.g.Text)).Select(x=>x.i).ToArray():[];
             var translation=document is null?null:translations?.Find(item.Track,document);
-            int translated=required.Count(index=>!string.IsNullOrWhiteSpace(translation?.TextAt(index)));
-            string translationState=document is null || !document.IsSynced && !document.Instrumental?"MissingOriginal":required.Length==0?"NotRequired":translation is null?"Missing":(translated==required.Length?"Complete":"Partial")+(translation.Draft?"Draft":"Translation");
-            rows.Add(new(item.PersistentId,item.Track,state,bound?.Source,document is null?null:TranslationAlignment.Hash(document.Raw),document?.Groups.Count??0,translationState,required.Length,translated,translation?.Source,translation?.Review));
+            var status=LibraryWorkspaceProjection.Assess(new(document,valid,bound?.Manual==true,translation,false,false,null,LibraryCoverState.Missing));
+            string translationState=status.Chinese switch
+            {
+                LibraryChineseState.BlockedOriginal=>"MissingOriginal",
+                LibraryChineseState.NotRequired=>"NotRequired",
+                LibraryChineseState.Complete=>"Complete"+(translation!.Draft?"Draft":"Translation"),
+                LibraryChineseState.Partial=>"Partial"+(translation!.Draft?"Draft":"Translation"),
+                _=>"Missing"
+            };
+            rows.Add(new(item.PersistentId,item.Track,state,bound?.Source,status.SourceHash,document?.Groups.Count??0,translationState,status.RequiredGroups,status.TranslatedGroups,translation?.Source,translation?.Review));
         }
         int foreign=rows.Count(x=>x.RequiredGroups>0);
         return new(DateTimeOffset.UtcNow,library.SourceHash,library.DeclaredCount,rows.Count,rows.Count(x=>x.OriginalState is "ManualTimed" or "CheckedTimed"),rows.Count(x=>x.OriginalState=="Instrumental"),rows.Count(x=>x.OriginalState is "Missing" or "Unconfirmed"),foreign,rows.Count(x=>x.TranslationState is "CompleteDraft" or "CompleteTranslation"),rows.Count(x=>x.TranslationState.EndsWith("Draft",StringComparison.Ordinal)),rows.Count(x=>x.RequiredGroups>0 && x.TranslatedGroups<x.RequiredGroups),rows){StoredTrackCount=library.StoredTrackCount};

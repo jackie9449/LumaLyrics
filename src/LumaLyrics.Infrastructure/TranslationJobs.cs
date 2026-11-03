@@ -23,7 +23,7 @@ public sealed record TranslationJobTicket(TranslationJobRequest Request,
     string RequestSha256, string TaskPath, string ResultPath);
 public sealed record TranslationJobSkip(Track Track, string Code, string Message);
 public sealed record TranslationBatchSelection(Track Track, TranslationJobMode Mode,
-    string? UserInstructions = null, bool IncludeExistingTranslation = false);
+    string? UserInstructions = null, bool IncludeExistingTranslation = false, LibraryPreparationTarget? Target = null);
 public sealed record TranslationBatchItem(string JobId, string RequestSha256,
     string TaskPath, string ResultPath, string ReceiptPath);
 public sealed record TranslationBatchChunk(string Format, int SchemaVersion,

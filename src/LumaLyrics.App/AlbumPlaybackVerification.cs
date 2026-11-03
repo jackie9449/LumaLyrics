@@ -7,13 +7,13 @@ namespace LumaLyrics.App;
 
 public partial class MainWindow
 {
-    async Task VerifyAlbumPlaybackAsync(MusicLibraryView browser,string directory,Dictionary<string,object?> checks,Func<IReadOnlyList<MusicAlbum>> played,Func<int> cancelled,Action<bool> unavailable)
+    async Task VerifyAlbumPlaybackAsync(MusicLibraryView browser,string directory,Dictionary<string,object?> checks,Func<IReadOnlyList<MusicAlbum>> played,Func<int> cancelled,Action<bool> unavailable,Func<IReadOnlyList<MusicLibrarySong>?>? managed=null)
     {
         async Task Search(string text){browser.SearchBox.Text=text;await Task.Delay(200);UpdateLayout();}
         void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent,button));
         Button AlbumPlay(string title)=>Descendants<Button>(browser.AlbumShelf).Single(b=>b.DataContext is MusicAlbum a && a.Title==title && AutomationProperties.GetName(b).StartsWith("播放专辑 · ",StringComparison.Ordinal));
         Button DetailPlay()=>Descendants<Button>(browser).Single(b=>AutomationProperties.GetName(b)=="播放当前专辑");
-        Button RowPlay()=>Descendants<Button>((ListBoxItem)browser.SongList.ItemContainerGenerator.ContainerFromItem(browser.SongList.SelectedItem)).Single();
+        Button RowPlay()=>Descendants<Button>((ListBoxItem)browser.SongList.ItemContainerGenerator.ContainerFromItem(browser.SongList.SelectedItem)).Single(b=>b.Content?.ToString()=="▷");
         void SelectSong(string id){browser.SongList.SelectedItem=browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Single(r=>r.Song.PersistentId==id);browser.SongList.ScrollIntoView(browser.SongList.SelectedItem);UpdateLayout();}
 
         browser.ShowAlbums();await Search("创作集0 工作室0");var whole=browser.AlbumShelf.Albums.Single();
@@ -25,6 +25,8 @@ public partial class MainWindow
         browser.OpenAlbum(whole);await Task.Delay(60);UpdateLayout();Click(DetailPlay());await browser.ActivePlayback!;
         checks["albumPlay.detailSubmitsEntireAlbum"]=played().Last().Key==whole.Key && browser.SelectedAlbum?.Key==whole.Key && browser.StatusText=="已确认专辑 · "+whole.Title;
         checks["albumPlay.detailUsesThemeResources"]=DetailPlay().Foreground==FindResource("AccentTextBrush");
+        if(managed is not null){int playCount=played().Count;Click(Descendants<Button>(browser).Single(b=>b.Content?.ToString()=="管理本专辑歌词"));checks["albumPlay.managementKeepsExactAlbumWithoutPlay"]=managed()?.Select(s=>s.Key).SequenceEqual(whole.Songs.Select(s=>s.Key))==true&&played().Count==playCount&&browser.SelectedAlbum?.Key==whole.Key;}
+
         VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"album-play-detail.png"),true);
         browser.ShowAlbums();await Search("浮光");var slow=browser.AlbumShelf.Albums.Single(a=>a.Title=="原创测试");
         int before=cancelled();Click(AlbumPlay(slow.Title));var earlier=browser.ActivePlayback!;Click(AlbumPlay("夜色"));await Task.WhenAll(earlier,browser.ActivePlayback!);

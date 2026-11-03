@@ -108,11 +108,11 @@ public sealed class TranslationRepository : IDisposable
     }
     public ActiveTranslationRevision? FindActive(Track track,LyricsDocument document)
     {
-        var translation=Find(track,document);if(translation is null)return null;
-        track=TrackMetadata.FromAppleSession(track);
-        using var c=Command("SELECT Revision,Manual FROM Translations WHERE Fingerprint=$f AND SourceHash=$h",("$f",track.Fingerprint),("$h",translation.SourceHash));
-        using var r=c.ExecuteReader();return r.Read()?new(r.GetString(0),new(track,translation,r.GetBoolean(1))):null;
+        if(document.Instrumental||!document.IsSynced)return null;track=TrackMetadata.FromAppleSession(track);
+        using var c=Command("SELECT Content,Revision,Manual FROM Translations WHERE Fingerprint=$f AND SourceHash=$h AND ($d IS NULL OR Duration IS NULL OR abs(Duration-$d)<=5000)",("$f",track.Fingerprint),("$h",TranslationAlignment.Hash(document.Raw)),("$d",track.DurationMs));
+        using var r=c.ExecuteReader();if(!r.Read())return null;var translation=Read(r.GetString(0));return translation.Lines.All(l=>l.GroupIndex<document.Groups.Count&&TranslationAlignment.IsLyricText(document.Groups[l.GroupIndex].Text))?new(r.GetString(1),new(track,translation,r.GetBoolean(2))):null;
     }
+
     public IReadOnlyList<TranslationHistoryEntry> ReadHistory(Track track,string hash)
     {
         var rows=new List<TranslationHistoryEntry>();

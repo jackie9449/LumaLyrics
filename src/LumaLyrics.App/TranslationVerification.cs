@@ -26,7 +26,7 @@ public partial class MainWindow
             checks["translation.disabledClearsFloating"]=vm.CurrentTranslation.Length==0 && vm.NextTranslation.Length==0;
             preferences=new(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();preferences.SelectTranslationTab();await Task.Delay(70);
             preferences.ChineseTranslations.SetVisibility(true,false);await Task.Delay(40);
-            checks["translation.settingsTabAvailable"]=Descendants<TabItem>(preferences).Any(t=>t.Header?.ToString()=="中文译文");
+            checks["translation.settingsTabAvailable"]=Descendants<TabItem>(preferences).Any(t=>t.Header?.ToString()=="资料库与歌词");
             checks["translation.mainToggleIndependent"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks.Count(b=>b.Visibility==Visibility.Visible)==7 && vm.CurrentTranslation.Length==0;
             checks["translation.savedImmediately"]=store.Load().ShowChineseTranslation && !store.Load().OverlayShowChineseTranslation;
             checks["translation.mainFooterReflectsSettings"]=MainChineseTranslationToggle.IsChecked==true && System.Windows.Automation.AutomationProperties.GetName(MainChineseTranslationToggle)=="主窗口中文译文开关";

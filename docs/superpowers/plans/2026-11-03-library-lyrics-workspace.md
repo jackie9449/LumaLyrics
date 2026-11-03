@@ -8,7 +8,23 @@
 
 **Tech Stack:** 既有 .NET 10 / C# 14、WPF、Microsoft.Data.Sqlite、System.Text.Json、xUnit、PowerShell；不增加翻译模型、网络服务或 UI 框架。
 
-**Spec:** [资料库与中文译文整合设计](../specs/2026-11-03-library-lyrics-workspace.md)。基线 `0df09de007f0b8e3ca7e5d0fb2b5a39beb98fcac`，工作树与远端初始一致。本次交付设计和计划，尚未实施下列变化。
+**Spec:** [资料库与中文译文整合设计](../specs/2026-11-03-library-lyrics-workspace.md)。基线 `0df09de007f0b8e3ca7e5d0fb2b5a39beb98fcac`，工作树与远端初始一致。本计划已进入实施；下方原始步骤保留为设计记录，实际交付与差异见下一节。
+
+## 2026-11-03 实施记录
+
+已落地统一入口、四个内部视图、按原生键选择、独立完整／部分状态、选中范围准备与批量 MD、明确目标的导入／恢复／采用／取消、全部批次和单首历史任务、歌曲／专辑管理联动。原词与译文库版本、个人备份和 agent 协议保持不变。
+
+实际文件组织复用 `LibraryPanel`、`TranslationJobListPanel` 和 `ChineseTranslationPanel`，新增 `LibraryWorkspacePanel`、`LibraryTasksPanel`、`PlaybackLibraryWorkspace`、`LibraryWorkspaceModels/Catalog`、`LibrarySongActions`、`LibraryTaskCatalog`。状态投影与类型放在同一个 Models 文件；协调器位于现有 profile 持有的 PlaybackCoordinator partial，沿用原 provider、单实例锁和保存服务，不另建通用持久任务库。导航专项合入增强的 TranslationJobVerification，并注册两个 workspace 参数别名。
+
+实现选择与限制：
+
+- 管理快照在后台批量读取并共享短期读取任务，分页使用请求版本、来源与取消校验；尚未实现逐条增量解析缓存。任务读取在隐藏时取消并解绑。
+- 一次冻结原生键集合，仅完整确认快照用于整库同步，封面下载只过滤选中键。原词及来源译文租约忙时逐曲说明后跳过，不并发重复请求；已有部分稿沿用，只有明确重译才替换。
+- 多条原生记录共享旧译文槽时，定向写入保守拒绝。尚未提供共享槽整组影响确认界面；不会假装所选一条能独立覆盖共享内容。
+- 任务页重试只重新检查失败的补缺目标，重译需要回到歌曲页重新确认。未知／缺失成员文件不猜批次内容；当前会话选择不跨重启执行。
+- 音乐浏览提供带身份的管理动作，详细覆盖状态集中在管理页；音乐浏览行未重复显示完整状态列。
+
+实际测试、运行包检查与实机边界见[验证记录](../../verification-library-workspace/README.md)。以下未勾选的历史步骤包含原先的拆文件、额外专项和性能方案，不能作为全部已完成的声明。
 
 ## Global Constraints
 

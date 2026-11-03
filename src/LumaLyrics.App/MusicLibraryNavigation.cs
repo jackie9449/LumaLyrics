@@ -19,13 +19,17 @@ public partial class MainWindow
             var bridge=playbackBridge;
             musicLibrary=new(token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),bridge.PlayAsync,
                 ()=>LibraryClicked(this,new()),ShowLyricsPage,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},vm,
-                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync,bridge.PlayQueueAsync,bridge.ReorderQueueAsync,bridge.PlayPlaylistAsync,bridge.PlayPlaylistSelectionAsync);
+                ()=>_=ControlAsync("previous"),()=>PlayClicked(this,new()),()=>_=ControlAsync("next"),bridge.PlayAlbumAsync,bridge.ReadQueueAsync,bridge.InsertNextAsync,bridge.PlayQueueAsync,bridge.ReorderQueueAsync,bridge.PlayPlaylistAsync,bridge.PlayPlaylistSelectionAsync,songs=>_=OpenSongManagementAsync(songs));
             MainPageHost.Children.Add(musicLibrary);
         }
         LyricsPage.Visibility=Visibility.Collapsed;musicLibrary.Visibility=Visibility.Visible;SelectNavigation(true);
         AppMotion.Reveal(musicLibrary);
         musicLibrary.ObserveArtworkProgress(coordinator.ArtworkStatus);
         await musicLibrary.EnsureLoadedAsync();musicLibrary.SetNowPlaying(coordinator.ActiveTrack,coordinator.Snapshot?.Status==LumaLyrics.Core.PlayState.Playing);
+    }
+    internal async Task OpenSongManagementAsync(IReadOnlyList<MusicLibrarySong> songs)
+    {
+        SettingsClicked(this,new());var window=settingsWindow!;window.SelectLibrarySongs();await window.Library.Songs.Reload();if(!ReferenceEquals(settingsWindow,window))return;window.Library.Songs.SelectKeys(songs.Select(s=>new LibrarySongKey(s.Source,s.PersistentId)));
     }
     void ShowLyricsPage()
     {

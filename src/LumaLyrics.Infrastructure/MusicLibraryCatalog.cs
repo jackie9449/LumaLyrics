@@ -16,6 +16,8 @@ public sealed record MusicLibrarySong(string Source,string PersistentId,Track Tr
 public sealed record MusicLibraryResult(IReadOnlyList<MusicLibrarySong> Songs,string Message)
 {
     public bool Unavailable {get;init;}
+    public LibrarySnapshot? ConfirmedMembership {get;init;}
+    public bool MembershipIsCached {get;init;}
     public IReadOnlyList<MusicPlaylist> Playlists {get;init;}=[];
     public bool PlaylistsUnavailable {get;init;}
 }
@@ -51,7 +53,7 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
         }
         var playlists=snapshot?.Playlists.Select(p=>new MusicPlaylist(snapshot.Path,p.Id,p.Name,p.DeclaredCount,p.Tracks.Select(PlaylistSong).ToArray(),p.Complete,
             snapshot.Playlists.Count(other=>string.Equals(other.Name,p.Name,StringComparison.OrdinalIgnoreCase))==1)).ToArray()??[];
-        return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message){Playlists=playlists,PlaylistsUnavailable=snapshot is null};
+        return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message){Playlists=playlists,PlaylistsUnavailable=snapshot is null,ConfirmedMembership=snapshot,MembershipIsCached=snapshot is null};
     }
     Dictionary<string,MusicLibrarySong> ReadCached(string? source,CancellationToken token)
     {

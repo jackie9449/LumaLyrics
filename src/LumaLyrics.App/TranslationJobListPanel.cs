@@ -5,81 +5,90 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
+using Microsoft.Win32;
 namespace LumaLyrics.App;
 
-public sealed class TranslationJobListPanel:StackPanel,IDisposable
+public sealed class TranslationJobListPanel:UserControl,IDisposable
 {
-    readonly PlaybackCoordinator coordinator;readonly ListBox songs=new(){SelectionMode=SelectionMode.Extended,Height=170,DisplayMemberPath="Label"};
-    readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap,Margin=new(0,8,0,8)};
-    readonly CheckBox prefer;readonly Button all,selected,replace,current,open;readonly CancellationTokenSource stop=new();
-    string? entry;bool busy;DateTime nextStatusRefresh;sealed record Row(Track Track,bool HasTranslation,string Label);
+    readonly PlaybackCoordinator coordinator;
+    readonly ListBox songs=new(){SelectionMode=SelectionMode.Extended,DisplayMemberPath="Label",HorizontalContentAlignment=HorizontalAlignment.Stretch};
+    readonly TextBox search=new(){MinWidth=100};
+    readonly ComboBox filter=new(){ItemsSource=new[]{"全部","缺动态原词","缺中文译文","部分译文","原词已更新"},SelectedIndex=0,MinWidth=120};
+    readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap},detail=new(){TextWrapping=TextWrapping.Wrap};
+    readonly CheckBox prefer,artwork;readonly HashSet<LibrarySongKey> selection=new(LibrarySongKey.Comparer);
+    readonly CancellationTokenSource stop=new();CancellationTokenSource? reading;long version;bool loading,disposed;
+    LibraryManagedSong[] rows=[];string? entry,lastRevision;bool lastBusy;
+    internal ListBox SongList=>songs;
+    internal IReadOnlyList<LibraryManagedSong> SelectedSongs=>rows.Where(r=>selection.Contains(Key(r))).ToArray();
+    internal CheckBox PreferExisting=>prefer;
+    internal string StatusText=>status.Text;
+    static LibrarySongKey Key(LibraryManagedSong row)=>row.Key;
     public TranslationJobListPanel(PlaybackCoordinator coordinator)
     {
-        this.coordinator=coordinator;
-        Children.Add(new TextBlock{Text="本地 agent · 批量中文译文",FontSize=15,Margin=new(0,18,0,8)});
-        prefer=DialogUi.Check(this,"优先查找现有来源译文",true);
-        AutomationProperties.SetName(songs,"批量翻译歌曲选择");VirtualizingPanel.SetIsVirtualizing(songs,true);VirtualizingPanel.SetVirtualizationMode(songs,VirtualizationMode.Recycling);Children.Add(songs);
-        var actions=new WrapPanel();Children.Add(actions);
-        all=DialogUi.Button(actions,"全部缺失：生成批量任务",()=>_=Generate(false,true));
-        selected=DialogUi.Button(actions,"为所选歌曲生成任务",()=>_=Generate(false,false));
-        replace=DialogUi.Button(actions,"重新制作所选译文…",()=>_=Generate(true,false));
-        current=DialogUi.Button(actions,"当前歌曲制作 / 重译…",()=>_=GenerateCurrent());
-        open=DialogUi.Button(actions,"打开批量入口 MD",()=>{if(entry is not null)Process.Start(new ProcessStartInfo(entry){UseShellExecute=true});});open.IsEnabled=false;
-        DialogUi.Button(actions,"复制任务路径",()=>{if(entry is not null)System.Windows.Clipboard.SetText(entry);});
-        DialogUi.Button(actions,"打开任务文件夹",()=>{if(entry is not null)Process.Start(new ProcessStartInfo(Path.GetDirectoryName(entry)!){UseShellExecute=true});});
-        DialogUi.Button(actions,"刷新 / 接收结果",()=>{coordinator.RefreshTranslationJobs();LoadSongs();});
-        DialogUi.Button(actions,"取消正在准备",()=>operation?.Cancel());
-        DialogUi.Button(actions,"恢复当前歌曲上一版译文",()=>_=Restore());
-        DialogUi.Button(actions,"采用当前歌曲的部分稿…",()=>_=Approve());
-        DialogUi.Button(actions,"取消当前歌曲未完成任务",CancelCurrent);
-        Children.Add(status);ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");
-        Loaded+=(_,_)=>{coordinator.Updated+=Refresh;LoadSongs();Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;
+        this.coordinator=coordinator;var root=new Grid();Content=root;
+        root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){MinHeight=48});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
+        var actions=new WrapPanel{Margin=new(0,8,0,8)};root.Children.Add(actions);
+        var menu=new ContextMenu();menu.SetResourceReference(StyleProperty,"LibraryActionMenu");menu.ItemContainerStyle=(Style)FindResource("LibraryActionMenuItem");ThemeManager.Bind(menu,Control.BackgroundProperty,"ControlBrush");ThemeManager.Bind(menu,Control.ForegroundProperty,"TextBrush");
+        var options=new StackPanel();prefer=DialogUi.Check(options,"优先查找现有来源译文",true);artwork=DialogUi.Check(options,"同时补封面",false);menu.Items.Add(new MenuItem{Header=options,StaysOpenOnClick=true});
+        void Action(string label,Action action){var item=new MenuItem{Header=label};item.Click+=(_,_)=>action();menu.Items.Add(item);}
+        DialogUi.Button(actions,"准备所选原词与译文",()=>_=Prepare(false,true));
+        DialogUi.Button(actions,"直接生成本地任务",()=>_=Prepare(false,false,false));
+        var more=DialogUi.Button(actions,"更多操作…",()=>{menu.IsOpen=true;});more.ContextMenu=menu;menu.PlacementTarget=more;
+        Action("仅查现有中文",()=>_=Prepare(false,true,false,false));
+        Action("重新制作所选译文…",()=>_=Prepare(true,false,false));
+        Action("暂停准备",coordinator.PauseWorkspace);
+        Action("打开批量入口 MD",()=>Open(entry));
+        Action("复制任务路径",()=>{if(entry is not null)Clipboard.SetText(entry);});
+        Action("刷新 / 接收结果",()=>{coordinator.RefreshTranslationJobs();_=Reload();});
+        Action("导入所选歌曲中文 LRC…",()=>_=Import());
+        Action("恢复所选歌曲上一版",()=>_=Restore());
+        Action("采用所选歌曲部分稿…",()=>_=Approve());
+        Action("取消所选歌曲任务",CancelSelected);
+        var filters=new DockPanel{Margin=new(0,0,0,8)};Grid.SetRow(filters,1);root.Children.Add(filters);
+        DockPanel.SetDock(filter,Dock.Right);filters.Children.Add(filter);filters.Children.Add(search);AutomationProperties.SetName(search,"搜索资料库与歌词");
+        search.TextChanged+=(_,_)=>ApplyFilter();filter.SelectionChanged+=(_,_)=>ApplyFilter();
+        VirtualizingPanel.SetIsVirtualizing(songs,true);VirtualizingPanel.SetVirtualizationMode(songs,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(songs,true);ScrollViewer.SetHorizontalScrollBarVisibility(songs,ScrollBarVisibility.Disabled);AutomationProperties.SetName(songs,"统一资料库歌曲选择");Grid.SetRow(songs,2);root.Children.Add(songs);
+        songs.SelectionChanged+=(_,_)=>{if(loading)return;foreach(var r in songs.Items.Cast<LibraryManagedSong>()){if(songs.SelectedItems.Contains(r))selection.Add(Key(r));else selection.Remove(Key(r));}UpdateDetail();};
+        var details=new StackPanel{Margin=new(0,8,0,0)};Grid.SetRow(details,3);root.Children.Add(details);details.Children.Add(detail);
+        var tools=new WrapPanel();details.Children.Add(tools);
+        DialogUi.Button(tools,"全选当前筛选",()=>{foreach(var r in songs.Items.Cast<LibraryManagedSong>())selection.Add(Key(r));ApplyFilter();});
+        DialogUi.Button(tools,"清空选择",()=>{selection.Clear();ApplyFilter();});
+        var statusScroll=new ScrollViewer{Content=status,MaxHeight=64,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};Grid.SetRow(statusScroll,4);status.Margin=new(0,8,0,0);root.Children.Add(statusScroll);ThemeManager.Bind(status,TextBlock.ForegroundProperty,"MutedBrush");ThemeManager.Bind(detail,TextBlock.ForegroundProperty,"MutedBrush");
+        SizeChanged+=(_,_)=>{statusScroll.MaxHeight=ActualHeight<340?32:64;detail.Visibility=ActualHeight<300?Visibility.Collapsed:Visibility.Visible;};
+        Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Updated;_=Reload();};Unloaded+=(_,_)=>{coordinator.Updated-=Updated;if(!disposed)reading?.Cancel();};
     }
-    CancellationTokenSource? operation;
-    void LoadSongs()
+    static void Open(string? path){if(path is not null&&File.Exists(path))Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
+    void Updated(){status.Text=coordinator.WorkspaceMessage;string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceMessage+coordinator.LibraryStatus+coordinator.ArtworkStatus+coordinator.Settings.LibraryPath;if(lastBusy!=coordinator.WorkspaceBusy||lastRevision!=stamp){lastBusy=coordinator.WorkspaceBusy;lastRevision=stamp;if(!lastBusy)_=Reload();}}
+    internal async Task Reload()
     {
-        if(busy)return;
-        try{entry??=TranslationBatchExchange.LatestEntry(coordinator.DataRoot);open.IsEnabled=entry is not null;using var lyrics=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"),true);using var translations=new TranslationRepository(coordinator.DataRoot,true);
-            songs.ItemsSource=coordinator.TranslationLibraryTracks().Select(item=>{var b=lyrics.FindReadOnly(item.Track);var d=b is null?null:new LrcParser().Parse(b.Raw,b.Plain) with{Instrumental=b.Instrumental};bool exists=d is not null&&translations.Find(item.Track,d) is not null;return new Row(item.Track,exists,$"{item.Track.Artist} — {item.Track.Title} · {(exists?"已有译文":"缺失 / 原词待确认")}");}).ToArray();}
-        catch(Exception e) when(e is IOException or InvalidDataException or Microsoft.Data.Sqlite.SqliteException){status.Text=e.Message;}
+        if(disposed)return;reading?.Cancel();reading?.Dispose();reading=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);var token=reading.Token;long request=++version;string? source=coordinator.Settings.LibraryPath;
+        try{var snapshot=await coordinator.ReadWorkspaceAsync(token);if(token.IsCancellationRequested||request!=version||source!=coordinator.Settings.LibraryPath)return;rows=snapshot.Songs.ToArray();selection.IntersectWith(rows.Select(Key));entry=await Task.Run(()=>TranslationBatchExchange.LatestEntry(coordinator.DataRoot),token);ApplyFilter();status.Text=coordinator.WorkspaceMessage+"\n"+snapshot.Message;}
+        catch(OperationCanceledException){}catch(Exception e){if(!disposed&&request==version)status.Text="读取暂不可用，保留上次清单："+e.Message;}
     }
-    void Refresh()
+    void ApplyFilter()
     {
-        if(busy||DateTime.UtcNow<nextStatusRefresh)return;nextStatusRefresh=DateTime.UtcNow.AddSeconds(2);
-        try{status.Text=coordinator.TranslationJobMessage+"\n"+TranslationJobExchange.Summary(coordinator.DataRoot);}
-        catch(Exception e) when(e is IOException or Microsoft.Data.Sqlite.SqliteException){status.Text=e.Message;}
+        if(songs is null)return;var terms=search.Text.Split(' ',StringSplitOptions.RemoveEmptyEntries);
+        var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,_=>true})).ToArray();
+        loading=true;try{songs.ItemsSource=shown;foreach(var r in shown)if(selection.Contains(Key(r)))songs.SelectedItems.Add(r);}finally{loading=false;}UpdateDetail();
     }
-    async Task Generate(bool retranslate,bool missing)
+    void UpdateDetail(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();detail.Text=$"已选 {picked.Length} 首 · 当前可见 {songs.Items.Count} 首 · 共 {rows.Length} 首"+(picked.Length==1?$"\n{picked[0].Track.Title} · {picked[0].Status.OriginalLabel} · {picked[0].Status.ChineseLabel}":"");}
+    internal void SelectKeys(IEnumerable<LibrarySongKey> keys){selection.Clear();foreach(var key in keys)selection.Add(key);ApplyFilter();}
+    async Task Prepare(bool replace,bool lookup,bool originals=true,bool export=true)
     {
-        var rows=(missing?songs.Items.Cast<Row>().Where(r=>!r.HasTranslation):songs.SelectedItems.Cast<Row>()).ToArray();
-        if(rows.Length==0){status.Text="请选择歌曲，或先确认资料库已有动态原词。";return;}
-        if(retranslate&&MessageBox.Show(Window.GetWindow(this),$"为所选 {rows.Length} 首重新制作：完成后替换各首当前译文，保留旧版本；部分稿不自动替换。","批量重译",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-        await Run(rows.Select(r=>new TranslationBatchSelection(r.Track,retranslate&&r.HasTranslation?TranslationJobMode.ReplaceExpected:TranslationJobMode.FillMissing)).ToArray(),retranslate?false:prefer.IsChecked==true);
+        var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();if(picked.Length==0){status.Text="请先选择歌曲。";return;}
+        if(replace&&MessageBox.Show(Window.GetWindow(this),$"重新制作所选 {picked.Length} 首，替换通过校验的当前译文，旧版保留。","重新制作",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+        try{await coordinator.PrepareWorkspaceAsync(picked,replace,lookup&&prefer.IsChecked==true,originals,export,originals&&artwork.IsChecked==true);if(!disposed)await Reload();}catch(Exception e){status.Text=e.Message;}
     }
-    async Task GenerateCurrent()
+    LibraryManagedSong? Single(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();if(picked.Length!=1){status.Text="此操作请选择一首歌曲。";return null;}return picked[0];}
+    async Task WithTarget(Func<LibraryManagedSong,Task> action){try{var row=Single();if(row is not null){await action(row);coordinator.RefreshTranslationJobs();await Reload();}}catch(Exception e){status.Text=e.Message;}}
+    Task Import()=>WithTarget(async row=>
     {
-        if(coordinator.ActiveTrack is not { } track)return;
-        bool replace=coordinator.Translation is not null;
-        if(replace&&MessageBox.Show(Window.GetWindow(this),"完成后替换当前歌曲中文译文，原版本保留。","重新制作",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
-        // Current songs need not be library members; single-song export is independently supported.
-        if(busy)return;bool lookupCurrent=prefer.IsChecked==true;SetBusy(true);try{var ticket=await Task.Run(async()=>{if(!replace&&lookupCurrent&&coordinator.Settings.OnlineLookup){using var provider=new NetEaseTranslationProvider();return (await new TranslationWorkflow(coordinator.DataRoot,provider).PrepareAsync(track,true,true,stop.Token)).Ticket;}return TranslationJobExchange.Create(coordinator.DataRoot,track,replace?TranslationJobMode.ReplaceExpected:TranslationJobMode.FillMissing);},stop.Token);if(ticket is null){coordinator.RefreshTranslationJobs();status.Text="已有来源译文可用。";return;}entry=ticket.TaskPath;open.IsEnabled=true;status.Text="任务已生成："+entry;}catch(Exception e){status.Text=e.Message;}finally{SetBusy(false);}
-    }
-    async Task Run(TranslationBatchSelection[] selections,bool lookup)
-    {
-        if(busy)return;SetBusy(true);operation?.Dispose();operation=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
-        try{status.Text="正在检查来源并生成批量任务…";var result=await coordinator.CreateTranslationBatchAsync(selections,lookup,operation.Token);entry=result.Batch?.EntryPath;open.IsEnabled=entry is not null;status.Text=$"已生成 {result.Tickets.Count} 首；跳过 {result.Skipped.Count} 首。\n"+(entry is null?"已有译文或没有可靠动态原词。":$"只需把此 MD 交给 agent：{entry}")+string.Join("",result.Skipped.Take(5).Select(s=>$"\n{s.Track.Title}：{s.Message}"));}
-        catch(OperationCanceledException){status.Text="准备已取消，已生成任务保留。";}catch(Exception e){status.Text=e.Message;}finally{SetBusy(false);}
-    }
-    void SetBusy(bool value){busy=value;all.IsEnabled=selected.IsEnabled=replace.IsEnabled=current.IsEnabled=!value;}
-    async Task Restore()
-    {
-        try{if(coordinator.ActiveTrack is not { } t||coordinator.Document is not { } d)return;using var repo=new TranslationRepository(coordinator.DataRoot,true);var active=repo.FindActive(t,d);var old=repo.ReadHistory(t,TranslationAlignment.Hash(d.Raw)).FirstOrDefault();if(active is null||old is null){status.Text="没有可恢复的旧版本。";return;}await TranslationJobExchange.RestoreHistoryAsync(coordinator.DataRoot,t,TranslationAlignment.Hash(d.Raw),old.Revision,active.Revision,stop.Token);coordinator.RefreshTranslationJobs();}
-        catch(Exception e){status.Text=e.Message;}
-    }
-    async Task Approve()
-    {
-        try{if(coordinator.ActiveTrack is not { } t||coordinator.Document is not { } d)return;var job=TranslationJobExchange.ReadJobs(coordinator.DataRoot).FirstOrDefault(j=>j.Ticket.Request.Target.Track.Fingerprint==t.Fingerprint&&j.Receipt.State==TranslationJobState.PartialReady);if(job is null)return;using var repo=new TranslationRepository(coordinator.DataRoot,true);var active=repo.FindActive(t,d);if(active is null)return;if(MessageBox.Show(Window.GetWindow(this),"采用有未译行的部分稿？当前完整译文将保留在历史中。","采用部分译稿",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;await TranslationJobExchange.ApprovePartialAsync(coordinator.DataRoot,job.Ticket.Request.JobId,active.Revision,stop.Token);coordinator.RefreshTranslationJobs();}catch(Exception e){status.Text=e.Message;}
-    }
-    void CancelCurrent(){if(coordinator.ActiveTrack is not { } t)return;foreach(var j in TranslationJobExchange.ReadJobs(coordinator.DataRoot).Where(j=>j.Ticket.Request.Target.Track.Fingerprint==t.Fingerprint))TranslationJobExchange.Cancel(coordinator.DataRoot,j.Ticket.Request.JobId);Refresh();}
-    public void Dispose(){stop.Cancel();operation?.Cancel();operation?.Dispose();coordinator.Updated-=Refresh;stop.Dispose();}
+        var dialog=new OpenFileDialog{Filter="中文歌词|*.lrc"};if(dialog.ShowDialog(Window.GetWindow(this))!=true)return;
+        if(new FileInfo(dialog.FileName).Length>2*1024*1024)throw new InvalidDataException("中文歌词不能超过 2 MB。");string raw=await File.ReadAllTextAsync(dialog.FileName,new System.Text.UTF8Encoding(false,true),stop.Token);
+        await Task.Run(()=>LibrarySongActions.Import(coordinator.DataRoot,row.Target,raw),stop.Token);
+    });
+    Task Restore()=>WithTarget(async row=>{using var tr=new TranslationRepository(coordinator.DataRoot,true);var old=tr.ReadHistory(row.Track,row.Status.SourceHash??"").FirstOrDefault();if(old is null)throw new InvalidDataException("没有旧版本。");LibrarySongActions.Check(coordinator.DataRoot,row.Target);if(!await TranslationJobExchange.RestoreHistoryAsync(coordinator.DataRoot,row.Track,row.Status.SourceHash!,old.Revision,row.Status.Revision!,stop.Token,row.Target))throw new InvalidDataException("资料已变化，未恢复。");});
+    Task Approve()=>WithTarget(async row=>{var job=TranslationJobExchange.ReadJobs(coordinator.DataRoot).FirstOrDefault(j=>j.Ticket.Request.Target.LibrarySource==row.Key.Source&&j.Ticket.Request.Target.PersistentId==row.Key.PersistentId&&j.Receipt.State==TranslationJobState.PartialReady)??throw new InvalidDataException("没有待采用的部分稿。");if(MessageBox.Show(Window.GetWindow(this),"采用部分稿？旧译文保留在历史中。","部分稿",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;LibrarySongActions.Check(coordinator.DataRoot,row.Target);await TranslationJobExchange.ApprovePartialAsync(coordinator.DataRoot,job.Ticket.Request.JobId,row.Status.Revision!,stop.Token,row.Target);});
+    void CancelSelected(){try{var keys=rows.Where(r=>selection.Contains(Key(r))).Select(r=>r.Key).ToHashSet(LibrarySongKey.Comparer);foreach(var job in TranslationJobExchange.ReadJobs(coordinator.DataRoot).Where(j=>keys.Contains(new(j.Ticket.Request.Target.LibrarySource??"",j.Ticket.Request.Target.PersistentId??""))))TranslationJobExchange.Cancel(coordinator.DataRoot,job.Ticket.Request.JobId);coordinator.RefreshTranslationJobs();}catch(Exception e){status.Text=e.Message;}}
+    public void Dispose(){if(disposed)return;disposed=true;coordinator.Updated-=Updated;stop.Cancel();reading?.Cancel();reading?.Dispose();reading=null;stop.Dispose();}
 }

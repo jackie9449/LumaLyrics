@@ -17,11 +17,11 @@ public static class TranslationBatchExchange
         if(chunkSize is <1 or >10)throw new ArgumentOutOfRangeException(nameof(chunkSize));
         root=Path.GetFullPath(root);using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"),true);
         var members=lyrics.GetLibraryQueue(true);var tickets=new List<TranslationJobTicket>();var skipped=new List<TranslationJobSkip>();
-        foreach(var selection in selections.DistinctBy(s=>s.Track))
+        foreach(var selection in selections.DistinctBy(s=>s.Target is {} t?t.Key.Source.ToUpperInvariant()+"\0"+t.Key.PersistentId:s.Track.Fingerprint+"|"+s.Track.DurationMs))
         {
             token.ThrowIfCancellationRequested();
             if(!members.Any(m=>m.Track==selection.Track)){skipped.Add(new(selection.Track,"NotMember","不是已确认的资料库成员。"));continue;}
-            try{tickets.Add(TranslationJobExchange.Create(root,selection.Track,selection.Mode,selection.UserInstructions,selection.IncludeExistingTranslation));}
+            try{tickets.Add(TranslationJobExchange.Create(root,selection.Track,selection.Mode,selection.UserInstructions,selection.IncludeExistingTranslation,selection.Target));}
             catch(InvalidDataException e){skipped.Add(new(selection.Track,"NotEligible",e.Message));}
         }
         if(tickets.Count==0)return new(null,tickets,skipped);

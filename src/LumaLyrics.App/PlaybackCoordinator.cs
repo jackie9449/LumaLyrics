@@ -286,7 +286,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public void SettingsChanged()
     {
         if(!Settings.OnlineLookup){lookup?.Cancel();requests.Next();foregroundLookupActive=false;if(Binding is null)LyricsStatus="联网查词已关闭，可导入本地歌词";}
-        if(!Settings.OnlineLookup)PauseTranslationPreparation();
+        if(!Settings.OnlineLookup){PauseTranslationPreparation();PauseWorkspace();}
         if(!Settings.OnlineLookup||!Settings.AutoPrefetchLibrary)PauseLibraryPrefetch();else _=ResumeLibraryPrefetchAsync();
         Updated?.Invoke();
     }
@@ -307,7 +307,8 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         if(translationActivated is not null)System.Windows.Application.Current.Activated-=translationActivated;
         if(translationInbox is not null)await translationInbox.DisposeAsync();
         if(translationInboxTask is not null)await translationInboxTask;
-        translations.Dispose();translationCancellation?.Dispose();
+        if(workspaceOperation is not null){try{await workspaceOperation;}catch(OperationCanceledException){}}
+        workspaceCancellation?.Dispose();translations.Dispose();translationCancellation?.Dispose();
         // Let a canceled HTTP continuation finish before disposing its semaphore.
         provider.Dispose();repository.Dispose();libraryCancellation?.Dispose();artworkCancellation?.Dispose();lifetime.Dispose();store.Save(Settings);
     }

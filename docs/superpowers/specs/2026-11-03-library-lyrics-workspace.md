@@ -2,7 +2,7 @@
 
 日期：2026-11-03。调查基线：`0df09de007f0b8e3ca7e5d0fb2b5a39beb98fcac`。
 
-本文配套[执行计划](../plans/2026-11-03-library-lyrics-workspace.md)，描述后续整合方案。本次只交付规划，不修改运行逻辑；已实现的本地 agent 翻译功能见[中文译文指南](../../chinese-translations.md)。
+本文配套[执行计划](../plans/2026-11-03-library-lyrics-workspace.md)，描述整合设计。统一入口与批量准备已实施；实际组织和保守限制见计划中的实施记录。使用方式见[中文译文指南](../../chinese-translations.md)。
 
 ## 1. 目标与整合范围
 

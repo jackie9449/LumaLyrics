@@ -75,7 +75,7 @@ public static class AppMotion
     static void ScopeChanged(DependencyObject d,DependencyPropertyChangedEventArgs e)
     {
         if(d is Window window && (bool)e.NewValue)SetAnimationsEnabled(window,Allowed);
-        if(d is not Control control || control is not (ButtonBase or ListBoxItem or TabItem or TextBoxBase or ComboBox or Thumb or DataGridRow or Slider or ProgressBar))return;
+        if(d is not Control control || control is not (ButtonBase or MenuItem or ListBoxItem or TabItem or TextBoxBase or ComboBox or Thumb or DataGridRow or Slider or ProgressBar))return;
         var state=feedback.GetValue(control,c=>new(c));
         if((bool)e.NewValue)state.Enable();else state.Disable();
     }
@@ -171,7 +171,7 @@ public static class AppMotion
         }
         void Enter(object s,MouseEventArgs e){hover=true;Update();}
         void Leave(object s,MouseEventArgs e){hover=false;pressed=false;Update();}
-        void Down(object s,MouseButtonEventArgs e){if(control is ButtonBase or Slider)pressed=true;Update();}
+        void Down(object s,MouseButtonEventArgs e){if(control is ButtonBase or MenuItem or Slider)pressed=true;Update();}
         void Up(object s,MouseButtonEventArgs e){pressed=false;Update();}
         void Release(object s,MouseEventArgs e){pressed=false;Update();}
         static bool RangeKey(Key key)=>key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;

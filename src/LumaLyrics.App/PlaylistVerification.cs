@@ -66,7 +66,7 @@ public partial class MainWindow
                     Width=width;Height=width==820?640:820;browser.ShowPlaylists();await Search("");await Task.Delay(65);UpdateLayout();
                     var shelfBounds=browser.PlaylistShelf.TransformToAncestor(browser).TransformBounds(new Rect(browser.PlaylistShelf.RenderSize));
                     checks[$"playlists.{theme.Id}.{width}.shelfBounds"]=shelfBounds.Right<=browser.ActualWidth+.5 && shelfBounds.Bottom<=browser.ActualHeight+.5 && browser.PlaylistShelf.ActualHeight>75;
-                    var tabs=Descendants<Button>(browser).Where(b=>b.Content?.ToString() is "专辑" or "歌曲" or "歌单" or "播放列表" or "缓存管理").ToArray();
+                    var tabs=Descendants<Button>(browser).Where(b=>b.Content?.ToString() is "专辑" or "歌曲" or "歌单" or "播放列表" or "歌词与译文管理").ToArray();
                     checks[$"playlists.{theme.Id}.{width}.navigationFits"]=tabs.All(t=>t.TransformToAncestor(browser).TransformBounds(new Rect(t.RenderSize)).Right<=browser.ActualWidth+.5);
                     if(width==1220)VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"playlist-shelf-"+theme.Id+".png"),true);
                     browser.OpenPlaylist(sample);await Task.Delay(45);UpdateLayout();

@@ -5,7 +5,7 @@ namespace LumaLyrics.Infrastructure;
 
 public static class TranslationJobExchange
 {
-    public static TranslationJobTicket Create(string root,Track track,TranslationJobMode mode,string? userInstructions=null,bool includeExistingTranslation=false)
+    public static TranslationJobTicket Create(string root,Track track,TranslationJobMode mode,string? userInstructions=null,bool includeExistingTranslation=false,LibraryPreparationTarget? expected=null)
     {
         root=Path.GetFullPath(root);if(!File.Exists(Path.Combine(root,"lyrics.db")))throw new DirectoryNotFoundException("个人资料不可用。");
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"),true);using var translations=new TranslationRepository(root);
@@ -18,14 +18,23 @@ public static class TranslationJobExchange
         if(mode==TranslationJobMode.FillMissing&&active is not null)throw new InvalidDataException("已有译文，请明确选择重新制作。");
         if(mode==TranslationJobMode.ReplaceExpected&&active is null)throw new InvalidDataException("没有可替换的当前译文。");
         using var db=Open(root);
+        var members=lyrics.GetLibraryQueue(true).Where(x=>x.Track==track).ToArray();
+        var member=expected is null?(members.Length<=1?members.FirstOrDefault():throw new InvalidDataException("有重复录音记录，请从资料库明确选择。")):members.SingleOrDefault(x=>x.Source.Equals(expected.Key.Source,StringComparison.OrdinalIgnoreCase)&&x.PersistentId==expected.Key.PersistentId)??throw new InvalidDataException("目标已不属于当前资料库。");
+        if(expected is not null&&(expected.BindingId!=binding.Id||expected.SourceHash!=TranslationAlignment.Hash(doc.Raw)||expected.ExpectedTranslationRevision!=active?.Revision))throw new InvalidDataException("所选原词或译文已更新，请刷新后重试。");
+        if(mode==TranslationJobMode.ReplaceExpected&&members.Length>1)throw new InvalidDataException("多条原生记录共享译文，需要先确认关联影响，未替换。");
         foreach(var old in ReadJobs(root).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
-            if(old.Ticket.Request.Target.BindingId==binding.Id&&old.Ticket.Request.Mode==mode&&old.Ticket.Request.ExpectedRevision==active?.Revision&&old.Ticket.Request.UserInstructions==userInstructions)return old.Ticket;
-        var member=lyrics.GetLibraryQueue(true).FirstOrDefault(x=>x.Track.Fingerprint==track.Fingerprint);
+            if(old.Ticket.Request.Target.BindingId==binding.Id&&old.Ticket.Request.Mode==mode&&old.Ticket.Request.ExpectedRevision==active?.Revision&&old.Ticket.Request.UserInstructions==userInstructions && (expected is null || old.Ticket.Request.Target.LibrarySource==expected.Key.Source && old.Ticket.Request.Target.PersistentId==expected.Key.PersistentId))return old.Ticket;
         string id=Guid.NewGuid().ToString("N");
         var request=new TranslationJobRequest(1,id,mode,root,new(track,binding.Id,TranslationAlignment.Hash(doc.Raw),doc.Raw,member?.Source,member?.PersistentId,groups),active?.Revision,DateTimeOffset.UtcNow,binding.Source,userInstructions,includeExistingTranslation?active?.Record.Translation.Lines:null);
         string json=JsonSerializer.Serialize(request,TranslationJobFiles.Json),hash=TranslationAlignment.Hash(json);
         string task=TranslationJobFiles.PathFor(root,id,"task.md"),result=TranslationJobFiles.PathFor(root,id,"translation-result.json");
-        Execute(db,"INSERT INTO TranslationJobs(Id,Request,RequestHash,State,Receipt) VALUES($id,$r,$h,'Exporting',NULL)",("$id",id),("$r",json),("$h",hash));
+        Execute(db,"ATTACH DATABASE $path AS originals",("$path",Path.Combine(root,"lyrics.db")));
+        using(var tx=db.BeginTransaction(deferred:false)){
+        var fresh=Scalar(db,"SELECT d.Raw FROM originals.TrackLyricsBindings b JOIN originals.LyricsDocuments d ON d.Id=b.DocumentId WHERE b.Id=$id",("$id",binding.Id));
+        var rev=Scalar(db,"SELECT Revision FROM Translations WHERE Fingerprint=$f AND SourceHash=$h",("$f",track.Fingerprint),("$h",request.Target.SourceHash));
+        if(member is not null && Scalar(db,"SELECT l.PersistentId FROM originals.LibraryTracks l JOIN originals.LibraryMembership m ON m.Source=l.Source AND m.PersistentId=l.PersistentId WHERE l.Active=1 AND l.Source=$s AND l.PersistentId=$p AND l.Fingerprint=$f",("$s",member.Source),("$p",member.PersistentId),("$f",track.Fingerprint)) is null)throw new InvalidDataException("登记前成员已变化。");
+        if(fresh!=doc.Raw||rev!=active?.Revision)throw new InvalidDataException("注册前资料已变化，请重新检查。");
+        Execute(db,"INSERT INTO TranslationJobs(Id,Request,RequestHash,State,Receipt) VALUES($id,$r,$h,'Exporting',NULL)",("$id",id),("$r",json),("$h",hash));tx.Commit();}
         Directory.CreateDirectory(Path.GetDirectoryName(task)!);
         TranslationJobFiles.Write(TranslationJobFiles.PathFor(root,id,"request.json"),json);
         TranslationJobFiles.Write(task,TranslationJobMarkdown.Render(request,hash,result+".tmp",result,null));
@@ -62,12 +71,12 @@ public static class TranslationJobExchange
         return new(request,result,resultHash,count.TranslatedCount,count.RequiredCount);
     }
     public static Task<TranslationJobReceipt> ImportAsync(string root,string path,CancellationToken token=default)=>Task.Run(()=>Apply(root,path,null,token),token);
-    static TranslationJobReceipt Apply(string root,string path,string? partialRevision,CancellationToken token)
+    static TranslationJobReceipt Apply(string root,string path,string? partialRevision,CancellationToken token,LibraryPreparationTarget? expected=null)
     {
         var validation=Validate(root,path);var request=validation.Request;
         if(Path.GetFileName(path)!="translation-result.json")throw new InvalidDataException("只接收已最终化的 translation-result.json。");
         using var db=Open(root);Execute(db,"ATTACH DATABASE $p AS originals",("$p",Path.Combine(root,"lyrics.db")));
-        using var tx=db.BeginTransaction(deferred:false);token.ThrowIfCancellationRequested();
+        using var tx=db.BeginTransaction(deferred:false);token.ThrowIfCancellationRequested();if(expected is not null)LibrarySongActions.CheckAtWrite(db,expected);
         string state=Scalar(db,"SELECT State FROM TranslationJobs WHERE Id=$id",("$id",request.JobId))!;
         var previous=Scalar(db,"SELECT Receipt FROM TranslationJobs WHERE Id=$id",("$id",request.JobId));
         if(state is not ("AwaitingResult" or "PartialReady"))return previous is null?new(request.JobId,Enum.Parse<TranslationJobState>(state),state,state,0,validation.RequiredCount,null,DateTimeOffset.UtcNow):JsonSerializer.Deserialize<TranslationJobReceipt>(previous,TranslationJobFiles.Json)!;
@@ -92,11 +101,11 @@ public static class TranslationJobExchange
         Execute(db,"UPDATE TranslationJobs SET State=$s,Receipt=$r,ResultHash=$hash WHERE Id=$id",("$hash",validation.ResultSha256),("$s",next.ToString()),("$r",JsonSerializer.Serialize(receipt,TranslationJobFiles.Json)),("$id",request.JobId));tx.Commit();
         try{TranslationJobFiles.Write(TranslationJobFiles.PathFor(root,request.JobId,"receipt.json"),JsonSerializer.Serialize(receipt,TranslationJobFiles.Json),true);}catch(IOException){}return receipt;
     }
-    public static Task<TranslationJobReceipt> ApprovePartialAsync(string root,string jobId,string expectedRevision,CancellationToken token=default)=>Task.Run(()=>Apply(root,TranslationJobFiles.PathFor(root,jobId,"translation-result.json"),expectedRevision,token),token);
+    public static Task<TranslationJobReceipt> ApprovePartialAsync(string root,string jobId,string expectedRevision,CancellationToken token=default,LibraryPreparationTarget? expected=null)=>Task.Run(()=>Apply(root,TranslationJobFiles.PathFor(root,jobId,"translation-result.json"),expectedRevision,token,expected),token);
     public static void Cancel(string root,string jobId){using var db=Open(root);Execute(db,"UPDATE TranslationJobs SET State='Cancelled',Receipt=NULL WHERE Id=$id AND State IN ('AwaitingResult','PartialReady','Exporting')",("$id",jobId));}
-    public static Task<bool> RestoreHistoryAsync(string root,Track track,string sourceHash,string historyRevision,string expectedRevision,CancellationToken token=default)=>Task.Run(()=>
+    public static Task<bool> RestoreHistoryAsync(string root,Track track,string sourceHash,string historyRevision,string expectedRevision,CancellationToken token=default,LibraryPreparationTarget? expected=null)=>Task.Run(()=>
     {
-        using var db=Open(root);Execute(db,"ATTACH DATABASE $p AS originals",("$p",Path.Combine(root,"lyrics.db")));using var tx=db.BeginTransaction(deferred:false);token.ThrowIfCancellationRequested();
+        using var db=Open(root);Execute(db,"ATTACH DATABASE $p AS originals",("$p",Path.Combine(root,"lyrics.db")));using var tx=db.BeginTransaction(deferred:false);token.ThrowIfCancellationRequested();if(expected is not null)LibrarySongActions.CheckAtWrite(db,expected);
         string? content=Scalar(db,"SELECT Content FROM TranslationHistory WHERE Revision=$r AND Fingerprint=$f AND SourceHash=$h",("$r",historyRevision),("$f",track.Fingerprint),("$h",sourceHash));
         if(content is null)return false;
         var restored=JsonSerializer.Deserialize<ChineseTranslation>(content)??throw new InvalidDataException("历史译文为空。");TranslationRepository.Validate(restored);if(restored.SourceHash!=sourceHash)throw new InvalidDataException("历史原词哈希不一致。");

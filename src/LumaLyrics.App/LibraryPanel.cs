@@ -10,7 +10,7 @@ public sealed class LibraryPanel : UserControl,IDisposable
     readonly PlaybackCoordinator coordinator;
     readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap,FontSize=15,LineHeight=24};
     readonly ProgressBar progress=new(){Height=6,Minimum=0,Maximum=1,Margin=new(0,18,0,0)};
-    bool subscribed,disposed;
+    bool subscribed,disposed;string coverage="";string? stamp;long readVersion;
     internal bool IsSubscribed=>subscribed;
     internal TextBox SourcePath {get;}
 
@@ -27,7 +27,7 @@ public sealed class LibraryPanel : UserControl,IDisposable
         DialogUi.Button(body,"选择本机 Library.musicdb",()=>{
             var picker=new OpenFileDialog{Filter="Apple Music 资料库|Library.musicdb",CheckFileExists=true};
             if(picker.ShowDialog(Window.GetWindow(this))!=true)return;
-            coordinator.PauseLibraryPrefetch();coordinator.Settings.LibraryPath=picker.FileName;SourcePath.Text=picker.FileName;
+            coordinator.PauseWorkspace();coordinator.PauseLibraryPrefetch();coordinator.Settings.LibraryPath=picker.FileName;SourcePath.Text=picker.FileName;
             coordinator.Settings.AutoPrefetchLibrary=true;coordinator.SaveSettings();_=coordinator.ResumeLibraryPrefetchAsync();
         });
         var actions=new WrapPanel{Margin=new(0,12,0,0)};body.Children.Add(actions);
@@ -47,9 +47,11 @@ public sealed class LibraryPanel : UserControl,IDisposable
     }
     void Refresh()
     {
-        var lyrics=coordinator.LibraryStatus;var artwork=coordinator.ArtworkStatus;status.Text=lyrics+"\n\n"+artwork;
+        var lyrics=coordinator.LibraryStatus;var artwork=coordinator.ArtworkStatus;status.Text=lyrics+"\n\n"+artwork+"\n\n"+coverage;
+        string next=$"{lyrics.Cached}:{lyrics.Total}:{artwork.Cached}:{coordinator.TranslationJobMessage}:{coordinator.WorkspaceMessage}:{coordinator.Settings.LibraryPath}";if(subscribed&&stamp!=next){stamp=next;_=ReadCoverage();}
         progress.Maximum=Math.Max(1,lyrics.Total+artwork.Total);progress.Value=lyrics.Cached+lyrics.Unavailable+lyrics.Errors+lyrics.Manual+artwork.Cached+artwork.Unavailable+artwork.Errors;
     }
+    async Task ReadCoverage(){long version=++readVersion;try{var snapshot=await coordinator.ReadWorkspaceAsync(CancellationToken.None);if(disposed||!subscribed||version!=readVersion)return;coverage=$"确认成员 {snapshot.Songs.Count} 首 · 中文完整 {snapshot.Songs.Count(s=>s.Status.Chinese==LibraryChineseState.Complete)} · 部分 {snapshot.Songs.Count(s=>s.Status.Chinese==LibraryChineseState.Partial)} · 缺中文 {snapshot.Songs.Count(s=>s.Status.Chinese==LibraryChineseState.Missing)} · 原词受阻 {snapshot.Songs.Count(s=>s.Status.Chinese==LibraryChineseState.BlockedOriginal)}";Refresh();}catch(Exception e){if(!disposed&&subscribed)coverage="状态暂不可读："+e.Message;}}
     void Unsubscribe(){if(!subscribed)return;coordinator.Updated-=Refresh;subscribed=false;}
     public void Dispose(){disposed=true;Unsubscribe();}
 }

@@ -27,6 +27,20 @@
  </Style>
  <Style TargetType="Button" BasedOn="{StaticResource AppAction}"/>
  <Style TargetType="ToggleButton" BasedOn="{StaticResource AppAction}"/>
+ <!-- Flat workspace command menu keeps native MenuItem keyboard/command semantics. -->
+ <Style x:Key="LibraryActionMenu" TargetType="ContextMenu">
+  <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="{DynamicResource CardBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource CardRadius}" Padding="6"><ScrollViewer MaxHeight="460" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer></Border></ControlTemplate></Setter.Value></Setter>
+ </Style>
+ <Style x:Key="LibraryActionMenuItem" TargetType="MenuItem">
+  <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Padding" Value="12,8"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/><Setter Property="local:AppMotion.Enabled" Value="True"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Grid Background="Transparent">
+   <Border Background="{DynamicResource HoverBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Background="{DynamicResource PressedBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Pressed),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Focus),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/></Border>
+  </Grid></ControlTemplate></Setter.Value></Setter>
+ </Style>
  <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="local:AppMotion.FeedbackBrush" Value="{DynamicResource PrimaryFeedbackBrush}"/>
  </Style>

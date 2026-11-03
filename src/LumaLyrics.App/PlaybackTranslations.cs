@@ -13,6 +13,7 @@ public sealed partial class PlaybackCoordinator
     public TranslationProgress TranslationProgress {get;private set;}=new(0,0,0,0,0,0,0,0,0,false,"尚未准备中文译文。");
     public void RefreshTranslation()
     {
+        workspaceReadUntil=DateTime.MinValue;
         ChineseTranslation? next=null;
         try{if(ActiveTrack is { } track && Document is { } doc)next=translations.Find(track,doc);}
         catch(Exception e) when(e is IOException or InvalidDataException or JsonException or Microsoft.Data.Sqlite.SqliteException){store.Log("Translation read: "+e.GetType().Name);}
