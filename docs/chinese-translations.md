@@ -51,4 +51,4 @@
 
 ## 后续设计：本地 agent 制作中文译文（尚未实现）
 
-2026-11-03 的[设计规格](superpowers/specs/2026-11-03-local-agent-chinese-translations.md)与[详细执行计划](superpowers/plans/2026-11-03-local-agent-chinese-translations.md)规划了已有来源优先、缺失时生成自足任务 MD、用户不满意时定向重译、结果自动校验接收和历史恢复。当前版本仍使用本页上述来源准备、中文 LRC 导入与译稿交换工具；新任务入口和命令需实施计划完成后才能使用。
+2026-11-03 的[设计规格](superpowers/specs/2026-11-03-local-agent-chinese-translations.md)与[详细执行计划](superpowers/plans/2026-11-03-local-agent-chinese-translations.md)规划了已有来源优先、缺失时生成自足任务 MD、用户不满意时定向重译、结果自动校验接收和历史恢复。批量使用只需交给 agent 一份 `batch-task.md`，由其按清单逐曲处理、记录进度并支持中断续做，用户不逐首发送文件。当前版本仍使用本页上述来源准备、中文 LRC 导入与译稿交换工具；新任务入口和命令需实施计划完成后才能使用。

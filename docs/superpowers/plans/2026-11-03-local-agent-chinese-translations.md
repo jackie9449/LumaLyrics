@@ -2,9 +2,9 @@
 
 > **For agentic workers:** Execute this plan task-by-task, inline. Follow the repository AGENTS.md. Do not delegate or require an additional skill to interpret the implementation steps.
 
-**Goal:** 优先使用可确认的已有中文译文；缺失或用户不满意时，生成一份可独立交给任意具备本机读写能力 agent 的任务 MD，并校验、接收、保留历史。
+**Goal:** 优先使用可确认的已有中文译文；缺失或用户不满意时，以单首自足 MD 或一份批量入口 MD 交给具备本机读写能力的 agent，支持批量续做、校验接收及历史恢复。
 
-**Architecture:** 沿用当前来源查询、原词 SHA-256、GroupIndex、个人译文库与显示通道。在个人目录增加逐曲任务协议和自足 MD，通过应用内的单消费者接收服务完成精确目标校验和带修订条件的保存；agent 只写 JSON 文件。保持“选用本地 agent”与具体模型供应商解耦。
+**Architecture:** 沿用当前来源查询、原词 SHA-256、GroupIndex、个人译文库与显示通道。在个人目录增加逐曲任务和必需的批量入口／分块清单，agent逐曲读取、提交及保存进度；应用单消费者服务精确校验目标并按修订条件保存。保持“选用本地 agent”与具体模型供应商解耦。
 
 **Tech Stack:** 当前 .NET 10 / C# 14、WPF、Microsoft.Data.Sqlite、System.Text.Json、xUnit、PowerShell；不增加翻译 SDK、模型依赖或在线翻译服务。
 
@@ -15,6 +15,7 @@
 - 能取得现有中文歌词时，直接使用。
 - 找不到现有中文歌词时，提供足够详细的 MD；用户只需把该文件交给能读写本机文件的 agent，即可完成翻译并放入正确位置。
 - 已有中文歌词不满意时，允许用户主动选择由本地 agent 重新制作。
+- 批量只交接一份入口 MD；agent 按清单连续处理、每首保存进度并可续做，用户不逐首发送或导入。
 - 译文绑定精确原词 UTF-8 SHA-256 和分组索引；不改变原词、时间轴、偏移、重复句、空白间奏或纯音乐状态。
 - 主窗口／悬浮译文开关继续独立且首次关闭；不得增加可见“待校对”标志，不将 AI 生成改成语义已审或伪装成手动导入。
 - 设置内管理本地任务，界面跟随应用主题；不影响悬浮歌词、工具栏、预览的独立外观。
@@ -25,7 +26,7 @@
 
 ## 当前交付状态与实施顺序
 
-本轮仅完成项目调查、规格与执行计划；下列 Task 复选框均是后续实施工作。没有新增运行代码、生成私人歌词任务或更改用户数据库。本轮已运行现有翻译相关测试：Core 20 项、Infrastructure 34 项，共 54 项通过。文档变更不需要打开真实播放器或运行产品 UI 回归；新增 UI 验收列在 Task 7 / 9。
+本轮仅完成项目调查、规格与执行计划；下列 Task 复选框均是后续实施工作。没有新增运行代码、生成私人歌词任务或更改用户数据库。首轮规划已运行现有翻译相关测试：Core 20 项、Infrastructure 34 项，共 54 项通过；本次补充批量入口与断点协议仍仅修改文档。文档变更不需要打开真实播放器或运行产品 UI 回归；新增 UI 验收列在 Task 7 / 9。
 
 依赖顺序：`1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9`。每项有独立可评审结果和验证；先稳定协议与原子保存，再开放会自动替换内容的 UI。预计分 4 个里程碑：协议／存储、MD／接收、Settings／备份、完整验收；实际耗时以竞态和 UI 验证结果为准，不预先承诺模型语义质量。
 
@@ -48,6 +49,8 @@
 | `src/LumaLyrics.Infrastructure/TranslationJobExchange.cs` | 新增；创建／导出、严格结果校验、导入、部分采用／恢复的公共服务 |
 | `src/LumaLyrics.Infrastructure/TranslationJobMarkdown.cs` | 新增；无模型依赖的完整 MD 渲染及绝对路径／围栏转义 |
 | `src/LumaLyrics.Infrastructure/Resources/LocalAgentTranslationTask.zh-CN.md` | 新增；规格第 5 节完整正文模板，嵌入程序集 |
+| `src/LumaLyrics.Infrastructure/TranslationBatchExchange.cs`、`TranslationBatchMarkdown.cs` | 新增；批次登记、分块清单、单一入口渲染和进度汇总 |
+| `src/LumaLyrics.Infrastructure/Resources/LocalAgentTranslationBatch.zh-CN.md` | 新增；连续处理／恢复的完整批量说明模板，嵌入程序集 |
 | `src/LumaLyrics.Infrastructure/TranslationJobInbox.cs` | 新增；应用生命周期文件通知、合并、串行接收、启动补扫和取消 |
 | `src/LumaLyrics.Infrastructure/TranslationJobCommandLine.cs` | 新增；两个新 Probe 命令的纯参数解析，便于在现有跨平台 Infrastructure 测试项目验证 |
 | `src/LumaLyrics.Infrastructure/TranslationRepository.cs` | 修改；schema 1→2、Revision、历史只读接口、全部保存更新修订、自动仅补缺 |
@@ -97,7 +100,21 @@ public sealed record TranslationJobResult(string Format, int SchemaVersion,
 public sealed record TranslationJobTicket(TranslationJobRequest Request,
     string RequestSha256, string TaskPath, string ResultPath);
 public sealed record TranslationJobSkip(Track Track, string Code, string Message);
-public sealed record TranslationJobBatchResult(IReadOnlyList<TranslationJobTicket> Tickets,
+public sealed record TranslationBatchSelection(Track Track, TranslationJobMode Mode,
+    string? UserInstructions = null, bool IncludeExistingTranslation = false);
+public sealed record TranslationBatchItem(string JobId, string RequestSha256,
+    string TaskPath, string ResultPath, string ReceiptPath);
+public sealed record TranslationBatchChunk(string Format, int SchemaVersion,
+    string BatchId, int ChunkIndex, IReadOnlyList<TranslationBatchItem> Items);
+public sealed record TranslationBatchChunkReference(int ChunkIndex, string Path,
+    string Sha256, int Count);
+public sealed record TranslationBatchManifest(string Format, int SchemaVersion,
+    string BatchId, string ProfileRoot, DateTimeOffset CreatedUtc, int Total,
+    int ChunkSize, IReadOnlyList<TranslationBatchChunkReference> Chunks);
+public sealed record TranslationBatchTicket(string BatchId, string EntryPath,
+    string ManifestPath, string ProgressPath, IReadOnlyList<string> ChunkPaths);
+public sealed record TranslationJobBatchResult(TranslationBatchTicket? Batch,
+    IReadOnlyList<TranslationJobTicket> Tickets,
     IReadOnlyList<TranslationJobSkip> Skipped);
 public sealed record TranslationJobValidation(TranslationJobRequest Request,
     TranslationJobResult Result, string ResultSha256,
@@ -135,6 +152,12 @@ Task<bool> RestoreHistoryAsync(string root, Track track, string sourceHash,
     string historyRevision, string expectedRevision, CancellationToken token = default);
 IReadOnlyList<TranslationJobSnapshot> ReadJobs(string root);
 void Cancel(string root, string jobId);
+
+// 新增 static TranslationBatchExchange；批量明确授权和缺失任务共用同一协议。
+TranslationJobBatchResult Create(string root,
+    IReadOnlyList<TranslationBatchSelection> selections, int chunkSize = 5);
+// 新增 static TranslationBatchMarkdown；模板内给出逐首循环及断点恢复规则。
+string Render(TranslationBatchTicket ticket, TranslationBatchManifest manifest);
 
 // 新增 TranslationJobMarkdown，纯渲染，不查资料库、不联网、不写文件。
 string Render(TranslationJobRequest request, string requestSha256,
@@ -250,7 +273,7 @@ public void ManualSaveChangesRevisionAndMissingWriteCannotReplaceIt()
 }
 ```
 
-- [ ] **Step 3：事务迁移和保存。** 当前表新增 Revision，新增 TranslationHistory 和 TranslationJobs（字段依规格第 6 节）；保存当前译文、旧版本入历史和修订变化必须同事务，保存无效／受保护时不得产生历史或改变 Revision。数据库只读模式接受受支持的 1／2 并保持旧库不变，写模式迁移 1→2；具体迁移测试同时检查失败回滚。只读 v1 可用原有 Find／ReadAll 和空历史，FindActive 明确要求先在可写的新目录升级，不伪造旧库 Revision。
+- [ ] **Step 3：事务迁移和保存。** 当前表新增 Revision，新增 TranslationHistory、TranslationJobs 和规格第 4.4 节的 TranslationBatches；保存当前译文、旧版本入历史和修订变化必须同事务，保存无效／受保护时不得产生历史或改变 Revision。数据库只读模式接受受支持的 1／2 并保持旧库不变，写模式迁移 1→2；具体迁移测试同时检查失败回滚。只读 v1 可用原有 Find／ReadAll 和空历史，FindActive 明确要求先在可写的新目录升级，不伪造旧库 Revision。
 - [ ] **Step 4：自动路径改为 `SaveMissing`，按真实保存结果更新进度。** 来源在网络等待期间若用户保存译文，必须读取并保留新值；旧 AI 导入返回实际插入数，不能明明被跳过仍标成 Draft。现有复用／修复核实同样语义；不要重写来源匹配算法。
 - [ ] **Step 5：运行迁移与已有翻译测试，提交。**
 
@@ -263,11 +286,11 @@ git commit -m "feat: retain translation revisions and protect automatic writes"
 
 **完成条件：** 旧资料无损升级，自动译文不覆盖期间新增的任何有效译文；历史恢复所需信息完整。
 
-## Task 3：生成可单独交付的任务 MD
+## Task 3：生成单首自足 MD 与一次交接的批量入口
 
-**Files:** 新增 `TranslationJobMarkdown.cs`、`Resources/LocalAgentTranslationTask.zh-CN.md`、`TranslationJobExchange.cs` 创建部分；修改 `LumaLyrics.Infrastructure.csproj`；新增 `TranslationJobMarkdownTests.cs`、`TranslationJobExportTests.cs`。
+**Files:** 新增 `TranslationJobMarkdown.cs`、`Resources/LocalAgentTranslationTask.zh-CN.md`、`TranslationJobExchange.cs` 创建部分、`TranslationBatchExchange.cs`、`TranslationBatchMarkdown.cs`、`Resources/LocalAgentTranslationBatch.zh-CN.md`；修改 `LumaLyrics.Infrastructure.csproj`；新增 `TranslationJobMarkdownTests.cs`、`TranslationJobExportTests.cs`、`TranslationBatchTests.cs`。
 
-**Interfaces:** 消费 Task 1/2 协议与修订；产出 `TranslationJobExchange.Create` / `CreateMissingBatch`、`TranslationJobMarkdown.Render`。Create 读取可靠原词、捕获授权、登记任务并原子导出，成功返回真实绝对路径的 ticket。
+**Interfaces:** 消费 Task 1/2 协议与修订；产出 `TranslationJobExchange.Create` / `CreateMissingBatch`、`TranslationJobMarkdown.Render`、`TranslationBatchExchange.Create`、`TranslationBatchMarkdown.Render`。单首 Create 捕获授权后返回任务 ticket；批量 Create 返回唯一 EntryPath、分块路径和逐曲跳过原因；CreateMissingBatch 是仅含 FillMissing 的便利入口，委托批量服务。
 
 - [ ] **Step 1：编写自足性测试并先运行。**
 
@@ -296,16 +319,46 @@ public void SingleMarkdownContainsEveryGroupIdentityAndFinalPath()
 - [ ] **Step 3：实现创建流程与限制。** `FillMissing` 遇到已有译文立即拒绝，不能偷偷升级为 ReplaceExpected；重译捕获当前 Revision。按 `store.Root` 校验原有资料和路径，拒绝源代码／软件目录、重解析点、不可靠原词、纯音乐。任务目录按随机 JobId `CreateNew`，登记 Exporting → 原子写 request/MD → AwaitingResult；导出失败留可诊断状态，不放出半份 MD。
 - [ ] **Step 4：加入实际路径与上下文测试。** 在中文＋空格＋单引号路径下验证所有绝对路径和可选 PowerShell 命令；测试 `\n`、JSON 引号、反斜线、包含反引号的原句、多行组、重复副歌、已有中文、原生 TTML 的既有解析组；确认结果骨架含全部组且 agent无需自己生成哈希。MD／结果超限不静默截断。
 - [ ] **Step 5：批量只选确认成员。** `CreateMissingBatch` 从 `LyricsRepository.GetLibraryQueue(includeDeferred:true)` 的已确认成员求交集；完全缺失才能自动 FillMissing；部分译文单独列出供用户重译，不自动覆盖。返回实际生成任务和逐曲拒绝原因，保留已成功任务，不回滚其他首。
-- [ ] **Step 6：运行并提交。**
+- [ ] **Step 6：批量入口和断点规则。** 新模板逐条落实规格第 3.3 / 4.4 节：一份入口、绝对路径清单、默认 5 首一块（支持 1–10）、每次读一首完整任务、逐首提交并更新自己的进度、已提交不覆盖、失败继续、自动进入下一块、限额前保存并可同入口恢复。全部索引／分块写完才公开 EntryPath，空批次返回 Batch=null，不能给用户空入口。进度不是接收授权；总数来自真实成功 ticket。增加以下测试及 100 首／20 个默认分块、混合 FillMissing 与 ReplaceExpected、重复选择、失败跳过和中断恢复测试；恢复不能重生成 JobId 或重新授权。
+
+```csharp
+[Fact]
+public void SixSongsRequireOneEntryAndTwoDefaultChunks()
+{
+    using var fixture = new TranslationJobFixture();
+    var tracks = Enumerable.Range(0, 6).Select(i =>
+        TranslationJobFixture.Track with { Title = $"Own song {i}" }).ToArray();
+    using (var lyrics = new LyricsRepository(Path.Combine(fixture.Root, "lyrics.db")))
+    {
+        lyrics.SyncLibrary(new("own-library", 6,
+            tracks.Select((track, i) => new LibraryTrack(i.ToString(), track)).ToArray(), "own"));
+        foreach (var track in tracks)
+            lyrics.Save(track, TranslationJobFixture.Original, "Own source", true);
+    }
+    var result = TranslationJobExchange.CreateMissingBatch(fixture.Root, tracks);
+    Assert.Equal(6, result.Tickets.Count);
+    Assert.Empty(result.Skipped);
+    var batch = Assert.IsType<TranslationBatchTicket>(result.Batch);
+    Assert.True(File.Exists(batch.EntryPath));
+    Assert.Equal(2, batch.ChunkPaths.Count);
+    var entry = File.ReadAllText(batch.EntryPath);
+    Assert.Contains(batch.ManifestPath, entry);
+    Assert.Contains(batch.ProgressPath, entry);
+}
+```
+
+`LibraryTrack` 是当前 `AppleMusicLibraryReader.cs` 中的既有类型，不新增或改动资料库模型。
+
+- [ ] **Step 7：运行并提交。**
 
 ```powershell
 . ./scripts/common.ps1
-Invoke-Dotnet test tests/LumaLyrics.Infrastructure.Tests -c Release --filter 'FullyQualifiedName~TranslationJobMarkdownTests|FullyQualifiedName~TranslationJobExportTests'
-git add src/LumaLyrics.Infrastructure/TranslationJobMarkdown.cs src/LumaLyrics.Infrastructure/Resources/LocalAgentTranslationTask.zh-CN.md src/LumaLyrics.Infrastructure/TranslationJobExchange.cs src/LumaLyrics.Infrastructure/LumaLyrics.Infrastructure.csproj tests/LumaLyrics.Infrastructure.Tests/TranslationJobMarkdownTests.cs tests/LumaLyrics.Infrastructure.Tests/TranslationJobExportTests.cs
+Invoke-Dotnet test tests/LumaLyrics.Infrastructure.Tests -c Release --filter 'FullyQualifiedName~TranslationJobMarkdownTests|FullyQualifiedName~TranslationJobExportTests|FullyQualifiedName~TranslationBatchTests'
+git add src/LumaLyrics.Infrastructure/TranslationJobMarkdown.cs src/LumaLyrics.Infrastructure/Resources/LocalAgentTranslationTask.zh-CN.md src/LumaLyrics.Infrastructure/TranslationJobExchange.cs src/LumaLyrics.Infrastructure/TranslationBatchExchange.cs src/LumaLyrics.Infrastructure/TranslationBatchMarkdown.cs src/LumaLyrics.Infrastructure/Resources/LocalAgentTranslationBatch.zh-CN.md src/LumaLyrics.Infrastructure/LumaLyrics.Infrastructure.csproj tests/LumaLyrics.Infrastructure.Tests/TranslationJobMarkdownTests.cs tests/LumaLyrics.Infrastructure.Tests/TranslationJobExportTests.cs tests/LumaLyrics.Infrastructure.Tests/TranslationBatchTests.cs
 git commit -m "feat: export self-contained local-agent lyric tasks"
 ```
 
-**完成条件：** 用户只把一首 task.md 交给 agent 就能获得完整原词、可写字段、校验要求及唯一输出路径；不需要源代码或旁边的 request 文件。
+**完成条件：** 单首 task.md 包含完整原词和唯一输出路径；批量只交一个 batch-task.md，agent自行逐曲读取和续做，用户不逐首发送；两者均不依赖仓库知识。
 
 ## Task 4：严格校验并原子接收，支持明确重译和恢复
 
@@ -485,7 +538,7 @@ checks["translationJobs.noReviewBadge"] =
 
 - [ ] **Step 2：当前歌曲卡片。** 显示来源、实际覆盖数及“准备中文译文…”／“生成本地翻译任务…”／“用本地 agent 重新制作…”；生成后提供“打开任务 MD”“复制任务路径”“打开任务文件夹”。“打开”只通过 Shell 打开已登记文件，不从结果／歌词执行命令。任务内容包含一键交接所需全部信息。
 - [ ] **Step 3：明确重译授权。** 创建界面显示目标和旧来源，可选简短风格说明及参考旧译文；按钮清楚写明完成后替换并保留历史。任务期间旧版可用；PartialReady提供“查看部分稿／采用此部分译稿／重新生成”，采用时捕获当前修订。历史卡可查看来源和恢复；保留 AI provenance，不添加待校对徽标。
-- [ ] **Step 4：批量任务与状态。** Settings 内复用已确认资料库筛选，显示实际缺失／部分／不适用；用户一次选择生成后逐首 MD，支持取消剩余导出和打开任务目录。列表使用有界／虚拟化容器，不在 playback 主页面塞入管理控件。
+- [ ] **Step 4：批量任务与状态。** Settings 内复用已确认资料库筛选，支持“全部缺失”与勾选多首重译，创建页一次列明各首模式和替换授权。生成后主要按钮为“打开批量入口 MD／复制批量任务路径”，不让用户逐首发送文件；支持取消剩余导出、同入口续做和只对失败项重新生成。汇总从真实任务状态显示选中数、来源已取得、待制作、已提交待接收、已接收、需处理和失败，不能信任 agent进度把内容标为已接收。列表使用有界／虚拟化容器，不在 playback主页面塞入管理控件。
 - [ ] **Step 5：生命周期与过期结果。** Coordinator 持有单个 inbox，创建／查找捕获 Track＋原词哈希及请求代次；切歌或新请求后不得将旧 UI 结果显示为新歌曲。inbox 按登记目标保存，切歌不取消已授权的独立翻译任务。页面 Loaded订阅、Unloaded解绑；应用 DisposeAsync取消回收并按既有关闭流程等待释放。收件完成仅刷新匹配目标和列表，不抢焦点、不跳滚动、不改偏移。
 - [ ] **Step 6：运行实际 UI 专项。** 覆盖 1220／980／820 宽度、六套应用主题（liquid/frost/material/paper/studio/bauhaus）、键盘 Tab/Enter/Escape、长路径换行、减少动画及系统动画关闭。确认悬浮主题、预览、锁定、两个开关、下一句原文与间奏保持。自动保存完成时不弹抢焦点窗口。
 - [ ] **Step 7：提交通过专项的 UI。**
@@ -505,9 +558,9 @@ git commit -m "feat: manage local-agent lyric tasks in translation settings"
 
 - [ ] **Step 1：先写恢复原创任务／历史测试。** 场景：先有手动译文→用户重译接收→导出快照→恢复到全新目录。验证当前 Draft、旧 Manual、Review、哈希、历史和 Revision 全部保留；恢复后旧任务暂停，不扫描原目录，不自动写旧路径；新任务生成新 JobId和新绝对路径。
 - [ ] **Step 2：增加旧格式兼容测试。** 使用真实 v1 manifest和 translations schema 1 fixture，读取只做验证，恢复目标中迁移；不修改原备份、不将当前新库当成旧库样例。未来版本清楚拒绝且不留下空库。
-- [ ] **Step 3：实现已登记文件白名单。** manifest 新增明确 job/history 类型，校验 ID、文件名、大小、SHA-256、相对路径、来源记录和受支持状态；不复制临时文件、未登记 result或外链文件。已接收结果按数据库中记录哈希验证；在途、被占用、导出中任务的缺失须明确写入 warnings，不把不一致文件标为成功。
+- [ ] **Step 3：实现已登记文件白名单。** manifest 新增明确 job/history/batch 类型，校验 ID、文件名、大小、SHA-256、相对路径、来源记录和受支持状态；包含登记的批量入口和分块，不复制临时文件、未登记 result或外链文件。agent-progress 只作可选且经校验的恢复提示，损坏则跳过并记录，不作为译文接收事实。已接收结果按数据库中记录哈希验证；在途、被占用、导出中任务的缺失须明确写入 warnings，不把不一致文件标为成功。
 - [ ] **Step 4：调整恢复路径。** 只恢复新目录；恢复译文和历史可直接使用，旧未完成任务标记 `Stale`、原因 `ProfileRelocated` 并保留可读记录，用户重新生成后才启用新路径。恢复一致性检查同时覆盖数据库快照与可读 JSON 内容，不只验证 ZIP 能解压。
-- [ ] **Step 5：增加泄漏拒绝样例。** 目录 `translation-jobs` 及根级 `task.md`、`request.json`、`translation-result.json`、`receipt.json` 与专用任务／历史 JSON都拒绝；静态模板资源／公共指南允许。Git 忽略规则涵盖生成任务但不能忽略仓库 `docs` 中的规格计划或源码模板。新增隐私测试使用原创样例，检查打包前拒绝，不实际打入真实个人内容。
+- [ ] **Step 5：增加泄漏拒绝样例。** 目录 `translation-jobs`／`translation-batches` 及根级 `task.md`、`batch-task.md`、`batch.json`、`agent-progress.json`、`request.json`、`translation-result.json`、`receipt.json` 与专用任务／历史 JSON都拒绝；静态模板资源／公共指南允许。Git 忽略规则涵盖生成任务但不能忽略仓库 `docs` 中的规格计划或源码模板。新增隐私测试使用原创样例，检查打包前拒绝，不实际打入真实个人内容。
 - [ ] **Step 6：运行并提交。**
 
 ```powershell
@@ -552,7 +605,7 @@ New-Item -ItemType Directory -Path $translationCheckData,$translationCheckReport
 
 保留并核对专项 JSON 的每条结果，实际打开六主题的关键截图；同时运行已有翻译／Settings专项或完整 UI 回归，报告各自实际通过数。Microsoft host是既有 apphost启动卡顿的可用后备。图像保留原创样例，路径含个人用户名的私人报告留本机。
 
-- [ ] **Step 3：验证 agent 交接，不以 mock替代可用性。** 至少使用一种较弱模型和一种常用本地 agent，仅提供单首 MD，不提供仓库／request／额外口头规则。用原创英语、重复副歌＋空白、多行组、日语／混合语言、中文路径各一首；核对是否一次放到正确路径、结构校验／接收是否通过、有没有未译原因／假称完成。若当前没有可用 agent环境，保留未完成状态并列明待用户实测项，不声称已经跨 agent通过。
+- [ ] **Step 3：验证 agent 交接，不以 mock替代可用性。** 至少使用一种较弱模型和一种常用本地 agent，分别仅提供单首 MD 和批量 batch-task.md，不提供仓库／request／额外口头规则。用原创英语、重复副歌＋空白、多行组、日语／混合语言、中文路径各一首；另做至少 10 首跨两块的连续处理、完成 3 首后强制结束并以同一入口续做、应用关闭时连续提交、单首失败后继续等实测。核对是否一次放到正确路径、是否跳过已提交项、结构校验／接收是否通过、有没有假称完成。若当前没有可用 agent环境，保留未完成状态并列明待用户实测项，不声称已经跨 agent通过。
 - [ ] **Step 4：人工评估翻译内容。** 检查含义、否定、人物指代、习语、前后呼应及每组边界；记录样例和具体问题，修正文案或模板后只重测受影响交接。结构通过仍记录 Draft，不能改为已语义核实。无需在此验收中操作真实 Apple Music播放。
 - [ ] **Step 5：走通用户三条完整路径。** 可靠来源→直接使用且无新任务；无来源→准备动作生成MD→agent落盘→自动显示；不满意→明确重译→旧版继续→新版本替换→历史恢复。另走切歌、退出重启、目录不可用、原词变化、手动修订／双任务竞争、部分替换拒绝路径。
 - [ ] **Step 6：更新文档并发布普通提交。** 指南写清楚最短操作、agent能力前提、当前个人目录、部分结果、失败原因、历史恢复和备份；release notes仅写实际实现和实际验证，不夹带个人翻译或未验证宣传。必要的版本号只在开始打包前按仓库版本约定更新，并与包内一致。
@@ -586,6 +639,7 @@ git diff HEAD origin/main --name-status
 | --- | --- |
 | 有现成中文歌词直接用 | Task 2 / 6 / 9 |
 | 缺失生成一份足够详细的 MD | Task 1 / 3；规格第 5 节逐条覆盖；Task 9 仅交 MD试用 |
+| 一次选多首、只交一份批量 MD、可中断续做 | Task 3 / 7 / 8 / 9；规格第 3.3 / 4.4 节；100 首分块测试和跨会话实测 |
 | 不满意时选择本地重译 | Task 2 / 4 / 7，含手动旧译文、明确授权、保留历史 |
 | 任意 agent无数据库／项目知识也可交接 | Task 3完整骨架、绝对路径、自检；Task 5命令可选 |
 | 原词、时间、重复句和空白不被改 | Task 1 / 3 / 4 / 7 |
