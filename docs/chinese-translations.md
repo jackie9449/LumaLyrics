@@ -72,3 +72,7 @@
 ```
 
 基本流程不要求执行命令；不要原样执行上述示例路径。详细协议和实现步骤见[设计规格](superpowers/specs/2026-11-03-local-agent-chinese-translations.md)及[执行计划](superpowers/plans/2026-11-03-local-agent-chinese-translations.md)。
+
+## 后续规划：整合资料库与中文译文
+
+新的[整合设计](superpowers/specs/2026-11-03-library-lyrics-workspace.md)与[执行计划](superpowers/plans/2026-11-03-library-lyrics-workspace.md)建议在 Settings 中统一为「资料库与歌词」，共用歌曲清单、覆盖状态、选择和任务视图，支持一次选择后补原词、查现有译文并生成批量 MD。当前版本入口尚未合并，本页上述操作继续有效。
