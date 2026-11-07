@@ -13,7 +13,7 @@ public sealed class LibraryWorkspacePanel:UserControl,IDisposable
     public LibraryWorkspacePanel(PlaybackCoordinator coordinator)
     {
         var grid=new Grid();Content=grid;pages.SetResourceReference(StyleProperty,"AppSectionTabs");grid.Children.Add(pages);
-        Overview=new(coordinator);Display=new(coordinator,false);Songs=new(coordinator);Tasks=new(coordinator);
+        Overview=new(coordinator,()=>Select(1));Display=new(coordinator,false);Songs=new(coordinator);Tasks=new(coordinator);
         pages.Items.Add(new TabItem{Header="总览",Content=new ScrollViewer{Content=Overview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});
         pages.Items.Add(new TabItem{Header="歌曲",Content=Songs});
         pages.Items.Add(new TabItem{Header="任务",Content=Tasks});

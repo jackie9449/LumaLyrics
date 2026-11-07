@@ -15,6 +15,7 @@ public enum LibraryCoverState { Missing,Ready,HighResolution,Unreadable }
 public sealed record LibraryStatusInput(LyricsDocument? Document,bool ConfirmedOriginal,bool ManualOriginal,ChineseTranslation? Translation,bool ManualTranslation,bool HasOlderTranslation,string? Revision,LibraryCoverState Cover);
 public sealed record LibrarySongStatus(LibraryOriginalState Original,LibraryChineseState Chinese,int RequiredGroups,int TranslatedGroups,bool ManualChinese,bool AiDraft,LibraryCoverState Cover,string? SourceHash,string? Revision,string? Reason)
 {
+    public string CoverLabel=>"封面："+(Cover==LibraryCoverState.HighResolution?"高清":Cover==LibraryCoverState.Ready?"可用":Cover==LibraryCoverState.Unreadable?"不可读":"缺失");
     public string OriginalLabel=>Original switch{LibraryOriginalState.Ready=>"动态原词",LibraryOriginalState.Instrumental=>"纯音乐",LibraryOriginalState.ManualPlain=>"手动静态原词",LibraryOriginalState.Unconfirmed=>"原词待确认",_=>"缺原词"};
     public string ChineseLabel=>Chinese switch{LibraryChineseState.Complete=>$"中文完整 {TranslatedGroups}/{RequiredGroups}",LibraryChineseState.Partial=>$"中文部分 {TranslatedGroups}/{RequiredGroups}",LibraryChineseState.NotRequired=>"无需中文",LibraryChineseState.Outdated=>"原词已更新",LibraryChineseState.BlockedOriginal=>"需动态原词",_=>"缺中文译文"};
 }

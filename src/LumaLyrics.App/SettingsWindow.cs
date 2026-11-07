@@ -60,6 +60,7 @@ public sealed class SettingsWindow : Window
         ((ScrollViewer)((TabItem)tabs.Items[1]).Content).ScrollChanged+=(_,e)=>{if(e.ViewportHeightChange!=0)SizeAppearanceEditor();};
         tabs.SelectionChanged+=(_,e)=>{
             if(!ReferenceEquals(e.Source,tabs))return;
+            heading.Visibility=tabs.SelectedIndex==4?Visibility.Collapsed:Visibility.Visible;
             if(tabs.SelectedIndex==1)BeginAppearanceEditing();
             else overlayEditor?.Close();
         };

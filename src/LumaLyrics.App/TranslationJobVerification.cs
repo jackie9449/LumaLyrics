@@ -28,6 +28,12 @@ public partial class MainWindow
             var jobs=TranslationJobExchange.ReadJobs(coordinator.DataRoot);checks["jobs.actualButtonGeneratedSix"]=jobs.Count==6;
             var entries=Directory.GetFiles(Path.Combine(coordinator.DataRoot,"translation-batches"),"batch-task.md",SearchOption.AllDirectories);checks["jobs.oneBatchEntry"]=entries.Length==1;
             checks["jobs.twoChunks"]=Directory.GetFiles(Path.Combine(coordinator.DataRoot,"translation-batches"),"*.json",SearchOption.AllDirectories).Length==3;
+            preferences.SelectLibraryTasks();await preferences.Library.Tasks.Reload();var taskPanel=preferences.Library.Tasks;var selectedBatch=taskPanel.BatchList.Items.Cast<LibraryTaskBatch>().First(t=>t.EntryPath is not null);taskPanel.BatchList.SelectedItem=selectedBatch;
+            string? copied=null;var realCopy=taskPanel.CopyText;taskPanel.CopyText=value=>copied=value;
+            try{((IInvokeProvider)new ButtonAutomationPeer(taskPanel.CopyPromptButton).GetPattern(PatternInterface.Invoke)).Invoke();until=DateTime.UtcNow.AddSeconds(5);while(copied is null&&DateTime.UtcNow<until)await Task.Delay(30);checks["workspace.prompt.exactSelectedEntry"]=copied?.Contains(selectedBatch.EntryPath!)==true&&copied.Contains("translation-result.json");taskPanel.BatchList.SelectedItem=null;checks["workspace.prompt.requiresSelection"]=!taskPanel.CopyPromptButton.IsEnabled;taskPanel.BatchList.SelectedItem=selectedBatch;}
+            finally{taskPanel.CopyText=realCopy;}
+            preferences.SelectLibrarySongs();
+
             foreach(var appTheme in AppThemes.All)
             {
                 SelectUiTheme(appTheme.Id,false);await Task.Delay(80);
@@ -48,6 +54,16 @@ public partial class MainWindow
                 var commands=more.ContextMenu!;checks["workspace."+appTheme.Id+".commandMenu"]=commands.IsOpen&&commands.Style==FindResource("LibraryActionMenu")&&commands.ActualHeight<=SystemParameters.WorkArea.Height;
                 var first=commands.Items.OfType<MenuItem>().Skip(1).First();first.Focus();checks["workspace."+appTheme.Id+".commandKeyboardFocus"]=first.IsKeyboardFocused;
                 VisualVerification.Save(commands,Path.Combine(directory,"workspace-menu-"+appTheme.Id+".png"));commands.IsOpen=false;
+                foreach(int page in new[]{0,2,3})
+                {
+                    preferences.Library.Select(page);preferences.Width=1100;preferences.Height=900;await Task.Delay(220);if(page==2)await preferences.Library.Tasks.Reload();
+                    string view=page==0?"overview":page==2?"tasks":"display";VisualVerification.Save(preferences,Path.Combine(directory,"workspace-"+view+"-"+appTheme.Id+".png"));
+                    checks["workspace."+appTheme.Id+"."+view+".visible"]=preferences.Library.IsVisible;
+                    preferences.Width=640;preferences.Height=520;await Task.Delay(120);VisualVerification.Save(preferences,Path.Combine(directory,"workspace-"+view+"-640-"+appTheme.Id+".png"));
+                    if(page==2){var batchBounds=taskPanel.BatchList.TransformToAncestor(taskPanel).TransformBounds(new Rect(0,0,taskPanel.BatchList.ActualWidth,taskPanel.BatchList.ActualHeight));var songBounds=taskPanel.TaskSongs.TransformToAncestor(taskPanel).TransformBounds(new Rect(0,0,taskPanel.TaskSongs.ActualWidth,taskPanel.TaskSongs.ActualHeight));checks["workspace."+appTheme.Id+".tasks.narrowBounded"]=batchBounds.Bottom<=taskPanel.ActualHeight+1&&songBounds.Bottom<=taskPanel.ActualHeight+1&&batchBounds.Height>=32&&songBounds.Height>=32;}
+                }
+                preferences.Width=1100;preferences.Height=920;preferences.SelectLibrarySongs();await Task.Delay(80);
+
             }
             foreach(double width in new[]{1220d,980d,820d,640d}){preferences.Width=width;preferences.Height=width==640?600:920;await Task.Delay(100);var bounds=panel.SongList.TransformToAncestor(panel).TransformBounds(new Rect(0,0,panel.SongList.ActualWidth,panel.SongList.ActualHeight));checks["jobs.width"+width+".bounded"]=panel.ActualWidth<=preferences.ActualWidth&&panel.ActualWidth>0&&bounds.Bottom<=panel.ActualHeight+1&&bounds.Height>=48;VisualVerification.Save(preferences,Path.Combine(directory,"workspace-width-"+width+".png"));}preferences.Width=1100;preferences.Height=920;
             checks["workspace.unifiedNavigation"]=Descendants<TabItem>(preferences).Count(t=>t.Header?.ToString()=="资料库与歌词")==1&&!Descendants<TabItem>(preferences).Any(t=>t.Header?.ToString()=="中文译文");
