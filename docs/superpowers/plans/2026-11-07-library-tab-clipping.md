@@ -14,4 +14,3 @@
 - [x] Add LibraryWorkspaceTab/LibraryWorkspaceTabs styles, apply only to LibraryWorkspacePanel, and keep all brushes/radii theme-derived.
 - [x] Check every tab selection/focus, all six themes, 640/820/980/1220 widths and reduced motion; render header-only evidence and retain workspace regressions.
 - [x] Update release/verification notes, publish a separate library-tabs preview, validate distribution and hashes, then commit/push and verify remote tree.
-
