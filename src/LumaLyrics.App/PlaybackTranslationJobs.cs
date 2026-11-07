@@ -9,7 +9,7 @@ public sealed partial class PlaybackCoordinator
     {
         translationInbox=new(store.Root);
         translationActivated=(_,_)=>translationInbox.RequestScan();System.Windows.Application.Current.Activated+=translationActivated;
-        translationInbox.Received+=receipt=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;TranslationJobMessage=receipt.Message;RefreshTranslation();Updated?.Invoke();});};
+        translationInbox.Received+=receipt=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;InvalidateWorkspace();TranslationJobMessage=receipt.Message;RefreshTranslation();Updated?.Invoke();});};
         translationInboxTask=Task.Run(async()=>{try{await translationInbox.RunAsync(lifetime.Token);}catch(OperationCanceledException){}catch(Exception e){store.Log("Translation inbox: "+e.GetType().Name);}});
     }
     public IReadOnlyList<LibraryQueueItem> TranslationLibraryTracks(){using var repo=new LyricsRepository(System.IO.Path.Combine(store.Root,"lyrics.db"),true);return repo.GetLibraryQueue(true);}
@@ -30,5 +30,5 @@ public sealed partial class PlaybackCoordinator
             token.ThrowIfCancellationRequested();var batch=TranslationBatchExchange.Create(store.Root,selections,token:token);translationInbox?.RequestScan();return batch;
         },token);
     }
-    public void RefreshTranslationJobs(){translationInbox?.RequestScan();RefreshTranslation();Updated?.Invoke();}
+    public void RefreshTranslationJobs(){InvalidateWorkspace();translationInbox?.RequestScan();RefreshTranslation();Updated?.Invoke();}
 }

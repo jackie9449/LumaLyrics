@@ -80,3 +80,5 @@
 ## 整合实现与验证
 
 [整合设计](superpowers/specs/2026-11-03-library-lyrics-workspace.md)、[执行计划及交付记录](superpowers/plans/2026-11-03-library-lyrics-workspace.md)和[验证范围](verification-library-workspace/README.md)记录实现与限制。音乐浏览的歌曲「管理」及专辑「管理本专辑歌词」会携带原生身份进入同一个 Settings，不触发播放命令。
+
+新增专辑未出现在歌曲页时，使用「总览 → 刷新资料库清单」。歌曲页的「刷新 / 接收结果」也会先同步成员，再接收 agent 结果。手动刷新独立于自动预缓存和联网查词开关；歌曲选择、筛选及已有译文仍保留。

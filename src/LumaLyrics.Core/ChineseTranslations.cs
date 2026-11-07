@@ -29,11 +29,12 @@ public static partial class TranslationAlignment
         return han>=5 && han>latin*2;
     }
     public static bool IsLyricText(string text)=>!string.IsNullOrWhiteSpace(text) && !Credits().IsMatch(text.Trim()) && text.Any(char.IsLetter);
-    public static bool NeedsChineseTranslation(LyricsDocument document,string line)
+    public static bool NeedsChineseTranslation(LyricsDocument document,string line)=>NeedsChineseTranslation(line,document.Groups.Any(g=>g.Text.Any(c=>c is >= '\u3040' and <= '\u30ff' or >= '\uac00' and <= '\ud7af')));
+    public static bool NeedsChineseTranslation(string line,bool containsJapaneseOrKorean)
     {
         if(!IsLyricText(line))return false;
         // Han-only Japanese lines still need translation when the original contains kana.
-        if(document.Groups.Any(g=>g.Text.Any(c=>c is >= '\u3040' and <= '\u30ff' or >= '\uac00' and <= '\ud7af')))return true;
+        if(containsJapaneseOrKorean)return true;
         int han=line.Count(c=>c is >= '\u3400' and <= '\u9fff');int other=line.Count(c=>char.IsLetter(c) && c is not (>= '\u3400' and <= '\u9fff'));
         return !(han>=2 && han>other*2);
     }

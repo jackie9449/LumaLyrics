@@ -55,15 +55,17 @@ public sealed partial class AppleMusicLibraryReader
                         else try{identity=PlaylistIdentity(payload,childOffset+metadataHeader,length-metadataHeader);}
                         catch(XmlException){validMetadata=false;}
                     }
-                    if(type==206)
+                    if(type is 206 or 218)
                     {
                         int metadataHeader=Int(payload,childOffset+4);
-                        if(metadataHeader<20 || metadataHeader>length-28)throw new InvalidDataException("资料库成员引用不完整。");
+                        bool compact=type==218;int minimum=compact?32:28;
+                        if(metadataHeader<20 || metadataHeader>length-minimum)throw new InvalidDataException("资料库成员引用不完整。");
                         int reference=childOffset+metadataHeader;
-                        if(!payload.AsSpan(reference,4).SequenceEqual("ipfa"u8))throw new InvalidDataException("资料库成员引用格式不受支持。");
+                        if(!payload.AsSpan(reference,4).SequenceEqual(compact?"IPfa"u8:"ipfa"u8))throw new InvalidDataException("资料库成员引用格式不受支持。");
                         int referenceSize=Int(payload,reference+4);
-                        if(referenceSize<28 || referenceSize>length-metadataHeader)throw new InvalidDataException("资料库成员引用边界无效。");
-                        ids.Add(BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(reference+20,8)).ToString("X16"));
+                        if(referenceSize<minimum || referenceSize>length-metadataHeader || compact&&(referenceSize!=32||length-metadataHeader!=32))throw new InvalidDataException("资料库成员引用边界无效。");
+                        // Type 218 carries a separate occurrence ID at 8; the recording ID is at 16.
+                        ids.Add(BinaryPrimitives.ReadUInt64LittleEndian(payload.AsSpan(reference+(compact?16:20),8)).ToString("X16"));
                     }
                     childOffset+=length;
                 }

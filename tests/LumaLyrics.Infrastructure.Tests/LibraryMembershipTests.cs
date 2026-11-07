@@ -48,6 +48,26 @@ public sealed class LibraryMembershipTests:IDisposable
     [Fact] public void DamagedNativeReferenceIsRejected()=>
         Assert.Throws<InvalidDataException>(()=>new AppleMusicLibraryReader().Parse(LibraryTests.Library(playlists:(w,_)=>MusicDbPlaylistFixture.Write(w,new PlaylistFixture([1],InvalidReference:true)))));
 
+    [Fact] public void CompactMasterUsesRecordingIdAndExcludesCatalogOnlyTracks()
+    {
+        var snapshot=new AppleMusicLibraryReader().Parse(LibraryTests.Library(3,playlists:(w,_)=>MusicDbPlaylistFixture.Write(w,new PlaylistFixture([3,1],CompactReferences:true))));
+        Assert.Equal(3,snapshot.StoredTrackCount);Assert.Equal(new[]{"Track 1","Track 3"},snapshot.Tracks.Select(t=>t.Track.Title));
+    }
+    [Theory] [InlineData(1,2,false)] [InlineData(99,1,false)] [InlineData(1,1,true)]
+    public void CompactMasterStillRejectsPartialDanglingAndDamagedReferences(ulong member,int declared,bool invalid)=>
+        Assert.Throws<InvalidDataException>(()=>new AppleMusicLibraryReader().Parse(LibraryTests.Library(3,playlists:(w,_)=>MusicDbPlaylistFixture.Write(w,new PlaylistFixture([member],Declared:declared,InvalidReference:invalid,CompactReferences:true)))));
+    [Fact] public void CompactPlaylistKeepsRepeatedOccurrencesAndOrder()
+    {
+        var snapshot=new AppleMusicLibraryReader().Parse(LibraryTests.Library(3,playlists:(w,_)=>MusicDbPlaylistFixture.Write(w,new PlaylistFixture([1],CompactReferences:true),new PlaylistFixture([3,2,3],false,Metadata:"<plist><dict><key>universal-library-id</key><string>own</string></dict></plist>",CompactReferences:true))));
+        Assert.Equal(new[]{"Track 3","Track 2","Track 3"},Assert.Single(snapshot.Playlists).Tracks.Select(t=>t.Track.Title));
+    }
+
+    [Fact] public void SourceChangeBeforeCommitKeepsThePreviousMembership()
+    {
+        using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));var old=new LibrarySnapshot("old",1,[new("1",new("Own song","Own artist","Own album",1000))],"own");lyrics.SyncLibrary(old);
+        int checks=0;Assert.Throws<OperationCanceledException>(()=>lyrics.SyncLibrary(new("new",1,[new("2",new("New song","Own artist","Own album",1000))],"new"),stillCurrent:()=>++checks==1));
+        Assert.Equal("old",Assert.Single(lyrics.GetLibraryQueue(true)).Source);
+    }
     [Fact] public async Task BackgroundPreparationQueriesOnlyConfirmedLibraryMembers()
     {
         string file=Path.Combine(root,"Library.musicdb");
@@ -102,7 +122,7 @@ public sealed class LibraryMembershipTests:IDisposable
     }
 }
 
-internal sealed record PlaylistFixture(ulong[] Members,bool Master=true,string Name="Original fixture",int? Declared=null,bool InvalidReference=false,string? Metadata=null);
+internal sealed record PlaylistFixture(ulong[] Members,bool Master=true,string Name="Original fixture",int? Declared=null,bool InvalidReference=false,string? Metadata=null,bool CompactReferences=false);
 internal static class MusicDbPlaylistFixture
 {
     internal static void Write(BinaryWriter writer,params PlaylistFixture[] playlists)
@@ -116,9 +136,10 @@ internal static class MusicDbPlaylistFixture
             {
                 byte[] content=Encoding.UTF8.GetBytes(xml);metadata=new byte[20+content.Length];"boma"u8.CopyTo(metadata);BitConverter.GetBytes(20).CopyTo(metadata,4);BitConverter.GetBytes(metadata.Length).CopyTo(metadata,8);BitConverter.GetBytes(205).CopyTo(metadata,12);content.CopyTo(metadata,20);
             }
-            var header=new byte[48];"lpma"u8.CopyTo(header);BitConverter.GetBytes(header.Length).CopyTo(header,4);BitConverter.GetBytes(header.Length+name.Length+metadata.Length+88*playlist.Members.Length).CopyTo(header,8);BitConverter.GetBytes(1+(metadata.Length>0?1:0)+playlist.Members.Length).CopyTo(header,12);BitConverter.GetBytes(playlist.Declared??playlist.Members.Length).CopyTo(header,16);BitConverter.GetBytes(playlist.Master?1:0).CopyTo(header,44);writer.Write(header);writer.Write(name);writer.Write(metadata);
+            var header=new byte[48];"lpma"u8.CopyTo(header);BitConverter.GetBytes(header.Length).CopyTo(header,4);BitConverter.GetBytes(header.Length+name.Length+metadata.Length+(playlist.CompactReferences?52:88)*playlist.Members.Length).CopyTo(header,8);BitConverter.GetBytes(1+(metadata.Length>0?1:0)+playlist.Members.Length).CopyTo(header,12);BitConverter.GetBytes(playlist.Declared??playlist.Members.Length).CopyTo(header,16);BitConverter.GetBytes(playlist.Master?1:0).CopyTo(header,44);writer.Write(header);writer.Write(name);writer.Write(metadata);
             foreach(ulong id in playlist.Members)
             {
+                if(playlist.CompactReferences){var compact=new byte[52];"boma"u8.CopyTo(compact);BitConverter.GetBytes(20).CopyTo(compact,4);BitConverter.GetBytes(52).CopyTo(compact,8);BitConverter.GetBytes(218).CopyTo(compact,12);(playlist.InvalidReference?"bad!"u8:"IPfa"u8).CopyTo(compact.AsSpan(20));BitConverter.GetBytes(32).CopyTo(compact,24);BitConverter.GetBytes(999UL).CopyTo(compact,28);BitConverter.GetBytes(id).CopyTo(compact,36);writer.Write(compact);continue;}
                 var reference=new byte[88];"boma"u8.CopyTo(reference);BitConverter.GetBytes(20).CopyTo(reference,4);BitConverter.GetBytes(reference.Length).CopyTo(reference,8);BitConverter.GetBytes(206).CopyTo(reference,12);(playlist.InvalidReference?"bad!"u8:"ipfa"u8).CopyTo(reference.AsSpan(20));BitConverter.GetBytes(68).CopyTo(reference,24);BitConverter.GetBytes(id).CopyTo(reference,40);writer.Write(reference);
             }
         }

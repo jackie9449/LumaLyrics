@@ -107,14 +107,15 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         // Imported lyrics and their calibration are personal data, including automatic imports.
         Execute("DELETE FROM LookupFailures");
     }
-    public void SyncLibrary(LibrarySnapshot snapshot)
+    public void SyncLibrary(LibrarySnapshot snapshot,CancellationToken token=default,Func<bool>? stillCurrent=null)
     {
         // This profile selects one native library. Replace only its derived
         // membership; historical rows, documents and manual bindings survive.
+        token.ThrowIfCancellationRequested();if(stillCurrent?.Invoke()==false)throw new OperationCanceledException();
         using var tx=db.BeginTransaction();Execute("UPDATE LibraryTracks SET Active=0");Execute("DELETE FROM LibraryMembership");
         foreach(var item in snapshot.Tracks)
         {
-            var t=item.Track;
+            token.ThrowIfCancellationRequested();var t=item.Track;
             Execute("""
                 INSERT INTO LibraryTracks(Source,PersistentId,Title,Artist,Album,Duration,Fingerprint,Active)
                 VALUES($s,$id,$t,$ar,$al,$d,$f,1)
@@ -125,6 +126,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
                 """,("$s",snapshot.Path),("$id",item.PersistentId),("$t",t.Title),("$ar",t.Artist),("$al",t.Album),("$d",t.DurationMs),("$f",t.Fingerprint));
             Execute("INSERT INTO LibraryMembership(Source,PersistentId) VALUES($s,$id)",("$s",snapshot.Path),("$id",item.PersistentId));
         }
+        token.ThrowIfCancellationRequested();if(stillCurrent?.Invoke()==false)throw new OperationCanceledException();
         tx.Commit();
     }
     public IReadOnlyList<LibraryQueueItem> GetLibraryQueue(bool includeDeferred=false,bool cachedOnly=false)

@@ -47,12 +47,12 @@ public static class TranslationJobExchange
         while(r.Read()){total++;string state=r.GetString(1);if(state is "Applied" or "AppliedPartial")applied++;else if(state=="AwaitingResult"){if(File.Exists(TranslationJobFiles.PathFor(root,r.GetString(0),"translation-result.json")))submitted++;else pending++;}else if(state is "Conflict" or "Stale" or "Rejected" or "PartialReady")attention++;}
         return $"任务 {total} · 已接收 {applied} · 待制作 {pending} · 已提交待接收 {submitted} · 需处理 {attention}";
     }
-    public static IReadOnlyList<TranslationJobSnapshot> ReadJobs(string root)
+    public static IReadOnlyList<TranslationJobSnapshot> ReadJobs(string root,CancellationToken token=default)
     {
         using var db=Open(root,true);using var c=Command(db,"SELECT Request,RequestHash,State,Receipt FROM TranslationJobs ORDER BY rowid DESC");using var r=c.ExecuteReader();var rows=new List<TranslationJobSnapshot>();
         while(r.Read())
         {
-            var request=JsonSerializer.Deserialize<TranslationJobRequest>(r.GetString(0),TranslationJobFiles.Json)!;
+            token.ThrowIfCancellationRequested();var request=JsonSerializer.Deserialize<TranslationJobRequest>(r.GetString(0),TranslationJobFiles.Json)!;
             var state=Enum.Parse<TranslationJobState>(r.GetString(2));
             var receipt=r.IsDBNull(3)?new(request.JobId,state,state.ToString(),state.ToString(),0,request.Target.Groups.Count(g=>g.NeedsTranslation),null,request.CreatedUtc):JsonSerializer.Deserialize<TranslationJobReceipt>(r.GetString(3),TranslationJobFiles.Json)!;
             if(state is (TranslationJobState.AwaitingResult or TranslationJobState.PartialReady or TranslationJobState.Exporting) && !Path.GetFullPath(request.ProfileRoot).Equals(Path.GetFullPath(root),StringComparison.OrdinalIgnoreCase))receipt=receipt with{State=TranslationJobState.Stale,Code="ProfileRelocated",Message="个人目录已迁移，请重新生成任务。"};

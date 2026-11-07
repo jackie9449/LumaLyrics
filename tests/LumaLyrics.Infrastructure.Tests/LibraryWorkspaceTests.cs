@@ -48,5 +48,16 @@ public sealed class LibraryWorkspaceTests:IDisposable
         var status=LibraryWorkspaceProjection.Assess(new(new LrcParser().Parse(Raw),true,true,null,false,false,null,LibraryCoverState.Missing));
         Assert.Equal(status.RequiredGroups,report.Tracks.Single().RequiredGroups);Assert.Equal(status.TranslatedGroups,report.Tracks.Single().TranslatedGroups);
     }
+    [Fact] public async Task AssessmentReuseTracksOriginalAndTranslationChanges()
+    {
+        LibraryManagedSong A(LibraryWorkspaceSnapshot snapshot)=>snapshot.Songs.Single(s=>s.Key.PersistentId=="a");
+        LibraryManagedSong B(LibraryWorkspaceSnapshot snapshot)=>snapshot.Songs.Single(s=>s.Key.PersistentId=="b");
+        var catalog=new LibraryWorkspaceCatalog(root);var first=await catalog.ReadAsync("own",1,default);var second=await catalog.ReadAsync("own",1,default);
+        Assert.Same(A(first),A(second));
+        using(var translations=new TranslationRepository(root))translations.Save(Song,new(TranslationAlignment.Hash(Raw),[new(0,"我们归家")],"own","manual","own",DateTimeOffset.UtcNow),true);
+        var third=await catalog.ReadAsync("own",1,default);Assert.NotSame(A(second),A(third));Assert.Equal(LibraryChineseState.Partial,A(third).Status.Chinese);Assert.Same(B(second),B(third));
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,Raw+"\n[00:09]New words","own",true);
+        var fourth=await catalog.ReadAsync("own",1,default);Assert.Equal(LibraryChineseState.Outdated,A(fourth).Status.Chinese);Assert.NotEqual(A(third).Status.SourceHash,A(fourth).Status.SourceHash);
+    }
     public void Dispose(){SqliteConnection.ClearAllPools();Directory.Delete(root,true);}
 }

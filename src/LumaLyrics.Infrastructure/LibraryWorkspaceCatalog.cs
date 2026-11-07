@@ -3,7 +3,14 @@ using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 public sealed class LibraryWorkspaceCatalog(string root)
 {
-    public Task<LibraryWorkspaceSnapshot> ReadAsync(string? source,long generation,CancellationToken token)=>Task.Run(()=>Read(source,generation,token),token);
+    readonly SemaphoreSlim readGate=new(1,1);
+    Dictionary<LibrarySongKey,(AssessmentKey Key,LibraryManagedSong Song)> assessments=new(LibrarySongKey.Comparer);
+    sealed record AssessmentKey(Track Track,LyricsBinding? Binding,string? Revision,bool Older,LibraryCoverState Cover);
+    public async Task<LibraryWorkspaceSnapshot> ReadAsync(string? source,long generation,CancellationToken token)
+    {
+        await readGate.WaitAsync(token).ConfigureAwait(false);
+        try{return await Task.Run(()=>Read(source,generation,token),token).ConfigureAwait(false);}finally{readGate.Release();}
+    }
     LibraryWorkspaceSnapshot Read(string? source,long generation,CancellationToken token)
     {
         var catalog=new MusicLibraryCatalog(root,source).Load(token);
@@ -23,7 +30,22 @@ public sealed class LibraryWorkspaceCatalog(string root)
             if(File.Exists(Path.Combine(root,"artwork.db"))){using var art=PersonalLibrarySnapshot.Open(Path.Combine(root,"artwork.db"));using var q=art.CreateCommand();q.CommandText="SELECT a.Source,a.PersistentId,a.ImageKey,i.Width,i.Height FROM LibraryArtwork a JOIN ArtworkImages i USING(ImageKey) WHERE a.Active=1";using var r=q.ExecuteReader();while(r.Read())covers[r.GetString(0)+"\0"+r.GetString(1)]=!File.Exists(Path.Combine(root,"cache","artwork",r.GetString(2)+".img"))?LibraryCoverState.Unreadable:Math.Min(r.GetInt32(3),r.GetInt32(4))>=1000?LibraryCoverState.HighResolution:LibraryCoverState.Ready;}
             bool Matches(Track a,Track b)=>!a.DurationMs.HasValue||!b.DurationMs.HasValue||Math.Abs(a.DurationMs.Value-b.DurationMs.Value)<=5000;
             var result=new List<LibraryManagedSong>();var parser=new LrcParser();
-            foreach(var song in catalog.Songs){token.ThrowIfCancellationRequested();var binding=bindings.GetValueOrDefault(song.Track.Fingerprint)?.FirstOrDefault(x=>Matches(x.Track,song.Track)).Binding;var doc=binding is null?null:parser.Parse(binding.Raw,binding.Plain) with{Instrumental=binding.Instrumental};var stored=translations.GetValueOrDefault(song.Track.Fingerprint)?.Where(t=>Matches(t.Record.Track,song.Track)).ToArray()??[];var active=stored.FirstOrDefault(t=>t.Record.Translation.SourceHash==(doc is null?null:TranslationAlignment.Hash(doc.Raw)));var status=LibraryWorkspaceProjection.Assess(new(doc,binding is not null&&(binding.Manual||LibraryPrefetcher.QualityOf(binding,song.Track)),binding?.Manual==true,active.Record?.Translation,active.Record?.Manual==true,stored.Length>0,active.Revision,covers.GetValueOrDefault(song.Key)));result.Add(new(new(song.Source,song.PersistentId),song.Track,binding?.Id,status));}
+            var next=new Dictionary<LibrarySongKey,(AssessmentKey Key,LibraryManagedSong Song)>(LibrarySongKey.Comparer);
+            foreach(var song in catalog.Songs)
+            {
+                token.ThrowIfCancellationRequested();
+                var key=new LibrarySongKey(song.Source,song.PersistentId);
+                var binding=bindings.GetValueOrDefault(song.Track.Fingerprint)?.FirstOrDefault(x=>Matches(x.Track,song.Track)).Binding;
+                string? hash=binding is null?null:TranslationAlignment.Hash(binding.Raw);
+                var stored=translations.GetValueOrDefault(song.Track.Fingerprint)?.Where(t=>Matches(t.Record.Track,song.Track)).ToArray()??[];
+                var active=stored.FirstOrDefault(t=>t.Record.Translation.SourceHash==hash);
+                var assessment=new AssessmentKey(song.Track,binding,active.Revision,stored.Length>0,covers.GetValueOrDefault(song.Key));
+                if(assessments.TryGetValue(key,out var previous)&&previous.Key==assessment){next[key]=previous;result.Add(previous.Song);continue;}
+                var doc=binding is null?null:parser.Parse(binding.Raw,binding.Plain) with{Instrumental=binding.Instrumental};
+                var status=LibraryWorkspaceProjection.Assess(new(doc,binding is not null&&(binding.Manual||LibraryPrefetcher.QualityOf(binding,song.Track)),binding?.Manual==true,active.Record?.Translation,active.Record?.Manual==true,stored.Length>0,active.Revision,assessment.Cover));
+                var row=new LibraryManagedSong(key,song.Track,binding?.Id,status);next[key]=(assessment,row);result.Add(row);
+            }
+            assessments=next;
             return new(root,sources.FirstOrDefault()??source??"",generation,false,result,catalog.Message);
         }
     }

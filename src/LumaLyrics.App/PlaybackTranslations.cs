@@ -13,11 +13,10 @@ public sealed partial class PlaybackCoordinator
     public TranslationProgress TranslationProgress {get;private set;}=new(0,0,0,0,0,0,0,0,0,false,"尚未准备中文译文。");
     public void RefreshTranslation()
     {
-        workspaceReadUntil=DateTime.MinValue;
         ChineseTranslation? next=null;
         try{if(ActiveTrack is { } track && Document is { } doc)next=translations.Find(track,doc);}
         catch(Exception e) when(e is IOException or InvalidDataException or JsonException or Microsoft.Data.Sqlite.SqliteException){store.Log("Translation read: "+e.GetType().Name);}
-        if(next is null || Translation is null || next.SourceHash!=Translation.SourceHash || next.Source!=Translation.Source || next.PreparedUtc!=Translation.PreparedUtc || !next.Lines.SequenceEqual(Translation.Lines))Translation=next;
+        if((next is null)!=(Translation is null) || next is not null&&Translation is not null&&(next.SourceHash!=Translation.SourceHash || next.Source!=Translation.Source || next.PreparedUtc!=Translation.PreparedUtc || !next.Lines.SequenceEqual(Translation.Lines))){Translation=next;InvalidateWorkspace();}
         TranslationStatus=Document?.Instrumental==true?"纯音乐，无需译文。":Translation is { } translation?$"{translation.Source}\n{(translation.Draft?$"AI 生成 · 已准备 {translation.Lines.Count} 行":translation.Review)}":Document is not {IsSynced:true}?"请先取得与歌曲版本一致的动态原词。":TranslationAlignment.IsChinese(string.Join("\n",Document.Groups.Where(g=>TranslationAlignment.IsLyricText(g.Text)).Select(g=>g.Text)))?"原词以中文为主。":"暂无与当前原词完整对应的中文译文，保持留空。";
     }
     void RefreshTranslationProgress()

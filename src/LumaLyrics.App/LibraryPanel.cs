@@ -31,6 +31,7 @@ public sealed class LibraryPanel : UserControl,IDisposable
             coordinator.Settings.AutoPrefetchLibrary=true;coordinator.SaveSettings();_=coordinator.ResumeLibraryPrefetchAsync();
         });
         var actions=new WrapPanel{Margin=new(0,12,0,0)};body.Children.Add(actions);
+        DialogUi.Button(actions,"刷新资料库清单",async()=>{try{await coordinator.SynchronizeWorkspaceAsync(CancellationToken.None);stamp=null;Refresh();}catch(Exception e){if(!disposed)status.Text="刷新未完成："+e.Message;}});
         DialogUi.Button(actions,"暂停后台预缓存",()=>{coordinator.Settings.AutoPrefetchLibrary=false;coordinator.SaveSettings();coordinator.PauseLibraryPrefetch();});
         DialogUi.Button(actions,"继续预缓存",async()=>{
             if(!coordinator.Settings.OnlineLookup){MessageBox.Show(Window.GetWindow(this),"请先在设置中开启联网查词。");return;}

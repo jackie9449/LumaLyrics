@@ -32,9 +32,10 @@ public static class LibraryWorkspaceProjection
         var doc=input.Document;
         var original=doc?.Instrumental==true?LibraryOriginalState.Instrumental:doc is null?LibraryOriginalState.Missing:!doc.IsSynced?input.ManualOriginal?LibraryOriginalState.ManualPlain:LibraryOriginalState.Unconfirmed:input.ConfirmedOriginal?LibraryOriginalState.Ready:LibraryOriginalState.Unconfirmed;
         string? hash=doc is null?null:TranslationAlignment.Hash(doc.Raw);var translation=input.Translation;
-        var needed=original==LibraryOriginalState.Ready&&!TranslationAlignment.IsChinese(string.Join("\n",doc!.Groups.Select(g=>g.Text)))?doc!.Groups.Select((g,i)=>(g,i)).Where(x=>TranslationAlignment.NeedsChineseTranslation(doc,x.g.Text)).Select(x=>x.i).ToArray():[];
-        bool current=translation?.SourceHash==hash&&translation is not null;int count=current?needed.Count(i=>!string.IsNullOrWhiteSpace(translation!.TextAt(i))):0;
-        var chinese=original==LibraryOriginalState.Instrumental?LibraryChineseState.NotRequired:original!=LibraryOriginalState.Ready?LibraryChineseState.BlockedOriginal:needed.Length==0||TranslationAlignment.IsChinese(string.Join("\n",doc!.Groups.Select(g=>g.Text)))?LibraryChineseState.NotRequired:!current?input.HasOlderTranslation||translation is not null?LibraryChineseState.Outdated:LibraryChineseState.Missing:count==needed.Length?LibraryChineseState.Complete:count>0?LibraryChineseState.Partial:LibraryChineseState.Missing;
+        bool containsJapaneseOrKorean=doc?.Groups.Any(g=>g.Text.Any(c=>c is >= '\u3040' and <= '\u30ff' or >= '\uac00' and <= '\ud7af'))==true;
+        var needed=original==LibraryOriginalState.Ready&&!TranslationAlignment.IsChinese(string.Join("\n",doc!.Groups.Select(g=>g.Text)))?doc!.Groups.Select((g,i)=>(g,i)).Where(x=>TranslationAlignment.NeedsChineseTranslation(x.g.Text,containsJapaneseOrKorean)).Select(x=>x.i).ToArray():[];
+        bool current=translation?.SourceHash==hash&&translation is not null;var translated=current?translation!.Lines.Where(l=>!string.IsNullOrWhiteSpace(l.Text)).Select(l=>l.GroupIndex).ToHashSet():[];int count=needed.Count(translated.Contains);
+        var chinese=original==LibraryOriginalState.Instrumental?LibraryChineseState.NotRequired:original!=LibraryOriginalState.Ready?LibraryChineseState.BlockedOriginal:needed.Length==0?LibraryChineseState.NotRequired:!current?input.HasOlderTranslation||translation is not null?LibraryChineseState.Outdated:LibraryChineseState.Missing:count==needed.Length?LibraryChineseState.Complete:count>0?LibraryChineseState.Partial:LibraryChineseState.Missing;
         return new(original,chinese,needed.Length,count,input.ManualTranslation,translation?.Draft==true,input.Cover,hash,input.Revision,null);
     }
 }

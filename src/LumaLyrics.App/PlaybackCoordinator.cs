@@ -231,6 +231,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     }
     void Apply(LyricsBinding binding)
     {
+        InvalidateWorkspace();
         Binding = binding; Document = parser.Parse(binding.Raw,binding.Plain) with { Instrumental = binding.Instrumental };
         RefreshTranslation();
         LyricsStatus = binding.Instrumental ? "纯音乐" : $"{(Document.IsSynced ? "逐行歌词" : "静态歌词")} · {binding.Source}{(binding.Manual ? " · 已锁定绑定" : "")}";

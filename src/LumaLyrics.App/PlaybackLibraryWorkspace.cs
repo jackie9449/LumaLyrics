@@ -9,10 +9,30 @@ public sealed partial class PlaybackCoordinator
     internal ITranslationProvider? WorkspaceChineseProvider {get;set;}
     public string WorkspaceMessage {get;private set;}="选择歌曲后，一次准备原词与中文译文。";
     public bool WorkspaceBusy=>workspaceOperation is {IsCompleted:false};
-    Task<LibraryWorkspaceSnapshot>? workspaceRead;string? workspaceReadSource;DateTime workspaceReadUntil;long workspaceEpoch;
-    public Task<LibraryWorkspaceSnapshot> ReadWorkspaceAsync(CancellationToken token)
+    Task<LibraryWorkspaceSnapshot>? workspaceRead;LibraryWorkspaceCatalog? workspaceCatalog;string? workspaceReadSource;DateTime workspaceReadUntil;long workspaceEpoch;
+    void InvalidateWorkspace()=>workspaceReadUntil=DateTime.MinValue;
+    public Task<LibraryWorkspaceSnapshot> ReadWorkspaceAsync(CancellationToken token,bool refresh=false)
     {
-        if(workspaceRead is null||workspaceReadSource!=Settings.LibraryPath||DateTime.UtcNow>=workspaceReadUntil){if(workspaceReadSource!=Settings.LibraryPath)workspaceEpoch++;workspaceReadSource=Settings.LibraryPath;workspaceReadUntil=DateTime.UtcNow.AddSeconds(1);string? readSource=Settings.LibraryPath;if(Environment.GetCommandLineArgs().Contains("--verify-ui")&&readSource is null)readSource=Path.Combine(store.Root,"isolated-library.musicdb");workspaceRead=new LibraryWorkspaceCatalog(store.Root).ReadAsync(readSource,workspaceEpoch,lifetime.Token);}return workspaceRead.WaitAsync(token);
+        bool sameSource=workspaceReadSource==Settings.LibraryPath;
+        if(workspaceRead is null||!sameSource||workspaceRead.IsCompleted&&(refresh||DateTime.UtcNow>=workspaceReadUntil))
+        {
+            if(!sameSource)workspaceEpoch++;workspaceReadSource=Settings.LibraryPath;workspaceReadUntil=DateTime.UtcNow.AddSeconds(5);
+            string? source=Settings.LibraryPath;if(Environment.GetCommandLineArgs().Contains("--verify-ui")&&source is null)source=Path.Combine(store.Root,"isolated-library.musicdb");
+            workspaceCatalog??=new(store.Root);workspaceRead=workspaceCatalog.ReadAsync(source,workspaceEpoch,lifetime.Token);
+        }
+        return workspaceRead.WaitAsync(token);
+    }
+    public async Task SynchronizeWorkspaceAsync(CancellationToken token)
+    {
+        string? expectedSource=Settings.LibraryPath;string source=expectedSource??AppleMusicLibraryReader.Discover()??throw new IOException("未发现 Apple Music 资料库。");
+        using var linked=CancellationTokenSource.CreateLinkedTokenSource(token,lifetime.Token);
+        int count=await Task.Run(()=>
+        {
+            var snapshot=new AppleMusicLibraryReader().Read(source);linked.Token.ThrowIfCancellationRequested();
+            if(expectedSource!=Settings.LibraryPath)throw new OperationCanceledException("资料库来源已变化。");
+            using var lyrics=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));lyrics.SyncLibrary(snapshot,linked.Token,()=>expectedSource==Settings.LibraryPath);return snapshot.Tracks.Count;
+        },linked.Token);
+        if(disposed||expectedSource!=Settings.LibraryPath)return;InvalidateWorkspace();WorkspaceMessage=$"已同步 {count:N0} 首资料库歌曲。";Updated?.Invoke();
     }
     public void PauseWorkspace()=>workspaceCancellation?.Cancel();
     public Task PrepareWorkspaceAsync(IReadOnlyList<LibraryManagedSong> selected,bool retranslate,bool findExisting,bool prepareOriginal=true,bool exportAgent=true,bool includeArtwork=false)
@@ -65,7 +85,7 @@ public sealed partial class PlaybackCoordinator
             }
             catch(OperationCanceledException){Report("准备已暂停，已保存内容和任务保留。");}
             catch(Exception e){Report("准备中断："+e.Message);}
-            finally{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;RefreshTranslation();Updated?.Invoke();});}
+            finally{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;InvalidateWorkspace();RefreshTranslation();Updated?.Invoke();});}
         },token);
         return workspaceOperation;
         void Report(string message){if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;WorkspaceMessage=message;Updated?.Invoke();});}

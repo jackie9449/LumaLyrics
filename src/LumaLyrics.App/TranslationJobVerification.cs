@@ -66,9 +66,25 @@ public partial class MainWindow
             checks["jobs.originalPreserved"]=coordinator.Document?.Raw==original;
             checks["jobs.visibilityPreserved"]=settings.ShowChineseTranslation==main&&settings.OverlayShowChineseTranslation==floating;
             await VerifyWorkspacePreparationAsync(checks,tracks,original);
+            await VerifyLargeWorkspaceAsync(preferences,checks);
 
         }
         finally{preferences?.Close();settingsWindow=null;settings.LibraryPath=oldSource;SelectUiTheme(theme,false);}
+    }
+    async Task VerifyLargeWorkspaceAsync(SettingsWindow preferences,Dictionary<string,object?> checks)
+    {
+        var tracks=Enumerable.Range(0,3003).Select(i=>new Track("Own large "+i.ToString("D4"),"Own artist","Own album "+(i%30),10000)).ToArray();
+        await Task.Run(()=>{using var lyrics=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"));lyrics.SyncLibrary(new("own-ui",tracks.Length,tracks.Select((t,i)=>new LibraryTrack(i.ToString(),t)).ToArray(),"own"));});
+        coordinator.RefreshTranslationJobs();preferences.SelectLibrarySongs();var panel=preferences.Library.Songs;
+        var read=coordinator.ReadWorkspaceAsync(default,true);var same=coordinator.ReadWorkspaceAsync(default,true);checks["workspace.large.readsCoalesced"]=ReferenceEquals(read,same);await read;await panel.Reload();await Task.Delay(80);
+        checks["workspace.large.virtualized"]=panel.SongList.Items.Count==3003&&Descendants<ListBoxItem>(panel.SongList).Count()<100;
+        var clock=System.Diagnostics.Stopwatch.StartNew();Descendants<Button>(panel).Single(b=>b.Content?.ToString()=="全选当前筛选").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));clock.Stop();
+        checks["workspace.large.selectAllMs"]=clock.ElapsedMilliseconds;checks["workspace.large.selectAllResponsive"]=panel.SelectedSongs.Count==3003&&clock.ElapsedMilliseconds<1500;
+        var search=Descendants<TextBox>(panel).Single();search.Text="Own large 0001";await Task.Delay(300);
+        checks["workspace.large.hiddenSelectionRetained"]=panel.SongList.Items.Count==1&&panel.SelectedSongs.Count==3003;
+        search.Text="";await Task.Delay(300);clock.Restart();Descendants<Button>(panel).Single(b=>b.Content?.ToString()=="清空选择").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));clock.Stop();
+        checks["workspace.large.clearMs"]=clock.ElapsedMilliseconds;checks["workspace.large.clearResponsive"]=panel.SelectedSongs.Count==0&&clock.ElapsedMilliseconds<1500;
+        panel.SelectKeys([new("own-ui","100")]);var source=panel.SongList.ItemsSource;await panel.Reload();checks["workspace.large.unchangedRowsRetained"]=ReferenceEquals(source,panel.SongList.ItemsSource)&&panel.SelectedSongs.Single().Key.PersistentId=="100";
     }
     sealed class WorkspaceOriginalFixture(Func<Track,CancellationToken,Task<IReadOnlyList<LyricsCandidate>>> lookup):ILyricsProvider
     {public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>lookup(track,token);}
