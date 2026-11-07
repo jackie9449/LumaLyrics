@@ -137,6 +137,26 @@
    <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" VerticalAlignment="Center"/></Border>
   </Grid><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
  </Style>
+ <!-- Normal margin-aware layout keeps horizontal TabItem feedback inside its full bounds. -->
+ <Style x:Key="LibraryWorkspaceTab" TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}">
+  <Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="14,9"/><Setter Property="MinWidth" Value="66"/><Setter Property="MinHeight" Value="36"/><Setter Property="SnapsToDevicePixels" Value="True"/>
+  <Setter Property="HorizontalContentAlignment" Value="Center"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Grid Background="Transparent" Opacity="{Binding Path=(local:AppMotion.Availability),RelativeSource={RelativeSource TemplatedParent}}">
+   <Border Margin="1" Background="{DynamicResource HoverBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Margin="1" Background="{DynamicResource AccentSoftBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Selected),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Margin="1" Background="{DynamicResource PressedBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Pressed),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Margin="1" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Focus),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>
+  </Grid><ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/><Setter Property="FontWeight" Value="SemiBold"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+ </Style>
+ <Style x:Key="LibraryWorkspaceTabs" TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
+  <Setter Property="TabStripPlacement" Value="Top"/><Setter Property="ItemContainerStyle" Value="{StaticResource LibraryWorkspaceTab}"/>
+  <Setter Property="ItemsPanel"><Setter.Value><ItemsPanelTemplate><StackPanel Orientation="Horizontal" KeyboardNavigation.DirectionalNavigation="Cycle" KeyboardNavigation.TabNavigation="Once"/></ItemsPanelTemplate></Setter.Value></Setter>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabControl"><Grid ClipToBounds="True"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <ItemsPresenter Margin="0,0,0,14" HorizontalAlignment="Left" KeyboardNavigation.TabIndex="1"/>
+   <ContentPresenter x:Name="PART_SelectedContentHost" Grid.Row="1" ContentSource="SelectedContent" TextElement.FontWeight="Normal" local:AppMotion.RevealOnChange="True" KeyboardNavigation.TabIndex="2"/>
+  </Grid></ControlTemplate></Setter.Value></Setter>
+ </Style>
  <!-- In-page sections use the same state layers and palette as Settings, without its navigation rail. -->
  <Style x:Key="AppSectionTab" TargetType="TabItem" BasedOn="{StaticResource {x:Type TabItem}}"><Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="14,9"/></Style>
  <Style x:Key="AppSectionTabs" TargetType="TabControl" BasedOn="{StaticResource {x:Type TabControl}}">
