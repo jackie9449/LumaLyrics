@@ -80,7 +80,7 @@
         <Grid>
          <Border Height="2" Width="28" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="28,0,0,0" Background="{DynamicResource AccentBrush}" Visibility="{DynamicResource HeaderRuleVisibility}" IsHitTestVisible="False"/>
          <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}" Background="{DynamicResource SheenBrush}"/>
-         <Grid x:Name="LyricContent" Margin="30,22,30,20" MaxWidth="820">
+         <Grid x:Name="LyricContent" Margin="30,22,30,20">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
           <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold"/><TextBlock Text="L Y R I C S" FontSize="8" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
           <Grid Grid.Row="1" Margin="0,12,0,0">

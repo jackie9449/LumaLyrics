@@ -13,14 +13,22 @@ public partial class MainWindow
     async Task VerifyResponsiveLayoutAsync(string directory,Dictionary<string,object?> checks)
     {
         double width=Width,height=Height;var state=WindowState;bool queue=settings.ShowPlaybackQueue;
-        string theme=settings.UiTheme;var browsing=manualUntil;
+        string theme=settings.UiTheme;var browsing=manualUntil;bool chinese=settings.ShowChineseTranslation,floating=settings.OverlayShowChineseTranslation;
         async Task Settle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(45);UpdateLayout();}
         Rect Bounds(FrameworkElement element)=>element.TransformToAncestor(Body).TransformBounds(new Rect(element.RenderSize));
         bool Inside(Rect rect)=>rect.Left>=-.5 && rect.Top>=-.5 && rect.Right<=Body.ActualWidth+.5 && rect.Bottom<=Body.ActualHeight+.5;
+        bool ContentUsesPanelWidth()
+        {
+            var panel=Bounds(LyricsPanel);var content=Bounds(LyricContent);
+            return Inside(content)&&content.Left-panel.Left>=17.5&&content.Left-panel.Left<=45.5&&panel.Right-content.Right>=17.5&&panel.Right-content.Right<=45.5;
+        }
         try
         {
             WindowState=WindowState.Normal;ShowLyricsPage();SetPlaybackQueueVisible(true);
-            coordinator.Import(new("微光之间","浮光工作室","原创布局样例",96000),"[00:00]微风轻轻推开了窗\n[00:12]城市在远处慢慢发亮\n[00:24]把此刻，轻轻唱成一束光。\n[00:36]让旋律停留在你身旁\n[00:48]每一句，都有回响。", "原创布局验证",false);
+            string longLine=string.Join(" ",Enumerable.Repeat("We carry the morning light across the quiet city and leave a little warmth beside every open door.",4));
+            coordinator.Import(new("微光之间","浮光工作室","原创布局样例",96000),"[00:00]The morning opens every window\n[00:12]We leave a little light beside the door\n[00:24]"+longLine+"\n[00:36]The quiet road leads us home\n[00:48]We sing beneath the waking sky", "原创布局验证",false);
+            coordinator.SetTranslationVisibility(true,floating);
+            coordinator.ImportChineseTranslation("[00:00]清晨轻轻推开每一扇窗\n[00:12]我们在门旁留下一点光\n[00:24]我们带着晨光穿过安静的城市，把温暖留在每一扇敞开的门边。我们继续前行，路边的灯火与远方的天空相接，让每一个清晨都有可以回去的方向。\n[00:36]安静的道路带我们回家\n[00:48]我们在初醒的天空下歌唱");
             currentIndex=2;
             foreach(var app in AppThemes.All)
             {
@@ -33,7 +41,7 @@ public partial class MainWindow
                     checks[key+".panelsAndTransportFit"]=Inside(Bounds(InfoPanel)) && Inside(Bounds(LyricsPanel)) && Inside(Bounds(PlaybackControls)) && Inside(Bounds(SeekSlider)) && Rect.Intersect(Bounds(InfoPanel),Bounds(LyricsPanel)).IsEmpty;
                     checks[key+".geometry"]=new{Body=Body.RenderSize.ToString(),Info=Bounds(InfoPanel).ToString(),Lyrics=Bounds(LyricsPanel).ToString(),Transport=Bounds(PlaybackControls).ToString(),Seek=Bounds(SeekSlider).ToString(),Cover=Bounds(ArtworkBorder).ToString()};
                     checks[key+".squareCoverRemainsVisible"]=ArtworkBorder.IsVisible && Math.Abs(ArtworkBorder.ActualWidth-ArtworkBorder.ActualHeight)<1 && Inside(Bounds(ArtworkBorder));
-                    checks[key+".boundedReadableLyrics"]=LyricContent.ActualWidth<=820.5 && lyricBlocks[2].FontSize>=27 && lyricBlocks[2].FontSize<=38.1;
+                    checks[key+".boundedReadableLyrics"]=ContentUsesPanelWidth() && lyricBlocks[2].FontSize>=27 && lyricBlocks[2].FontSize<=38.1;
                     if(size==(1220d,820d))baseline=ArtworkBorder.ActualWidth;
                     if(size==(1920d,1080d))
                     {
@@ -48,12 +56,33 @@ public partial class MainWindow
                 checks[$"responsive.{app.Id}.smallResizeIsContinuous"]=after>before && after-before<10;
                 manualUntil=DateTime.UtcNow.AddMinutes(1);var retained=manualUntil;Width=1260;await Settle();
                 checks[$"responsive.{app.Id}.resizeRetainsManualBrowsing"]=manualUntil==retained;
+                foreach(bool showQueue in new[]{true,false})
+                {
+                    SetPlaybackQueueVisible(showQueue);
+                    foreach(double wideWidth in new[]{1920d,2560d})
+                    {
+                        Width=wideWidth;Height=1080;await Settle();
+                        string key=$"responsive.{app.Id}.wide.{wideWidth}.{showQueue}";
+                        checks[key+".usesPanelWidth"]=ContentUsesPanelWidth();
+                        checks[key+".contentGeometry"]=new{Panel=Bounds(LyricsPanel).ToString(),Content=Bounds(LyricContent).ToString(),LyricsScroll.ViewportWidth};
+                        checks[key+".scrollViewportBounded"]=LyricsScroll.ViewportWidth>0&&LyricsScroll.ViewportWidth<=LyricContent.ActualWidth+.5;
+                        checks[key+".bilingualRowsUseViewport"]=translationBlocks[2].IsVisible&&Math.Abs(lyricBlocks[2].ActualWidth-translationBlocks[2].ActualWidth)<1&&lyricBlocks[2].ActualWidth>LyricsScroll.ViewportWidth-12;
+                        checks[key+".longOriginalWraps"]=lyricBlocks[2].ActualHeight>lyricBlocks[2].LineHeight*2&&lyricBlocks[2].TextWrapping==TextWrapping.Wrap&&translationBlocks[2].TextWrapping==TextWrapping.Wrap;
+                        VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"wide-lyrics-{app.Id}-{wideWidth}-queue-{showQueue}.png"),true);
+                    }
+                    WindowState=WindowState.Maximized;await Settle();
+                    checks[$"responsive.{app.Id}.maximized.{showQueue}.usesPanelWidth"]=ContentUsesPanelWidth()&&Inside(Bounds(ArtworkBorder))&&Inside(Bounds(PlaybackControls));
+                    VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"wide-lyrics-{app.Id}-maximized-queue-{showQueue}.png"),true);
+                    WindowState=WindowState.Normal;Width=1220;Height=820;await Settle();
+                    checks[$"responsive.{app.Id}.restored.{showQueue}.usesPanelWidth"]=ContentUsesPanelWidth();
+                }
+                SetPlaybackQueueVisible(true);
             }
             WindowState=WindowState.Maximized;await Settle();
-            checks["responsive.maximizedKeepsBalancedBounds"]=Inside(Bounds(ArtworkBorder)) && Inside(Bounds(PlaybackControls)) && ArtworkBorder.ActualWidth>=160 && LyricContent.ActualWidth<=820.5;
+            checks["responsive.maximizedKeepsBalancedBounds"]=Inside(Bounds(ArtworkBorder)) && Inside(Bounds(PlaybackControls)) && ArtworkBorder.ActualWidth>=160 && ContentUsesPanelWidth();
             VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"responsive-maximized.png"),true);
         }
-        finally{WindowState=WindowState.Normal;Width=width;Height=height;manualUntil=browsing;SetPlaybackQueueVisible(queue);SelectUiTheme(theme,false);WindowState=state;await Settle();}
+        finally{WindowState=WindowState.Normal;Width=width;Height=height;manualUntil=browsing;coordinator.SetTranslationVisibility(chinese,floating);SetPlaybackQueueVisible(queue);SelectUiTheme(theme,false);WindowState=state;await Settle();}
     }
 
     async Task VerifyIntegratedAppearanceAsync(string directory,Dictionary<string,object?> checks)

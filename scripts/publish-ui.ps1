@@ -93,6 +93,8 @@ Copy-Item -LiteralPath docs/screenshots-ui-v0180 -Destination $guide -Recurse -F
 Copy-Item -LiteralPath docs/verification-v0180 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v110 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-wide-lyrics -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-wide-lyrics.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-release-1.1.0.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/verification-playlists -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-playlist-continuation -Destination $guide -Recurse -Force
