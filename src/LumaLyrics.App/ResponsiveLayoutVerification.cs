@@ -112,7 +112,8 @@ public partial class MainWindow
                 VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-integrated-{theme.Id}.png"),true);
                 parent.SelectLibraryTab();await Settle();
                 var library=parent.Library;library.SourcePath.Text="Apple Music / Library.musicdb（原创界面示例）";
-                checks[$"integrated.{theme.Id}.libraryManagementLivesInsideSettings"]=library.IsVisible && library.IsSubscribed && ReferenceEquals(Window.GetWindow(library),parent) && !Application.Current.Windows.OfType<LibraryWindow>().Any() && Descendants<Button>(library).Count()==4;
+                var libraryCommands=Descendants<Button>(library).Select(b=>b.Content?.ToString()).ToHashSet();
+                checks[$"integrated.{theme.Id}.libraryManagementLivesInsideSettings"]=library.IsVisible && library.IsSubscribed && ReferenceEquals(Window.GetWindow(library),parent) && !Application.Current.Windows.OfType<LibraryWindow>().Any() && new[]{"刷新资料库清单","选择歌曲开始准备","暂停后台预缓存"}.All(libraryCommands.Contains);
                 VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-library-{theme.Id}.png"),true);
                 parent.Width=640;await Settle();
                 checks[$"integrated.{theme.Id}.compactLibraryControlsStayWithinViewport"]=Descendants<Button>(library).All(button=>{var rect=button.TransformToAncestor(library).TransformBounds(new Rect(button.RenderSize));return rect.Left>=0 && rect.Right<=library.ActualWidth+.5;});

@@ -28,7 +28,10 @@ public partial class MainWindow
             var jobs=TranslationJobExchange.ReadJobs(coordinator.DataRoot);checks["jobs.actualButtonGeneratedSix"]=jobs.Count==6;
             var entries=Directory.GetFiles(Path.Combine(coordinator.DataRoot,"translation-batches"),"batch-task.md",SearchOption.AllDirectories);checks["jobs.oneBatchEntry"]=entries.Length==1;
             checks["jobs.twoChunks"]=Directory.GetFiles(Path.Combine(coordinator.DataRoot,"translation-batches"),"*.json",SearchOption.AllDirectories).Length==3;
-            preferences.SelectLibraryTasks();await preferences.Library.Tasks.Reload();var taskPanel=preferences.Library.Tasks;var selectedBatch=taskPanel.BatchList.Items.Cast<LibraryTaskBatch>().First(t=>t.EntryPath is not null);taskPanel.BatchList.SelectedItem=selectedBatch;
+            preferences.SelectLibraryTasks();await preferences.Library.Tasks.Reload();var taskPanel=preferences.Library.Tasks;
+            // Loaded may already own the coalesced read; Reload then requests another pass without awaiting that owner.
+            until=DateTime.UtcNow.AddSeconds(5);while(DateTime.UtcNow<until&&!taskPanel.BatchList.Items.Cast<LibraryTaskBatch>().Any(t=>t.EntryPath is not null))await Task.Delay(30);
+            var selectedBatch=taskPanel.BatchList.Items.Cast<LibraryTaskBatch>().First(t=>t.EntryPath is not null);taskPanel.BatchList.SelectedItem=selectedBatch;
             string? copied=null;var realCopy=taskPanel.CopyText;taskPanel.CopyText=value=>copied=value;
             try{((IInvokeProvider)new ButtonAutomationPeer(taskPanel.CopyPromptButton).GetPattern(PatternInterface.Invoke)).Invoke();until=DateTime.UtcNow.AddSeconds(5);while(copied is null&&DateTime.UtcNow<until)await Task.Delay(30);checks["workspace.prompt.exactSelectedEntry"]=copied?.Contains(selectedBatch.EntryPath!)==true&&copied.Contains("translation-result.json");taskPanel.BatchList.SelectedItem=null;checks["workspace.prompt.requiresSelection"]=!taskPanel.CopyPromptButton.IsEnabled;taskPanel.BatchList.SelectedItem=selectedBatch;}
             finally{taskPanel.CopyText=realCopy;}

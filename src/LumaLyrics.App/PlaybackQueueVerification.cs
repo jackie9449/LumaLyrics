@@ -109,7 +109,9 @@ public partial class MainWindow
             {
                 Width=width;Height=width==820?640:820;await Task.Delay(70);UpdateLayout();
                 var button=browser.QueuePanel.RefreshButton;var bounds=button.TransformToAncestor(browser).TransformBounds(new Rect(0,0,button.ActualWidth,button.ActualHeight));
-                checks["queue.layoutFits."+width]=bounds.Left>=0 && bounds.Right<=browser.ActualWidth && browser.QueuePanel.UpcomingList.ActualHeight>90;
+                // Transformed layout coordinates can differ at the floating-point precision boundary.
+                checks["queue.layoutFits."+width]=bounds.Left>=-0.000001 && bounds.Right<=browser.ActualWidth+0.000001 && browser.QueuePanel.UpcomingList.ActualHeight>90;
+                checks["queue.layoutGeometry."+width]=new{bounds.Left,bounds.Right,AvailableWidth=browser.ActualWidth,ListHeight=browser.QueuePanel.UpcomingList.ActualHeight};
             }
             Width=1220;Height=820;browser.HideQueue();browser.ShowAllSongs();browser.SearchBox.Text="";await Task.Delay(170);UpdateLayout();VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"playback-queue-song-actions.png"),true);
             await VerifyNativeQueueStructureAsync(checks);

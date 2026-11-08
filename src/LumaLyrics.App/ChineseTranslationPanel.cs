@@ -22,7 +22,8 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
             var mainPanel=new StackPanel();mainPanel.Children.Add(LibraryWorkspaceUi.Text("主窗口",15,false));var mainHint=LibraryWorkspaceUi.Text("在原词下方显示中文。",11);mainHint.Margin=new(0,5,0,12);mainPanel.Children.Add(mainHint);main=DialogUi.Check(mainPanel,"主窗口显示中文译文",coordinator.Settings.ShowChineseTranslation);var mainCard=LibraryWorkspaceUi.Card(mainPanel);mainCard.Margin=new(0,0,10,12);switches.Children.Add(mainCard);
             var floatingPanel=new StackPanel();floatingPanel.Children.Add(LibraryWorkspaceUi.Text("桌面歌词",15,false));var floatingHint=LibraryWorkspaceUi.Text("与悬浮工具栏开关同步。",11);floatingHint.Margin=new(0,5,0,12);floatingPanel.Children.Add(floatingHint);floating=DialogUi.Check(floatingPanel,"悬浮歌词显示中文译文",coordinator.Settings.OverlayShowChineseTranslation);var floatingCard=LibraryWorkspaceUi.Card(floatingPanel);floatingCard.Margin=new(0,0,10,12);switches.Children.Add(floatingCard);Children.Add(switches);switches.SizeChanged+=(_,_)=>switches.Columns=switches.ActualWidth>=560?2:1;
             var preview=new StackPanel();preview.Children.Add(LibraryWorkspaceUi.Text("双语预览",11));var original=LibraryWorkspaceUi.Text("The stars will guide us home",20,false);original.Margin=new(0,16,0,4);preview.Children.Add(original);var translated=LibraryWorkspaceUi.Text("星光会指引我们归家",14);preview.Children.Add(translated);var note=LibraryWorkspaceUi.Text("原文保持主位，中文补充其下。间奏和纯音乐保持留白。",11);note.Margin=new(0,16,0,0);preview.Children.Add(note);Children.Add(LibraryWorkspaceUi.Card(preview,20));
-            var attribution=new StackPanel();attribution.Children.Add(LibraryWorkspaceUi.Text("当前译文来源",14,false));source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=20;source.Margin=new(0,8,0,0);ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");attribution.Children.Add(source);Children.Add(LibraryWorkspaceUi.Card(attribution));
+            var attribution=new StackPanel();attribution.Children.Add(LibraryWorkspaceUi.Text("当前译文来源",14,false));source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=20;source.Margin=new(0,8,0,0);ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");attribution.Children.Add(source);
+            var reviewCurrent=DialogUi.Button(attribution,"以 Apple Music 原词校对…",OpenReview);AutomationProperties.SetName(reviewCurrent,"打开 Apple Music 原词校对");Children.Add(LibraryWorkspaceUi.Card(attribution));
             AutomationProperties.SetName(main,"主窗口中文译文开关");AutomationProperties.SetName(floating,"悬浮歌词中文译文开关");main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
             Attach();return;
         }
@@ -47,14 +48,12 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         AddText("来源译文与 AI 译文分别统计，可在当前歌曲查看来源。所有译文保存在个人资料中，可单独导出。",11);
         AddText("当前歌曲",15);source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=21;ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(source);
         import=DialogUi.Button(this,"导入当前歌曲的中文 LRC…",Import);
-        var review=DialogUi.Button(this,"以 Apple Music 原词校对…",()=>
-        {
-            if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);
-        });AutomationProperties.SetName(review,"打开 Apple Music 原词校对");
+        var review=DialogUi.Button(this,"以 Apple Music 原词校对…",OpenReview);AutomationProperties.SetName(review,"打开 Apple Music 原词校对");
         if(includeJobs){jobs=new(coordinator);Children.Add(jobs);}
         else{for(int i=Children.Count-1;i>=5;i--)if(!ReferenceEquals(Children[i],source))Children.RemoveAt(i);}
         Attach();
     }
+    void OpenReview(){if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);}
     void Attach(){Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Refresh;Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;Refresh();}
     void AddText(string text,double size)
     {var label=new TextBlock{Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,size>=15?9:7)};if(size<15)ThemeManager.Bind(label,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(label);}

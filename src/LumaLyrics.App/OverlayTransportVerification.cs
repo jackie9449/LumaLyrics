@@ -29,7 +29,8 @@ public partial class MainWindow
             checks["overlayTransport.unlockedHoverShowsBothBars"]=floating.ToolbarPopup.IsOpen && floating.PlaybackPopup.IsOpen;
             var bottom=floating.LyricSurface.PointToScreen(new(0,floating.LyricSurface.ActualHeight));var bar=floating.PlaybackToolbar.PointToScreen(new());
             checks["overlayTransport.placedBelowLyrics"]=bar.Y>=bottom.Y && bar.Y-bottom.Y<=16;
-            checks["overlayTransport.centeredUnderLyrics"]=Math.Abs(bar.X+floating.PlaybackToolbar.ActualWidth/2-(bottom.X+floating.LyricSurface.ActualWidth/2))<2;
+            var toolbarCenter=floating.PlaybackToolbar.PointToScreen(new(floating.PlaybackToolbar.ActualWidth/2,0));var lyricCenter=floating.LyricSurface.PointToScreen(new(floating.LyricSurface.ActualWidth/2,0));
+            checks["overlayTransport.centeredUnderLyrics"]=Math.Abs(toolbarCenter.X-lyricCenter.X)<2;
             floating.PlaybackToolbar.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(floating),0,Key.Escape){RoutedEvent=Keyboard.PreviewKeyDownEvent});
             checks["overlayTransport.escapeClosesControls"]=!floating.PlaybackPopup.IsOpen && !floating.ToolbarPopup.IsOpen;
             var monitor=System.Windows.Forms.Screen.FromHandle(NativeWindow.Handle(floating)).WorkingArea;
