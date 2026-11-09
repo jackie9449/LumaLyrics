@@ -84,6 +84,7 @@ public partial class MainWindow
             checks["jobs.autoReceived"]=TranslationJobExchange.ReadJobs(coordinator.DataRoot).First(j=>j.Ticket.Request.JobId==ticket.Request.JobId).Receipt.State==TranslationJobState.Applied;
             checks["jobs.originalPreserved"]=coordinator.Document?.Raw==original;
             checks["jobs.visibilityPreserved"]=settings.ShowChineseTranslation==main&&settings.OverlayShowChineseTranslation==floating;
+            await VerifyExistingChineseFilterAsync(preferences,tracks,original,directory,checks);
             await VerifyWorkspacePreparationAsync(checks,tracks,original);
             await VerifyLargeWorkspaceAsync(preferences,checks);
 

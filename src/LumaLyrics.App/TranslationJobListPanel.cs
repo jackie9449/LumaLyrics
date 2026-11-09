@@ -13,7 +13,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     readonly PlaybackCoordinator coordinator;
     readonly WorkspaceSongList songs=new(){SelectionMode=SelectionMode.Extended,HorizontalContentAlignment=HorizontalAlignment.Stretch};
     readonly TextBox search=new(){MinWidth=100};
-    readonly ComboBox filter=new(){ItemsSource=new[]{"全部","缺动态原词","缺中文译文","部分译文","原词已更新"},SelectedIndex=0,MinWidth=120};
+    readonly ComboBox filter=new(){ItemsSource=new[]{"全部","缺动态原词","缺中文译文","部分译文","原词已更新","有中文译文"},SelectedIndex=0,MinWidth=120};
     readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap},detail=new(){TextWrapping=TextWrapping.Wrap};
     readonly CheckBox prefer,artwork;readonly HashSet<LibrarySongKey> selection=new(LibrarySongKey.Comparer);
     readonly System.Windows.Threading.DispatcherTimer searchDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
@@ -22,11 +22,12 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     internal ListBox SongList=>songs;
     internal IReadOnlyList<LibraryManagedSong> SelectedSongs=>rows.Where(r=>selection.Contains(Key(r))).ToArray();
     internal CheckBox PreferExisting=>prefer;
+    internal Func<int,bool> ConfirmRegeneration {get;set;}
     internal string StatusText=>status.Text;
     static LibrarySongKey Key(LibraryManagedSong row)=>row.Key;
     public TranslationJobListPanel(PlaybackCoordinator coordinator)
     {
-        this.coordinator=coordinator;songs.SetResourceReference(StyleProperty,typeof(ListBox));var root=new Grid();Content=root;
+        this.coordinator=coordinator;ConfirmRegeneration=count=>MessageBox.Show(Window.GetWindow(this),$"将为所选 {count} 首重新生成本地翻译任务。现有译文继续使用，新译文通过校验后才替换，旧版保留。","重新生成翻译任务",MessageBoxButton.OKCancel)==MessageBoxResult.OK;songs.SetResourceReference(StyleProperty,typeof(ListBox));var root=new Grid();Content=root;
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){MinHeight=48});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var header=new StackPanel();root.Children.Add(header);var heading=LibraryWorkspaceUi.Heading("歌曲与译文","选择歌曲，一次准备原词、现有中文和本地翻译任务。");header.Children.Add(heading);
         var actions=new WrapPanel{Margin=new(0,0,0,4)};header.Children.Add(actions);songs.ItemTemplate=LibraryWorkspaceUi.SongTemplate();
@@ -37,7 +38,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         LibraryWorkspaceUi.Button(actions,"直接生成本地任务",()=>_=Prepare(false,false,false));
         var more=LibraryWorkspaceUi.Button(actions,"更多操作…",()=>{menu.IsOpen=true;});more.ContextMenu=menu;menu.PlacementTarget=more;
         Action("仅查现有中文",()=>_=Prepare(false,true,false,false));
-        Action("重新制作所选译文…",()=>_=Prepare(true,false,false));
+        Action("重新生成翻译任务…",()=>_=Prepare(true,false,false));
         Action("暂停准备",coordinator.PauseWorkspace);
         Action("打开批量入口 MD",()=>Open(entry));
         Action("复制任务路径",()=>{if(entry is not null)Clipboard.SetText(entry);});
@@ -71,7 +72,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     void ApplyFilter()
     {
         if(songs is null)return;var terms=search.Text.Split(' ',StringSplitOptions.RemoveEmptyEntries);
-        var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,_=>true})).ToArray();
+        var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,5=>r.Status.Chinese is LibraryChineseState.Complete or LibraryChineseState.Partial,_=>true})).ToArray();
         loading=true;try{if(!songs.Items.Cast<LibraryManagedSong>().SequenceEqual(shown,ReferenceEqualityComparer.Instance))songs.ItemsSource=shown;var picked=shown.Where(r=>selection.Contains(Key(r))).ToArray();if(songs.SelectedItems.Count!=picked.Length||songs.SelectedItems.Cast<LibraryManagedSong>().Any(r=>!selection.Contains(Key(r))))songs.ApplySelection(picked);}finally{loading=false;}UpdateDetail();
     }
     void UpdateDetail(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();detail.Text=$"已选 {picked.Length} 首 · 当前可见 {songs.Items.Count} 首 · 共 {rows.Length} 首"+(picked.Length==1?$"\n{picked[0].Track.Title} · {picked[0].Status.OriginalLabel} · {picked[0].Status.ChineseLabel}":"");}
@@ -79,7 +80,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     async Task Prepare(bool replace,bool lookup,bool originals=true,bool export=true)
     {
         var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();if(picked.Length==0){status.Text="请先选择歌曲。";return;}
-        if(replace&&MessageBox.Show(Window.GetWindow(this),$"重新制作所选 {picked.Length} 首，替换通过校验的当前译文，旧版保留。","重新制作",MessageBoxButton.OKCancel)!=MessageBoxResult.OK)return;
+        if(replace&&!ConfirmRegeneration(picked.Length))return;
         try{await coordinator.PrepareWorkspaceAsync(picked,replace,lookup&&prefer.IsChecked==true,originals,export,originals&&artwork.IsChecked==true);if(!disposed)await Reload();}catch(Exception e){status.Text=e.Message;}
     }
     async Task RefreshLibrary()
