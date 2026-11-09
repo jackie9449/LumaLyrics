@@ -326,7 +326,7 @@ public partial class MainWindow : Window
         preferences.Activate();
     }
     void PowerModeChanged(object s,PowerModeChangedEventArgs e) {if(e.Mode==PowerModes.Resume)Dispatcher.BeginInvoke(()=>coordinator.Resume());}
-    void DisplayChanged(object? s,EventArgs e)=>Dispatcher.BeginInvoke(()=>{NativeWindow.ClampVisible(this);NativeWindow.ClampVisible(overlay);});
+    void DisplayChanged(object? s,EventArgs e)=>Dispatcher.BeginInvoke(()=>{NativeWindow.ClampVisible(this);overlay.EnsureVisibleBounds();});
     void OnClosing(object? s,CancelEventArgs e) {if(quitting)return;e.Cancel=true;if(settings.CloseToTray && CanRecoverOverlay){Hide();coordinator.SaveSettings();}else _=QuitAsync();}
     public async Task QuitAsync()
     {

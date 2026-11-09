@@ -95,6 +95,7 @@ Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Forc
 Copy-Item -LiteralPath docs/verification-v110 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-wide-lyrics -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-existing-chinese -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-overlay-native-update -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-09-existing-chinese-filter.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-wide-lyrics.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-release-1.1.0.md -Destination (Join-Path $guide "superpowers/plans") -Force

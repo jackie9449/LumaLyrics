@@ -141,6 +141,24 @@ internal static class ThemeManager
         target.Resources["AccentBrush"]=Solid(appearance.Accent);
         var accent=ColorOf(appearance.Accent);
         target.Resources["AccentTextBrush"]=Solid(accent.R*.2126+accent.G*.7152+accent.B*.0722>160?"#182630":"#FFFFFF");
+        Color Mix(Color a,Color b,double t)=>Color.FromRgb((byte)Math.Round(a.R+(b.R-a.R)*t),(byte)Math.Round(a.G+(b.G-a.G)*t),(byte)Math.Round(a.B+(b.B-a.B)*t));
+        double Luminance(Color c)
+        {
+            double Linear(byte b){double v=b/255d;return v<=.04045?v/12.92:Math.Pow((v+.055)/1.055,2.4);}
+            return .2126*Linear(c.R)+.7152*Linear(c.G)+.0722*Linear(c.B);
+        }
+        double Contrast(Color a,Color b){double x=Luminance(a),y=Luminance(b);return (Math.Max(x,y)+.05)/(Math.Min(x,y)+.05);}
+        Color Readable(Color c,Color surface)=>Contrast(c,surface)>=4.5?c:Contrast(Colors.Black,surface)>Contrast(Colors.White,surface)?Colors.Black:Colors.White;
+        void Paint(string key,Color color){var brush=new SolidColorBrush(color);brush.Freeze();target.Resources[key]=brush;}
+        var foreground=Readable(ColorOf(appearance.Color),background);var soft=Mix(background,accent,.18);
+        Paint("WindowBrush",background);Paint("PanelBrush",background);Paint("RaisedBrush",background);
+        Paint("TextBrush",foreground);Paint("MutedBrush",Readable(Mix(background,foreground,.75),background));
+        Paint("ControlBrush",Mix(background,accent,.08));Paint("HoverBrush",Mix(background,accent,.18));Paint("PressedBrush",Mix(background,accent,.26));
+        Paint("BorderBrush",Mix(background,foreground,.28));Paint("AccentSoftBrush",soft);Paint("AccentTextBrush",Readable(foreground,accent));
+        Paint("OverlayAccentInkBrush",Readable(accent,soft));
+        target.Resources["OverlayControlFont"]=new FontFamily(appearance.Font);
+        target.Resources["OverlayControlRadius"]=new CornerRadius(appearance.CornerRatio.GetValueOrDefault() * 18);
+        target.Resources["OverlayToolbarRadius"]=new CornerRadius(appearance.CornerRatio.GetValueOrDefault() * 22);
     }
 
     // The floating toolbar's established light palette is independent of redesigned

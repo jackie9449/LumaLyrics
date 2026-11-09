@@ -11,6 +11,30 @@ public partial class MainWindow
 {
     async Task VerifyNativeHandoffReadinessAsync(Dictionary<string,object?> checks)
     {
+        var songs=new ListBox();songs.Items.Add("Songs");
+        var library=new Expander{Header="Library",Content=songs,IsExpanded=false};AutomationProperties.SetAutomationId(library,"Sidebar_Header_Library");
+        var playlists=new Expander{Header="Playlists",Content=new TextBlock{Text="Keep collapsed"},IsExpanded=false};AutomationProperties.SetAutomationId(playlists,"Sidebar_Header_Playlists");
+        var groups=new StackPanel();groups.Children.Add(library);groups.Children.Add(playlists);
+        var navigationFixture=new Window{Owner=this,Title="浮光歌词 · 折叠资料库回归",Width=400,Height=240,Content=groups,ShowInTaskbar=false};navigationFixture.Show();
+        try
+        {
+            await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);nint handle=NativeWindow.Handle(navigationFixture);
+            async Task<bool> Expand(CancellationToken token)=>await Task.Run(()=>
+            {
+                using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
+                var result=AppleMusicLibraryHandoff.ExpandLibrarySongsNavigation(automation.FromHandle(handle),token);
+                return result?.Properties.Name.ValueOrDefault=="Songs";
+            });
+            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            checks["handoff.collapsedLibraryExposesSongs"]=await Expand(timeout.Token) && library.IsExpanded;
+            checks["handoff.libraryExpansionLeavesPlaylistsCollapsed"]=!playlists.IsExpanded;
+            checks["handoff.expandedLibraryIsNotToggledClosed"]=await Expand(timeout.Token) && library.IsExpanded;
+            library.IsExpanded=false;await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+            using var cancelled=new CancellationTokenSource();cancelled.Cancel();bool rejected=false;
+            try{await Expand(cancelled.Token);}catch(OperationCanceledException){rejected=true;}
+            checks["handoff.cancelledNavigationDoesNotExpand"]=rejected && !library.IsExpanded && !playlists.IsExpanded;
+        }
+        finally{navigationFixture.Close();}
         var global=new TextBox{Text="保留全局搜索"};AutomationProperties.SetAutomationId(global,"TextBox");
         var local=new TextBox{Text="本地原筛选",Visibility=Visibility.Collapsed};AutomationProperties.SetAutomationId(local,"FilterTextBox");
         var button=new ToggleButton{Content="过滤"};AutomationProperties.SetAutomationId(button,"FilterButton");

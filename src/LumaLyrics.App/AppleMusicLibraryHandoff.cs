@@ -64,11 +64,13 @@ internal static partial class AppleMusicLibraryHandoff
             {
                 using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(handle);
                 token.ThrowIfCancellationRequested();var navigation=FindSongsNavigation(root);
+                if(navigation is null)navigation=ExpandLibrarySongsNavigation(root,token,trace);
                 if(navigation is null)
                 {
                     var hamburger=root.FindFirstDescendant(cf=>cf.ByAutomationId("Hamburger_Button"));
                     if(hamburger?.Patterns.Invoke.IsSupported==true)hamburger.Patterns.Invoke.Pattern.Invoke();
-                    navigation=WaitForNative(()=>FindSongsNavigation(root),TimeSpan.FromSeconds(15),token);
+                    var ready=WaitForNative(()=>FindSongsNavigation(root)??root.FindFirstDescendant(cf=>cf.ByAutomationId("Sidebar_Header_Library")),TimeSpan.FromSeconds(15),token);
+                    navigation=ready?.Properties.AutomationId.ValueOrDefault=="Sidebar_Header_Library"?ExpandLibrarySongsNavigation(root,token,trace):ready;
                 }
                 if(navigation is null)return "当前 Apple Music 版本没有提供可用的歌曲列表，请打开资料库后重试。";
                 trace?.Invoke("navigation",new{name=Name(navigation),type=navigation.ControlType.ToString()});
@@ -127,6 +129,17 @@ internal static partial class AppleMusicLibraryHandoff
         finally{gate.Release();}
     }
     static AutomationElement? FindSongsNavigation(AutomationElement root)=>root.FindFirstDescendant(cf=>cf.ByControlType(ControlType.ListItem).And(cf.ByName("歌曲").Or(cf.ByName("Songs")).Or(cf.ByName("曲"))));
+    internal static AutomationElement? ExpandLibrarySongsNavigation(AutomationElement root,CancellationToken token,Action<string,object?>? trace=null)
+    {
+        token.ThrowIfCancellationRequested();
+        var group=root.FindFirstDescendant(cf=>cf.ByAutomationId("Sidebar_Header_Library"));
+        if(group?.Patterns.ExpandCollapse.IsSupported!=true)return null;
+        if(group.Patterns.ExpandCollapse.Pattern.ExpandCollapseState.Value==ExpandCollapseState.Collapsed)
+        {
+            token.ThrowIfCancellationRequested();group.Patterns.ExpandCollapse.Pattern.Expand();trace?.Invoke("libraryNavigationExpanded",new{id="Sidebar_Header_Library"});
+        }
+        return WaitForNative(()=>FindSongsNavigation(root),TimeSpan.FromSeconds(12),token);
+    }
     internal static AutomationElement? FindReadySongAction(AutomationElement row)
     {
         var button=row.FindFirstDescendant(cf=>cf.ByAutomationId("MoreButton"));return button?.Patterns.Invoke.IsSupported==true && button.Properties.IsEnabled.ValueOrDefault?button:null;
@@ -195,6 +208,6 @@ internal static partial class AppleMusicLibraryHandoff
         using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
         var root=automation.FromHandle(process.MainWindowHandle);
         var elements=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List).Or(cf.ByControlType(ControlType.DataGrid)).Or(cf.ByControlType(ControlType.Button)).Or(cf.ByControlType(ControlType.ListItem)).Or(cf.ByControlType(ControlType.Edit)).Or(cf.ByControlType(ControlType.MenuItem)).Or(cf.ByControlType(ControlType.Text))).Take(500);
-        return new{available=true,process.Id,minimized=IsIconic(process.MainWindowHandle),lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Select(l=>new{id=l.Properties.AutomationId.ValueOrDefault,children=l.FindAllChildren().Take(12).Select(c=>new{name=Name(c),type=c.ControlType.ToString(),id=c.Properties.AutomationId.ValueOrDefault}).ToArray()}).ToArray(),elements=elements.Select(e=>{string name=Name(e);return new{name=name[..Math.Min(240,name.Length)],id=e.Properties.AutomationId.ValueOrDefault,type=e.Properties.ControlType.ValueOrDefault.ToString(),invoke=e.Patterns.Invoke.IsSupported,select=e.Patterns.SelectionItem.IsSupported,value=e.Patterns.Value.IsSupported,itemContainer=e.Patterns.ItemContainer.IsSupported,scroll=e.Patterns.Scroll.IsSupported};}).ToArray()};
+        return new{available=true,process.Id,minimized=IsIconic(process.MainWindowHandle),lists=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Select(l=>new{id=l.Properties.AutomationId.ValueOrDefault,children=l.FindAllChildren().Take(12).Select(c=>new{name=Name(c),type=c.ControlType.ToString(),id=c.Properties.AutomationId.ValueOrDefault}).ToArray()}).ToArray(),elements=elements.Select(e=>{string name=Name(e);return new{name=name[..Math.Min(240,name.Length)],id=e.Properties.AutomationId.ValueOrDefault,type=e.Properties.ControlType.ValueOrDefault.ToString(),invoke=e.Patterns.Invoke.IsSupported,select=e.Patterns.SelectionItem.IsSupported,value=e.Patterns.Value.IsSupported,itemContainer=e.Patterns.ItemContainer.IsSupported,scroll=e.Patterns.Scroll.IsSupported,expand=e.Patterns.ExpandCollapse.IsSupported,expandState=e.Patterns.ExpandCollapse.IsSupported?e.Patterns.ExpandCollapse.Pattern.ExpandCollapseState.Value.ToString():null};}).ToArray()};
     }
 }
