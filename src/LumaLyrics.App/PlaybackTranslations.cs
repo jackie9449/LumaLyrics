@@ -27,6 +27,8 @@ public sealed partial class PlaybackCoordinator
     }
     public void SetTranslationVisibility(bool main,bool floating)
     {Settings.ShowChineseTranslation=main;Settings.OverlayShowChineseTranslation=floating;SaveSettings();RefreshTranslation();Updated?.Invoke();}
+    public void SetChineseScript(string mode)
+    {Settings.ChineseScript=ChineseScriptDisplay.Normalize(mode);SaveSettings();Updated?.Invoke();}
     public async Task StartTranslationPreparationAsync(bool retry=false)
     {
         if(disposed)return;

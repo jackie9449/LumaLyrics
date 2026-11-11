@@ -20,6 +20,15 @@
           "SQLitePCLRaw.core": "2.1.13"
         }
       },
+      "OpenccNetLib": {
+        "type": "Transitive",
+        "resolved": "1.7.0",
+        "contentHash": "EV7XauU5hAlEiCiqAkWgSe5O8Stnym1DwOEv9wXs0ca8JvfrYG2GvEaCy038bd/PsfTmTUZ4ZO4/pB6YwvDSYw==",
+        "dependencies": {
+          "System.Formats.Cbor": "8.0.0",
+          "ZstdSharp.Port": "0.8.8"
+        }
+      },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.13",
@@ -47,20 +56,32 @@
           "SQLitePCLRaw.core": "2.1.13"
         }
       },
+      "System.Formats.Cbor": {
+        "type": "Transitive",
+        "resolved": "8.0.2",
+        "contentHash": "C7D+Z/Pt2McSFp2bHKZQW/37kjVFZ1mTqGn2u6MME/XCgXNaSquCRW1/FD7w/AqpT+H6q32kzUevDJFsmCCsGw=="
+      },
+      "ZstdSharp.Port": {
+        "type": "Transitive",
+        "resolved": "0.8.8",
+        "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
+      },
       "lumalyrics.core": {
         "type": "Project"
       },
       "lumalyrics.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "LumaLyrics.Core": "[0.10.0, )",
+          "LumaLyrics.Core": "[1.1.0, )",
           "Microsoft.Data.Sqlite": "[10.0.13, )"
         }
       },
       "lumalyrics.windows": {
         "type": "Project",
         "dependencies": {
-          "LumaLyrics.Core": "[0.10.0, )"
+          "LumaLyrics.Core": "[1.1.0, )",
+          "OpenccNetLib": "[1.7.0, )",
+          "System.Formats.Cbor": "[8.0.2, )"
         }
       }
     },

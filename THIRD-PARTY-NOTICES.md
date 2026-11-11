@@ -15,6 +15,10 @@
 | FlaUI.Core / FlaUI.UIA3 | 5.0.0 | [FlaUI](https://github.com/FlaUI/FlaUI)，MIT，原始许可见 licenses/FlaUI-LICENSE.txt |
 | Interop.UIAutomationClient | 10.19041.0 | [UIAutomation-Interop](https://github.com/Roemer/UIAutomation-Interop)，MIT，原始许可随包附带 |
 | System.Management | 8.0.0 | [dotnet/runtime](https://github.com/dotnet/runtime)，MIT，原始许可与 notices 随包附带 |
+| OpenccNetLib | 1.7.0 | [OpenccNet](https://github.com/laisuk/OpenccNet)，MIT，原始许可与第三方说明见 licenses/OpenccNetLib-* |
+| OpenCC 内置简繁字词词典 | OpenccNetLib 1.7.0 内嵌版本 | [OpenCC](https://github.com/BYVoid/OpenCC)，Apache-2.0，原始许可见 licenses/OpenCC-Dictionary-LICENSE.txt；仅在本地转换显示文字 |
+| ZstdSharp.Port | 0.8.8 | [ZstdSharp](https://github.com/oleg-st/ZstdSharp)，MIT，原始许可见 licenses/ZstdSharp-LICENSE.txt；托管代码解压内置词典 |
+| System.Formats.Cbor | 8.0.2 | [dotnet/runtime](https://github.com/dotnet/runtime)，MIT，原始许可见 licenses/Runtime-LICENSE.txt；显式使用已修复安全公告的 8.0.2 |
 | Inno Setup | 6.7.3 | 安装程序由 [Inno Setup](https://jrsoftware.org/) 生成；保留安装引擎版权及 [原始许可](licenses/Inno-Setup-LICENSE.txt)。安装界面中文增补文案由本项目编写。编译器不随应用分发。 |
 
 直接与传递 NuGet 版本和完整内容哈希固定在各项目 `packages.lock.json`，SDK 在 `global.json`。本次 SDK 为 10.0.402，仅用于开发，不把整个 SDK 分发给用户。附带的备用 dotnet host 和 hostfxr 来自相同微软发行版。

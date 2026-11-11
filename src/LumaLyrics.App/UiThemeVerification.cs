@@ -103,6 +103,7 @@ public partial class MainWindow
         if(Environment.GetCommandLineArgs().Contains("--verify-translations"))
         {
             await VerifyTranslationsAsync(directory,checks);
+            await VerifyChineseScriptAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
         if(Environment.GetCommandLineArgs().Contains("--verify-library-browser"))

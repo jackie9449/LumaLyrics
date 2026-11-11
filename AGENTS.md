@@ -29,6 +29,8 @@
 - Map covers through Apple Music persistent IDs and confirmed album references. Count high resolution from actual image dimensions, preserve usable fallbacks, and keep personal metadata, images and downloaded lyrics out of Git.
 - Keep personal data outside software directories and archives. Export readable personal lyrics/covers with consistent database snapshots; restore only into a new directory. Never replace existing personal files or silently create an empty profile when a selected location is unavailable. Validate distribution boundaries before creating a software ZIP.
 
+- Chinese script display offers original, simplified and traditional choices shared by main and floating lyrics, saved in personal settings. Convert only display strings offline; preserve raw originals, hashes, group indexes, timing, manual bindings and translation provenance. Detectable Japanese/Korean originals stay unchanged while their Chinese translations can convert. Keep both translation visibility switches independent.
+
 ## Local development records
 
 Keep development changes in local Git and record each completed task in [docs/development-log.md](docs/development-log.md). This workflow supersedes the GitHub synchronization instructions in earlier plans and handoff packages.

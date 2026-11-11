@@ -11,6 +11,7 @@ public sealed class AppSettings
     public bool AutoPrefetchLibrary { get; set; } = true;
     public bool ShowChineseTranslation { get; set; }
     public bool OverlayShowChineseTranslation { get; set; }
+    public string ChineseScript { get; set; } = "original";
     public string? LibraryPath { get; set; }
     public bool CloseToTray { get; set; } = true;
     public bool ReduceMotion { get; set; }

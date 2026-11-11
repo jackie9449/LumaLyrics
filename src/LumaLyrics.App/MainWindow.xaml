@@ -82,7 +82,7 @@
          <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}" Background="{DynamicResource SheenBrush}"/>
          <Grid x:Name="LyricContent" Margin="30,22,30,20">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold"/><TextBlock Text="L Y R I C S" FontSize="8" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+          <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/><ContentControl x:Name="ChineseScriptHost" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
           <Grid Grid.Row="1" Margin="0,12,0,0">
            <ScrollViewer x:Name="LyricsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ManualScroll" ScrollChanged="LyricsScrollChanged"><StackPanel x:Name="LyricLines" Margin="0,70,10,100"/></ScrollViewer>
            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="390" Margin="14,0">

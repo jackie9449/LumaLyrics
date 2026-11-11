@@ -12,16 +12,19 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
     readonly PlaybackCoordinator coordinator;readonly CheckBox main,floating;readonly TextBlock progress=new(),source=new();
     readonly Button? prepare,pause,retry,import;
     bool syncing,disposed; readonly TranslationJobListPanel? jobs;
+    TextBlock? scriptPreview;
     public ChineseTranslationPanel(PlaybackCoordinator coordinator,bool includeJobs=true)
     {
         this.coordinator=coordinator;
         if(!includeJobs)
         {
-            Children.Add(LibraryWorkspaceUi.Heading("中文显示，随你选择","主窗口与桌面歌词独立记忆，修改后立即保存。"));
+            Children.Add(LibraryWorkspaceUi.Heading("中文显示，随你选择","译文开关独立记忆，简繁显示同步；修改后立即保存。"));
             var switches=new System.Windows.Controls.Primitives.UniformGrid{Columns=2,Margin=new(0,0,-10,0)};
             var mainPanel=new StackPanel();mainPanel.Children.Add(LibraryWorkspaceUi.Text("主窗口",15,false));var mainHint=LibraryWorkspaceUi.Text("在原词下方显示中文。",11);mainHint.Margin=new(0,5,0,12);mainPanel.Children.Add(mainHint);main=DialogUi.Check(mainPanel,"主窗口显示中文译文",coordinator.Settings.ShowChineseTranslation);var mainCard=LibraryWorkspaceUi.Card(mainPanel);mainCard.Margin=new(0,0,10,12);switches.Children.Add(mainCard);
             var floatingPanel=new StackPanel();floatingPanel.Children.Add(LibraryWorkspaceUi.Text("桌面歌词",15,false));var floatingHint=LibraryWorkspaceUi.Text("与悬浮工具栏开关同步。",11);floatingHint.Margin=new(0,5,0,12);floatingPanel.Children.Add(floatingHint);floating=DialogUi.Check(floatingPanel,"悬浮歌词显示中文译文",coordinator.Settings.OverlayShowChineseTranslation);var floatingCard=LibraryWorkspaceUi.Card(floatingPanel);floatingCard.Margin=new(0,0,10,12);switches.Children.Add(floatingCard);Children.Add(switches);switches.SizeChanged+=(_,_)=>switches.Columns=switches.ActualWidth>=560?2:1;
+            AddScriptChoice();
             var preview=new StackPanel();preview.Children.Add(LibraryWorkspaceUi.Text("双语预览",11));var original=LibraryWorkspaceUi.Text("The stars will guide us home",20,false);original.Margin=new(0,16,0,4);preview.Children.Add(original);var translated=LibraryWorkspaceUi.Text("星光会指引我们归家",14);preview.Children.Add(translated);var note=LibraryWorkspaceUi.Text("原文保持主位，中文补充其下。间奏和纯音乐保持留白。",11);note.Margin=new(0,16,0,0);preview.Children.Add(note);Children.Add(LibraryWorkspaceUi.Card(preview,20));
+            scriptPreview=translated;
             var attribution=new StackPanel();attribution.Children.Add(LibraryWorkspaceUi.Text("当前译文来源",14,false));source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=20;source.Margin=new(0,8,0,0);ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");attribution.Children.Add(source);
             var reviewCurrent=DialogUi.Button(attribution,"以 Apple Music 原词校对…",OpenReview);AutomationProperties.SetName(reviewCurrent,"打开 Apple Music 原词校对");Children.Add(LibraryWorkspaceUi.Card(attribution));
             AutomationProperties.SetName(main,"主窗口中文译文开关");AutomationProperties.SetName(floating,"悬浮歌词中文译文开关");main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
@@ -34,9 +37,11 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         main.Margin=new(0,8,0,4);floating.Margin=new(0,4,0,14);
         AutomationProperties.SetName(main,"主窗口中文译文开关");AutomationProperties.SetName(floating,"悬浮歌词中文译文开关");
         main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
+        AddScriptChoice();
         var sample=new StackPanel{Margin=new(18,14,18,14)};
         sample.Children.Add(new TextBlock{Text="The stars will guide us home",FontSize=19,TextWrapping=TextWrapping.Wrap});
         var sampleChinese=new TextBlock{Text="星光会指引我们归家",FontSize=14,Margin=new(0,6,0,0)};ThemeManager.Bind(sampleChinese,TextBlock.ForegroundProperty,"MutedBrush");sample.Children.Add(sampleChinese);
+        scriptPreview=sampleChinese;
         var card=new Border{Child=sample,CornerRadius=new(14),BorderThickness=new(1),Margin=new(0,0,0,18)};ThemeManager.Bind(card,Border.BackgroundProperty,"RaisedBrush");ThemeManager.Bind(card,Border.BorderBrushProperty,"BorderBrush");Children.Add(card);
         ThemeManager.Bind(card,Border.CornerRadiusProperty,"PreviewCardRadius");
         AddText("资料库中文译文",15);progress.TextWrapping=TextWrapping.Wrap;progress.LineHeight=22;progress.FontSize=12;ThemeManager.Bind(progress,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(progress);
@@ -53,6 +58,13 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         else{for(int i=Children.Count-1;i>=5;i--)if(!ReferenceEquals(Children[i],source))Children.RemoveAt(i);}
         Attach();
     }
+    void AddScriptChoice()
+    {
+        var panel=new StackPanel();panel.Children.Add(LibraryWorkspaceUi.Text("歌词简繁显示",14,false));
+        var hint=LibraryWorkspaceUi.Text("中文原词与译文统一使用所选字形，主窗口和悬浮歌词同步。只改变显示，原始歌词保持不变。",11);hint.Margin=new(0,6,0,12);panel.Children.Add(hint);
+        var selector=ChineseScriptDisplay.CreateSelector(coordinator);selector.HorizontalAlignment=HorizontalAlignment.Left;panel.Children.Add(selector);
+        Children.Add(LibraryWorkspaceUi.Card(panel));
+    }
     void OpenReview(){if(Window.GetWindow(this) is { } owner && owner.Owner is MainWindow main)main.ShowLyricsReview(owner);}
     void Attach(){Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Refresh;Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;Refresh();}
     void AddText(string text,double size)
@@ -63,6 +75,11 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         syncing=true;
         try{main.IsChecked=coordinator.Settings.ShowChineseTranslation;floating.IsChecked=coordinator.Settings.OverlayShowChineseTranslation;}
         finally{syncing=false;}
+        if(scriptPreview is not null)
+        {
+            try{scriptPreview.Text=LumaLyrics.Windows.ChineseScriptConverter.Convert("星光会指引我们归家",coordinator.Settings.ChineseScript);}
+            catch(InvalidOperationException){scriptPreview.Text="星光会指引我们归家";}
+        }
         progress.Text=coordinator.TranslationProgress.ToString();source.Text=coordinator.TranslationStatus;
         bool running=coordinator.TranslationProgress.Running;if(prepare is not null)prepare.IsEnabled=retry!.IsEnabled=!running&&coordinator.Settings.OnlineLookup;if(pause is not null)pause.IsEnabled=running;
         if(import is not null)import.IsEnabled=coordinator.Document is {IsSynced:true,Instrumental:false};

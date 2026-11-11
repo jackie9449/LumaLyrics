@@ -26,12 +26,14 @@ public partial class MainWindow : Window
     LyricsDocument? displayed; int currentIndex=-2; DateTime manualUntil, pausedSince; string? hotkeyError;
     readonly List<TextBlock> lyricBlocks=[];
     readonly List<TextBlock> translationBlocks=[];ChineseTranslation? displayedTranslation;bool displayedTranslationEnabled;
+    string displayedChineseScript="original";string[] displayOriginalLines=[],displayTranslationLines=[];
     ArtworkPalette? artworkPalette;
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
         store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        ChineseScriptHost.Content=ChineseScriptDisplay.CreateSelector(coordinator);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
         ArtworkMat.SizeChanged+=(_,_)=>ClipArtwork();
@@ -150,13 +152,24 @@ public partial class MainWindow : Window
         playbackSidebar.ObserveTrack(coordinator.ActiveTrack);playbackSidebar.ObserveArtwork(coordinator.ArtworkStatus);
         vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
         vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
-        if(!ReferenceEquals(displayed,coordinator.Document) || !ReferenceEquals(displayedTranslation,coordinator.Translation) || displayedTranslationEnabled!=settings.ShowChineseTranslation)BuildLyrics();
+        if(!ReferenceEquals(displayed,coordinator.Document) || !ReferenceEquals(displayedTranslation,coordinator.Translation) || displayedTranslationEnabled!=settings.ShowChineseTranslation || displayedChineseScript!=ChineseScriptDisplay.Normalize(settings.ChineseScript))BuildLyrics();
         Tick();
     }
     void BuildLyrics()
     {
         bool sameDocument=ReferenceEquals(displayed,coordinator.Document);double previousScroll=LyricsScroll.VerticalOffset;var browsingUntil=manualUntil;
         displayed=coordinator.Document;displayedTranslation=coordinator.Translation;displayedTranslationEnabled=settings.ShowChineseTranslation;currentIndex=-2;lyricBlocks.Clear();translationBlocks.Clear();LyricLines.Children.Clear();
+        displayedChineseScript=ChineseScriptDisplay.Normalize(settings.ChineseScript);
+        displayOriginalLines=displayed is null?[]:displayed.IsSynced?displayed.Groups.Select(g=>g.Text).ToArray():displayed.Raw.Split('\n');
+        displayTranslationLines=displayed?.IsSynced==true?Enumerable.Range(0,displayed.Groups.Count).Select(i=>displayedTranslation?.TextAt(i)??"").ToArray():[];
+        try
+        {
+            // Convert once per document/preference update, never on the playback timer.
+            var originals=ChineseScriptDisplay.ConvertOriginals(displayOriginalLines,displayedChineseScript);
+            var translations=displayTranslationLines.Select(t=>LumaLyrics.Windows.ChineseScriptConverter.Convert(t,displayedChineseScript)).ToArray();
+            displayOriginalLines=originals;displayTranslationLines=translations;
+        }
+        catch(InvalidOperationException ex){store.Log("Chinese script display: "+ex.Message);vm.LyricStatus="简繁转换暂不可用，已按原文显示。";}
         bool empty=displayed is null || displayed.Instrumental || string.IsNullOrWhiteSpace(displayed.Raw);
         bool instrumental=displayed?.Instrumental==true;
         overlay.SetInstrumental(instrumental);
@@ -164,11 +177,11 @@ public partial class MainWindow : Window
         LyricsScroll.Visibility=instrumental?Visibility.Collapsed:Visibility.Visible;ReturnButton.Visibility=Visibility.Collapsed;
         EmptyHint.Text=coordinator.Snapshot is null?"在 Apple Music 中播放歌曲，或导入本地歌词进行静态浏览。":coordinator.LyricsStatus;
         if(empty)return;
-        foreach(var text in displayed!.IsSynced?displayed.Groups.Select(g=>g.Text):displayed.Raw.Split('\n'))
+        foreach(var text in displayOriginalLines)
         {
             var line=new TextBlock{Text=string.IsNullOrWhiteSpace(text)?" ":text,TextWrapping=TextWrapping.Wrap,FontSize=24,LineHeight=36,Margin=new(0,0,0,24),Foreground=(Brush)FindResource("MutedBrush")};
             line.SetResourceReference(TextBlock.FontFamilyProperty,"LyricFont");
-            string translation=displayedTranslationEnabled && displayed.IsSynced?displayedTranslation?.TextAt(lyricBlocks.Count)??"":"";
+            string translation=displayedTranslationEnabled && displayed!.IsSynced?displayTranslationLines[lyricBlocks.Count]:"";
             var translated=new TextBlock{Text=translation,TextWrapping=TextWrapping.Wrap,FontSize=16,LineHeight=26,Margin=new(0,5,0,24),Visibility=translation.Length>0?Visibility.Visible:Visibility.Collapsed};
             translated.SetResourceReference(TextBlock.ForegroundProperty,"MutedBrush");
             if(translation.Length>0){line.Margin=new(0);var pair=new StackPanel();pair.Children.Add(line);pair.Children.Add(translated);LyricLines.Children.Add(pair);}else LyricLines.Children.Add(line);
@@ -202,11 +215,11 @@ public partial class MainWindow : Window
         }
         if(DateTime.UtcNow>=manualUntil && ReturnButton.Visibility==Visibility.Visible) {ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
         if(displayed?.Instrumental==true) {vm.Current="";vm.Next="";}
-        else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayed.Groups[index].Text:"前奏";vm.Next=index+1<displayed.Groups.Count?displayed.Groups[index+1].Text:"";}
+        else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayOriginalLines[index]:"前奏";vm.Next=index+1<displayOriginalLines.Length?displayOriginalLines[index+1]:"";}
         else {vm.Current=s?.Track.Title ?? "浮光歌词";vm.Next=displayed is null?"等待歌词":displayed.IsSynced?"同步受限 · 请在主窗口浏览":"静态歌词 · 请在主窗口浏览";}
         bool translate=settings.OverlayShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
-        vm.CurrentTranslation=translate && index>=0?coordinator.Translation?.TextAt(index)??"":"";
-        vm.NextTranslation=translate && index+1<displayed!.Groups.Count?coordinator.Translation?.TextAt(index+1)??"":"";
+        vm.CurrentTranslation=translate && index>=0?displayTranslationLines[index]:"";
+        vm.NextTranslation=translate && index+1<displayTranslationLines.Length?displayTranslationLines[index+1]:"";
         if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=coordinator.LyricsStatus;
         var desired=s?.Status==PlayState.Playing && (IsVisible||overlay.IsVisible)?33:500;
         if(timer.Interval.TotalMilliseconds!=desired)timer.Interval=TimeSpan.FromMilliseconds(desired);
