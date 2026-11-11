@@ -9,13 +9,14 @@ namespace LumaLyrics.App;
 
 internal static class DialogUi
 {
-    public static StackPanel Panel(Window window,string heading,string hint)
+    public static StackPanel Panel(Window window,string heading,string hint,bool embedded=false)
     {
         window.Width=650;window.Height=650;window.MinWidth=480;window.MinHeight=400;window.WindowStartupLocation=WindowStartupLocation.CenterOwner;
         ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         var p=new StackPanel{Margin=new(26)};var title=new TextBlock{Text=heading,Margin=new(0,0,0,12),TextWrapping=TextWrapping.Wrap};title.SetResourceReference(FrameworkElement.StyleProperty,"AppDialogHeadline");p.Children.Add(title);
         var hintLabel=new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,18)};ThemeManager.Bind(hintLabel,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(hintLabel);
-        ApplicationWindowFrame.SetContent(window,new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto});return p;
+        var scroll=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+        if(embedded)window.Content=scroll;else ApplicationWindowFrame.SetContent(window,scroll);return p;
     }
     public static TextBox Field(Panel p,string label,string value="") {p.Children.Add(new TextBlock{Text=label,Margin=new(0,8,0,4)});var box=new TextBox{Text=value};p.Children.Add(box);return box;}
     public static Button Button(Panel p,string label,Action clicked) {var b=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Left,Margin=new(0,12,8,0)};b.Click+=(_,_)=>clicked();p.Children.Add(b);return b;}
@@ -142,11 +143,11 @@ public sealed class CandidateWindow : Window
 }
 public sealed class DiagnosticsWindow : Window
 {
-    public DiagnosticsWindow(PlaybackCoordinator c,SettingsStore store,string? hotkeyError)
+    public DiagnosticsWindow(PlaybackCoordinator c,SettingsStore store,string? hotkeyError,bool embedded=false)
     {
-        Title="浮光歌词 · 诊断";var p=DialogUi.Panel(this,"连接与诊断","本机兼容性仍需按人工验收表检查。普通置顶无法覆盖独占全屏或系统安全桌面。");
+        Title="浮光歌词 · 诊断";var p=DialogUi.Panel(this,"连接与诊断","查看媒体时钟、歌词时间轴和本机连接状态。",embedded);
         var text=new TextBox{IsReadOnly=true,AcceptsReturn=true,Height=220,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};p.Children.Add(text);
-        void Refresh(){var s=c.Snapshot;text.Text=$"系统：{Environment.OSVersion}\n来源：{s?.SessionId ?? "未发现 Apple Music"}\n会话代次：{s?.Generation} / 曲目修订：{s?.Revision}\n原始位置：{s?.PositionMs} ms\n时间轴更新：{s?.TimelineUtc:O}\n质量：{c.Quality}\nSeek：{s?.CanSeek}\n快捷键：{hotkeyError ?? "已注册"}\n数据目录：{store.Root}\n歌词状态：{c.LyricsStatus}";}
+        void Refresh(){var s=c.Snapshot;text.Text=$"系统：{Environment.OSVersion}\n来源：{s?.SessionId ?? "未发现 Apple Music"}\n会话代次：{s?.Generation} / 曲目修订：{s?.Revision}\n原始位置：{s?.PositionMs} ms\n时间轴更新：{s?.TimelineUtc:O}\n插值位置：{c.Position:F0} ms\n快照年龄：{(s is null?0:System.Diagnostics.Stopwatch.GetElapsedTime(s.MonotonicTicks).TotalMilliseconds):F0} ms\n歌词偏移（文件 / 歌曲 / 全局）：{c.Document?.FileOffsetMs} / {c.Binding?.OffsetMs} / {c.Settings.GlobalOffsetMs} ms\n质量：{c.Quality}\nSeek：{s?.CanSeek}\n快捷键：{hotkeyError ?? "已注册"}\n数据目录：{store.Root}\n歌词状态：{c.LyricsStatus}";}
         Refresh();var sources=DialogUi.Choice(p,"可用媒体来源（只在明确选择时切换）",c.Source.SessionIds.ToArray(),c.Source.SelectedId ?? "");
         DialogUi.Button(p,"使用所选来源",async()=>{if(sources.SelectedItem is string id){c.Settings.PreferredSession=id;c.SaveSettings();await c.Source.SelectAsync(id);Refresh();}});
         DialogUi.Button(p,"重新连接",async()=>{await c.ReconnectAsync();Refresh();});

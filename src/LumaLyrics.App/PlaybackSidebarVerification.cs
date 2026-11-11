@@ -55,6 +55,10 @@ public partial class MainWindow
             checks["sidebar.currentAndActualQueueVisible"]=PlaybackQueueHost.IsVisible && sidebar.View.Snapshot?.Current==tracks[0] && sidebar.View.Snapshot.Upcoming.Count==153;
             checks["sidebar.orderAndRepeatedOccurrences"]=sidebar.View.UpcomingList.Items.Cast<PlaybackQueueView.QueueRow>().Take(3).Select(r=>r.Title).SequenceEqual(new[]{"夜航","静静的海面","夜航"});
             checks["sidebar.virtualizedAndCoversDecoded"]=Descendants<ListBoxItem>(sidebar.View.UpcomingList).Count() is >0 and <30 && Descendants<Image>(sidebar.View).Any(i=>i.Source is BitmapImage{PixelWidth:96});
+            sidebar.View.SetLibrary([songs[1],songs[1] with{PersistentId="duplicate"}]);
+            sidebar.View.Apply(new(tracks[1],[new(tracks[1] with{Album="",DurationMs=null})],true,true,DateTimeOffset.UtcNow,""));
+            checks["sidebar.incompleteMetadataCover"]=sidebar.View.UpcomingList.Items.Cast<PlaybackQueueView.QueueRow>().Single().Cover is BitmapImage;
+            sidebar.View.SetLibrary(songs);sidebar.View.Apply(Queue());
             var items=sidebar.View.UpcomingList.ItemsSource;await sidebar.RefreshAsync();checks["sidebar.unchangedRefreshPreservesRows"]=ReferenceEquals(items,sidebar.View.UpcomingList.ItemsSource) && loads==1;
             int before=reads;busy=true;await sidebar.RefreshAsync();checks["sidebar.nativeHandoffDefersQueueRead"]=reads==before && sidebar.View.Message.Contains("正在切换歌曲",StringComparison.Ordinal);busy=false;await sidebar.RefreshAsync();
             mode=4;delayed=new(TaskCreationOptions.RunContinuationsAsynchronously);var older=sidebar.RefreshAsync();mode=5;sidebar.ObserveTrack(tracks[1]);await AwaitScheduledRefresh();delayed.SetResult(Queue() with{Message="旧请求"});await older;

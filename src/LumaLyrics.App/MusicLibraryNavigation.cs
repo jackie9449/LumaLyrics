@@ -14,6 +14,7 @@ public partial class MainWindow
     async void MusicLibraryClicked(object sender,RoutedEventArgs e)=>await ShowMusicLibraryAsync();
     internal async Task ShowMusicLibraryAsync()
     {
+        CloseEmbeddedPage();
         if(musicLibrary is null)
         {
             var bridge=playbackBridge;
@@ -33,12 +34,13 @@ public partial class MainWindow
     }
     void ShowLyricsPage()
     {
+        CloseEmbeddedPage();
         if(musicLibrary is not null)musicLibrary.Visibility=Visibility.Collapsed;LyricsPage.Visibility=Visibility.Visible;SelectNavigation(false);
         AppMotion.Reveal(LyricsPage);
     }
     void SelectNavigation(bool library)
     {
-        foreach(var (button,active) in new[]{(LyricsNav,!library),(MusicNav,library)})
+        foreach(var (button,active) in new[]{(LyricsNav,!library),(MusicNav,library),(SettingsNav,false),(DiagnosticsNav,false)})
         {
             AppMotion.SetIsSelected(button,active);
             button.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");

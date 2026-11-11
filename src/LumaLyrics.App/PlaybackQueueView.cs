@@ -26,6 +26,13 @@ internal sealed partial class PlaybackQueueView:Grid
     string? playMessage;
     Dictionary<string,MusicLibrarySong[]> library=new(StringComparer.Ordinal);
     bool rowsNeedRefresh=true;
+    string? currentArtworkKey;
+    ImageSource? currentArtwork;
+    internal void SetCurrentArtwork(Track? track,ImageSource? image)
+    {
+        currentArtworkKey=track?.Fingerprint;currentArtwork=image;
+        if(Snapshot?.Current is { } current)currentCover.Source=Cover(current) ?? (current.Fingerprint==currentArtworkKey?currentArtwork:null);
+    }
     internal MusicQueueSnapshot? Snapshot {get;private set;}
     internal ListBox UpcomingList=>upcoming;
     internal Task? ActivePlayback {get;private set;}
@@ -85,8 +92,9 @@ internal sealed partial class PlaybackQueueView:Grid
         var image=new FrameworkElementFactory(typeof(ArtworkImage));image.SetBinding(Image.SourceProperty,new Binding("Cover"));image.SetValue(Image.StretchProperty,Stretch.UniformToFill);image.SetResourceReference(ArtworkImage.CornersProperty,"QueueArtworkRadius");cover.AppendChild(image);row.AppendChild(cover);
         var copy=new FrameworkElementFactory(typeof(StackPanel));copy.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);copy.AppendChild(Label("Title",compact?12:14,"TextBrush"));var artist=Label("Subtitle",compact?10:11,"MutedBrush");artist.SetValue(MarginProperty,new Thickness(0,compact?5:6,0,0));copy.AppendChild(artist);row.AppendChild(copy);return new(){VisualTree=row};
     }
-    internal void SetLibrary(IReadOnlyList<MusicLibrarySong> songs){library=songs.GroupBy(s=>s.Track.Fingerprint,StringComparer.Ordinal).ToDictionary(g=>g.Key,g=>g.ToArray(),StringComparer.Ordinal);covers.Clear();rowsNeedRefresh=true;if(Snapshot is not null)Apply(Snapshot);}
-    ImageSource? Cover(Track track)=>library.TryGetValue(track.Fingerprint,out var candidates)?covers.Get(MusicPlaybackQueue.MatchLibrarySong(track,candidates)?.CoverPath):null;
+    internal void SetLibrary(IReadOnlyList<MusicLibrarySong> songs){library=songs.GroupBy(s=>CoverKey(s.Track),StringComparer.Ordinal).ToDictionary(g=>g.Key,g=>g.ToArray(),StringComparer.Ordinal);covers.Clear();rowsNeedRefresh=true;if(Snapshot is not null)Apply(Snapshot);}
+    static string CoverKey(Track track)=>(track with{Album=""}).Fingerprint;
+    ImageSource? Cover(Track track)=>library.TryGetValue(CoverKey(track),out var candidates)?covers.Get(MusicPlaybackQueue.MatchCoverPath(track,candidates)):null;
     internal void Loading(){RefreshButton.IsEnabled=false;message.Text=playMessage??"正在读取 Apple Music 播放列表…";}
     internal void WaitingForSelection(){RefreshButton.IsEnabled=false;message.Text="正在切换歌曲，播放列表稍后更新…";}
     internal void Apply(MusicQueueSnapshot snapshot)
@@ -95,7 +103,7 @@ internal sealed partial class PlaybackQueueView:Grid
         Snapshot=snapshot;RefreshButton.IsEnabled=true;message.Text=playMessage??(compact && snapshot.Available && snapshot.IsComplete?"与 Apple Music 同步":snapshot.Message);
         detail.Text=snapshot.Available?$"接下来 {snapshot.Upcoming.Count:N0} 首"+(compact?"":$" · {snapshot.CapturedUtc.ToLocalTime():HH:mm:ss} 更新")+(snapshot.IsComplete?"":" · 部分列表"):compact?"当前与接下来播放":"连接 Apple Music，查看实际播放顺序";
         currentCard.Visibility=snapshot.Available && snapshot.Current is not null?Visibility.Visible:Visibility.Collapsed;
-        if(snapshot.Current is { } track){currentTitle.Text=track.Title;currentArtist.Text=Subtitle(track);currentTitle.ToolTip=track.Title;currentArtist.ToolTip=Subtitle(track);currentCover.Source=Cover(track);}
+        if(snapshot.Current is { } track){currentTitle.Text=track.Title;currentArtist.Text=Subtitle(track);currentTitle.ToolTip=track.Title;currentArtist.ToolTip=Subtitle(track);currentCover.Source=Cover(track) ?? (track.Fingerprint==currentArtworkKey?currentArtwork:null);}
         if(!sameRows){upcoming.ItemsSource=snapshot.Upcoming.Select((entry,index)=>new QueueRow(index+1,entry,Cover)).ToArray();rowsNeedRefresh=false;}
         empty.Visibility=snapshot.Upcoming.Count==0?Visibility.Visible:Visibility.Collapsed;empty.Text=!snapshot.Available?"暂时无法读取播放列表\n可打开 Apple Music 后刷新":snapshot.IsComplete?"接下来还没有歌曲\n在歌曲旁点‘插播’，把喜欢的歌放到下一首":"Apple Music 尚未提供后续歌曲\n请稍后刷新";
     }

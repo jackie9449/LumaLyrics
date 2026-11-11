@@ -8,6 +8,15 @@ public sealed class TestTime : TimeProvider
 }
 public class ClockTests
 {
+    [Theory]
+    [InlineData(PlayState.Playing,11000)]
+    [InlineData(PlayState.Paused,10000)]
+    public void DelayedSnapshotIncludesDeliveryTimeOnlyWhilePlaying(PlayState state,double expected)
+    {
+        var time=new TestTime();var clock=new PlaybackClock(time);
+        var snapshot=Snapshot(time,10000,state);time.Advance(1000);clock.Update(snapshot);
+        Assert.Equal(expected,clock.PositionMs);
+    }
     static PlaybackSnapshot Snapshot(TestTime t,double pos,PlayState state=PlayState.Playing,DateTimeOffset? timeline=null,long revision=1,double? rate=1)=>new("AppleMusic.exe",1,revision,new("A","B","C",240000),state,rate,pos,timeline??t.Utc,t.Utc,t.Milliseconds,PositionQuality.Estimated);
     [Fact] public void StartsMidSongAndUsesMonotonicTime()
     {

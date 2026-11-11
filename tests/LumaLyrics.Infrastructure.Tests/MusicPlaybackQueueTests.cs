@@ -4,6 +4,15 @@ namespace LumaLyrics.Infrastructure.Tests;
 
 public sealed class MusicPlaybackQueueTests
 {
+    [Fact]
+    public void CoversAllowMissingDurationAndDuplicatesButRejectDifferentAlbumsOrImages()
+    {
+        var track=new Track("微光","浮光","夜航",180000);
+        var song=new MusicLibrarySong("fixture","1",track,"cover.img");
+        Assert.Equal("cover.img",MusicPlaybackQueue.MatchCoverPath(track with{DurationMs=null,Album=""},[song,song with{PersistentId="2"}]));
+        Assert.Null(MusicPlaybackQueue.MatchCoverPath(track with{Album=""},[song,song with{Track=track with{Album="夜航 (Live)"}}]));
+        Assert.Null(MusicPlaybackQueue.MatchCoverPath(track,[song,song with{CoverPath="other.img"}]));
+    }
     [Fact] public void SwappingIndistinguishableAdjacentOccurrencesCannotBeReportedAsAConfirmedChange()
     {
         var track=new Track("Own repeated song","Own artist","Own album",10000);var snapshot=new MusicQueueSnapshot(track,[new(track,true,true),new(track)],true,true,DateTimeOffset.UtcNow,"own");

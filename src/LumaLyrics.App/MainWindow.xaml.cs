@@ -261,6 +261,7 @@ public partial class MainWindow : Window
             }
             catch(Exception ex){store.Log("Artwork decode: "+ex.GetType().Name);}
         }
+        playbackSidebar.View.SetCurrentArtwork(coordinator.ActiveTrack,Artwork.Source);
         ThemeManager.Apply(settings.UiTheme,artworkPalette,animate:!settings.ReduceMotion,applicationScope:Resources);
         StyleLyricLines(-1,currentIndex);
     }
@@ -292,10 +293,11 @@ public partial class MainWindow : Window
     void CandidatesClicked(object s,RoutedEventArgs e)=>new CandidateWindow(coordinator){Owner=this}.ShowDialog();
     void SettingsClicked(object s,RoutedEventArgs e)
     {
-        if(settingsWindow is not null){settingsWindow.Activate();return;}
-        var window=settingsWindow=new SettingsWindow(coordinator,id=>SelectUiTheme(id)){Owner=this};
+        if(settingsWindow is not null){if(settingsWindow.IsVisible)settingsWindow.Activate();return;}
+        CloseEmbeddedPage();
+        var window=settingsWindow=new SettingsWindow(coordinator,id=>SelectUiTheme(id),embedded:true){Owner=this};
         window.Closed+=(_,_)=>{settingsWindow=null;if(quitting)return;SelectUiTheme(settings.UiTheme,false);overlay.ApplyStyle();RegisterHotkeys();coordinator.SaveSettings();Tick();};
-        window.Show();
+        ShowEmbeddedPage(window,SettingsNav);
     }
     public void ShowAppearance(Window? dialogOwner=null)
     {
@@ -303,7 +305,7 @@ public partial class MainWindow : Window
         if(preferences is null){SettingsClicked(this,new());preferences=settingsWindow!;}
         preferences.SelectOverlayTab();preferences.BeginAppearanceEditing();
         if(preferences.WindowState==WindowState.Minimized)preferences.WindowState=WindowState.Normal;
-        preferences.Activate();
+        if(preferences.IsVisible)preferences.Activate();
     }
     internal AppearanceEditor CreateAppearanceEditor()
     {
@@ -318,12 +320,16 @@ public partial class MainWindow : Window
         };
         return editor;
     }
-    void DiagnosticsClicked(object s,RoutedEventArgs e)=>new DiagnosticsWindow(coordinator,store,hotkeyError){Owner=this}.ShowDialog();
+    void DiagnosticsClicked(object s,RoutedEventArgs e)
+    {
+        CloseEmbeddedPage();
+        ShowEmbeddedPage(new DiagnosticsWindow(coordinator,store,hotkeyError,embedded:true){Owner=this},DiagnosticsNav);
+    }
     void LibraryClicked(object s,RoutedEventArgs e)
     {
         SettingsClicked(this,new());var preferences=settingsWindow!;preferences.SelectLibraryTab();
         if(preferences.WindowState==WindowState.Minimized)preferences.WindowState=WindowState.Normal;
-        preferences.Activate();
+        if(preferences.IsVisible)preferences.Activate();
     }
     void PowerModeChanged(object s,PowerModeChangedEventArgs e) {if(e.Mode==PowerModes.Resume)Dispatcher.BeginInvoke(()=>coordinator.Resume());}
     void DisplayChanged(object? s,EventArgs e)=>Dispatcher.BeginInvoke(()=>{NativeWindow.ClampVisible(this);overlay.EnsureVisibleBounds();});
@@ -331,7 +337,7 @@ public partial class MainWindow : Window
     public async Task QuitAsync()
     {
         if(quitting)return;quitting=true;seekProbe?.Cancel();seekCancellation?.Cancel();SeekSlider.CancelEdit();timer.Stop();hotkeys?.Dispose();DisposeTray();SystemEvents.PowerModeChanged-=PowerModeChanged;SystemEvents.DisplaySettingsChanged-=DisplayChanged;
-        playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
+        playbackBridge.HandoffCompleted-=playbackSidebar.RequestRefresh;playbackSidebar.Dispose();musicLibrary?.Dispose();appearanceWindow?.Close();CloseEmbeddedPage();settingsWindow?.Close();overlay.Close();await coordinator.DisposeAsync();Close();System.Windows.Application.Current.Shutdown();
     }
     async Task CaptureAsync(string directory)
     {

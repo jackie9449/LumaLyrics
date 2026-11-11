@@ -40,7 +40,8 @@ public sealed class PlaybackClock(TimeProvider? provider = null) : IPlaybackCloc
         if (newEvidence && sane && !transitionStale && !quantizedRepeat)
         {
             rate = s.Rate is > 0 and <= 4 ? s.Rate.Value : 1;
-            var target = s.PositionMs!.Value + (s.Status == PlayState.Playing ? Math.Max(0, ageMs) * rate : 0);
+            double deliveryMs = Math.Max(0, time.GetElapsedTime(s.MonotonicTicks, time.GetTimestamp()).TotalMilliseconds);
+            var target = s.PositionMs!.Value + (s.Status == PlayState.Playing ? (Math.Max(0, ageMs) + deliveryMs) * rate : 0);
             double error = predicted.HasValue ? target-predicted.Value : double.MaxValue;
             anchor = !changed && !statusChanged && Math.Abs(error)<500 ? predicted!.Value+error*.35 : target;
             anchorTicks = time.GetTimestamp(); evidenceTicks = anchorTicks; valid = true;

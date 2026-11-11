@@ -80,4 +80,15 @@ public static class MusicPlaybackQueue
         var matches=songs.Where(s=>MusicLibraryPlayback.IsRequestedRecording(s.Track,track)).Take(2).ToArray();
         return matches.Length==1?matches[0]:null;
     }
+
+    public static string? MatchCoverPath(Track track,IReadOnlyList<MusicLibrarySong> songs)
+    {
+        if(string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))return null;
+        var matches=songs.Where(song=>MatchRules.Normalize(song.Track.Title)==MatchRules.Normalize(track.Title)
+            && MatchRules.Normalize(song.Track.Artist)==MatchRules.Normalize(track.Artist)
+            && (string.IsNullOrWhiteSpace(track.Album) || MatchRules.Normalize(song.Track.Album)==MatchRules.Normalize(track.Album))).ToArray();
+        if(matches.Select(song=>MatchRules.Normalize(song.Track.Album)).Distinct().Count()!=1)return null;
+        var paths=matches.Select(song=>song.CoverPath).Where(path=>!string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
+        return paths.Length==1?paths[0]:null;
+    }
 }

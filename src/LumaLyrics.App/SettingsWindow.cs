@@ -19,14 +19,15 @@ public sealed class SettingsWindow : Window
     internal ChineseTranslationPanel ChineseTranslations {get;}
     internal LibraryWorkspacePanel Library {get;}
 
-    public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme)
+    public SettingsWindow(PlaybackCoordinator coordinator,Action<string> changeApplicationTheme,bool embedded=false)
     {
         settings=coordinator.Settings;
         Title="浮光歌词 · 设置";Width=1120;Height=940;MinWidth=640;MinHeight=520;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;
         FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
         ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");
-        var root=new Grid{Margin=new(24,18,24,22)};ApplicationWindowFrame.SetContent(this,root);
+        var root=new Grid{Margin=new(24,18,24,22)};
+        if(embedded)Content=root;else ApplicationWindowFrame.SetContent(this,root);
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new StackPanel{Margin=new(0,0,0,22)};
         heading.Children.Add(Text("P R E F E R E N C E S",10,true));
@@ -84,12 +85,12 @@ public sealed class SettingsWindow : Window
         var unlock=DialogUi.Field(general,"解锁快捷键",settings.UnlockHotkey);
         bool originalStartup=StartupEnabled();
         var startup=DialogUi.Check(general,"登录 Windows 时启动（默认关闭）",originalStartup);
-        DialogUi.Button(general,"清理查词响应缓存（保留全部个人资料）",()=>{coordinator.ClearCache();MessageBox.Show(this,"查词响应缓存已清理。个人歌词、封面、绑定与校准均已保留。");});
+        DialogUi.Button(general,"清理查词响应缓存（保留全部个人资料）",()=>{coordinator.ClearCache();MessageBox.Show(Owner ?? this,"查词响应缓存已清理。个人歌词、封面、绑定与校准均已保留。");});
         var save=DialogUi.Button(general,"保存常规设置",()=>{
-            if(!double.TryParse(offset.Text,out var off)||!double.IsFinite(off)||Math.Abs(off)>3600000){MessageBox.Show(this,"请检查歌词偏移数值。");return;}
+            if(!double.TryParse(offset.Text,out var off)||!double.IsFinite(off)||Math.Abs(off)>3600000){MessageBox.Show(Owner ?? this,"请检查歌词偏移数值。");return;}
             // Only write the startup preference when the user actually changed it.
             try{if((startup.IsChecked==true)!=originalStartup)SetStartup(startup.IsChecked==true);}
-            catch(Exception ex){MessageBox.Show(this,"开机启动保存失败："+ex.Message);return;}
+            catch(Exception ex){MessageBox.Show(Owner ?? this,"开机启动保存失败："+ex.Message);return;}
             settings.AppleMusicOriginalLyrics=nativeOriginal.IsChecked==true;settings.OnlineLookup=online.IsChecked==true;settings.AutoPrefetchLibrary=prefetch.IsChecked==true;
             settings.CloseToTray=close.IsChecked==true;settings.ReduceMotion=reduce.IsChecked==true;settings.FadeOnPause=fade.IsChecked==true;
             settings.GlobalOffsetMs=off;settings.ToggleHotkey=toggle.Text;settings.UnlockHotkey=unlock.Text;

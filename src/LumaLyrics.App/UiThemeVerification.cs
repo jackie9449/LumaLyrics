@@ -86,7 +86,7 @@ public partial class MainWindow
         }
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-sidebar"))
         {
-            await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);
+            await VerifyPlaybackSidebarAsync(directory,checks);await VerifyQueueNavigationAsync(checks);await VerifyNativeHandoffReadinessAsync(checks);await VerifyEmbeddedPagesAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-queue"))

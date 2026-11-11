@@ -1,4 +1,8 @@
 using LumaLyrics.Windows;
+if(args.ElementAtOrDefault(0)=="--probe-timing")
+{
+    await LumaLyrics.Probe.TimingProbe.RunAsync(args.ElementAtOrDefault(1)??throw new ArgumentException("Specify a private report path."),args.Contains("--play"));return;
+}
 if(await LumaLyrics.Probe.TranslationJobCommands.TryRunAsync(args))return;
 if(args.ElementAtOrDefault(0)=="--probe-native-memory-safety")
 {
