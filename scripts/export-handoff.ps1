@@ -66,6 +66,7 @@ $locale=Join-Path $projectRoot '.tools/locale-audit-tool'
 if(Test-Path -LiteralPath $locale){
     $localeTarget=Join-Path $output 'toolchain/locale-audit-tool';New-Item -ItemType Directory -Path $localeTarget | Out-Null
     Copy-Item -LiteralPath (Join-Path $locale 'Program.cs'),(Join-Path $locale 'Tool.csproj') -Destination $localeTarget
+    if(Test-Path -LiteralPath (Join-Path $locale 'packages.lock.json')){Copy-Item -LiteralPath (Join-Path $locale 'packages.lock.json') -Destination $localeTarget}
 }
 Copy-Item -LiteralPath "$PSScriptRoot/handoff/START_HERE.md" -Destination (Join-Path $output 'START_HERE.md')
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'docs/migration-validation.md')){Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/migration-validation.md') -Destination (Join-Path $output 'MIGRATION_CHECKS.md')}
