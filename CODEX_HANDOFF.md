@@ -1,12 +1,12 @@
 # 浮光歌词 · 换机开发接手说明
 
-更新：2026-11-11。当前功能提交为 **441c37d**，应用版本仍为 **1.1.0**。包内 manifest.json 记录准确源码提交、源码树、应用提交、SDK 和文件散列；交接文档提交可能晚于功能提交。
+更新：2026-11-11。当前应用版本为 **1.2.0**，基于 **b0736aa** 的完整交接成果准备正式发布；此前功能提交为 **441c37d**。发布结果与验证以 [1.2.0 记录](docs/verification-v120/README.md)和对应 v1.2.0 标签为准。旧迁移包 manifest 仍记录该次源码及 1.1.0 预览运行包，不会随此版本发布改变。
 
 ## 1. 记录与协作方式
 
 先读 [AGENTS.md](AGENTS.md)、[全部更新索引](docs/updates-2026-11-11.md)、[开发记录](docs/development-log.md)、[发布记录](docs/release-notes.md)。更早设计、截图和验证材料仍在 docs 中。工作包 history/commits.txt 和 history/LumaLyrics.bundle 保存完整本地提交历史及 v1.0.0、v1.1.0 标签。
 
-**已改用本地 Git，不进行 GitHub 同步。** 不配置远端、不 fetch/push、不创建 PR、不覆盖正式发布资产。旧计划和旧交接包内的 GitHub 步骤由当前 AGENTS.md 替代。原 571ba0e 交接包只作历史保留，不能代替本次成果。
+**常规开发使用本地 Git。** 仅在用户对当前任务明确提出时进行 GitHub 同步或发布；本次用户已明确要求同步最新代码并发布 1.2.0。其它任务继续遵循 AGENTS.md，不覆盖旧正式发布资产。原 571ba0e 交接包只作历史保留，不能代替本次成果。
 
 ## 2. 新电脑恢复
 
@@ -53,7 +53,7 @@ Invoke-Dotnet test -c Release --no-build --no-restore
 
 离线 NuGetAudit=false 仅避免联网审计请求，不改变锁文件，也不代表进行了最新漏洞审计。SDK、nupkg 保留各自许可；旧机用户 NuGet/Git 配置、凭据和 hooks 不随包复制。
 
-app/LumaLyrics-1.1.0-ui-preview-space-shortcut-win-x64.zip 是当前软件。完整解压后运行 浮光歌词.exe，无需开发 SDK；旧版从托盘完全退出后再开新版。版本号相同不代表二进制相同，使用包名、提交与散列辨认。本次未覆盖正式 v1.1.0 标签或安装程序。
+旧交接包中的 app/LumaLyrics-1.1.0-ui-preview-space-shortcut-win-x64.zip 是当时已测预览。当前发布使用 LumaLyrics-1.2.0-portable-win-x64.zip 和 LumaLyrics-1.2.0-setup-win-x64.exe。完整解压后运行浮光歌词.exe，无需开发 SDK；旧版从托盘完全退出后再开新版。用版本、包名、提交与散列辨认，保留 v1.1.0 标签及原安装程序。
 
 源 apphost 曾有启动停顿，保留 Microsoft host 回退：.tools/dotnet/dotnet.exe exec src/LumaLyrics.App/bin/Release/net10.0-windows10.0.19041.0/LumaLyrics.dll。运行包 runtime/dotnet.exe 只有启动用途，不是开发 SDK。
 

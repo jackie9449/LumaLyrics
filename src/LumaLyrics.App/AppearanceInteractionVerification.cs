@@ -21,7 +21,7 @@ public partial class MainWindow
             vm.Current="把此刻，轻轻唱成一束光。";vm.Next="让旋律停留在你身旁";
             SettingsClicked(this,new());ShowAppearance(settingsWindow);await Settle();
             var editor=appearanceWindow!;var parent=settingsWindow!;
-            checks["editing.settingsAndOverlayStayEnabled"]=NativeWindow.IsWindowEnabled(NativeWindow.Handle(this)) && NativeWindow.IsWindowEnabled(NativeWindow.Handle(parent)) && NativeWindow.IsWindowEnabled(NativeWindow.Handle(overlay));
+            checks["editing.settingsAndOverlayStayEnabled"]=NativeWindow.IsWindowEnabled(NativeWindow.Handle(this)) && ReferenceEquals(Window.GetWindow(editor),this) && ReferenceEquals(embeddedPage,parent) && embeddedPageHost.IsVisible && embeddedPageHost.IsEnabled && editor.IsEnabled && !parent.IsVisible && NativeWindow.IsWindowEnabled(NativeWindow.Handle(overlay));
             checks["editing.lockedOverlayTemporarilyDraggable"]=overlay.IsLocked && overlay.AppearanceEditing && overlay.CanDrag && !NativeWindow.IsClickThrough(overlay);
             checks["editing.hiddenOverlayTemporarilyVisible"]=overlay.IsVisible && !settings.OverlayVisible;
             checks["editing.previewUsesFullOpacity"]=overlay.Opacity==1;

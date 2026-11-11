@@ -2,7 +2,7 @@
 
 **让音乐，有迹可循。** 为 Windows Apple Music 设计的桌面歌词应用，支持动态原词、独立悬浮歌词、中文译文与本机音乐库。
 
-[下载 1.1.0](https://github.com/jackie9449/LumaLyrics/releases/tag/v1.1.0) · [更新记录](docs/release-notes.md) · [使用与故障反馈](https://github.com/jackie9449/LumaLyrics/issues)
+[下载 1.2.0](https://github.com/jackie9449/LumaLyrics/releases/tag/v1.2.0) · [更新记录](docs/release-notes.md) · [使用与故障反馈](https://github.com/jackie9449/LumaLyrics/issues)
 
 ![六套主应用主题](docs/screenshots-ui-v0180/theme-collection.png)
 
@@ -12,26 +12,30 @@
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| 安装版 | [LumaLyrics-1.1.0-setup-win-x64.exe](https://github.com/jackie9449/LumaLyrics/releases/download/v1.1.0/LumaLyrics-1.1.0-setup-win-x64.exe) | 双击安装，默认安装到当前用户目录，并创建名为 **浮光歌词** 的桌面快捷方式与开始菜单入口。无需管理员权限。 |
-| 便携版 | [LumaLyrics-1.1.0-portable-win-x64.zip](https://github.com/jackie9449/LumaLyrics/releases/download/v1.1.0/LumaLyrics-1.1.0-portable-win-x64.zip) | 完整解压后双击 **浮光歌词.exe**。程序不写入系统安装目录，个人资料仍独立存储。 |
+| 安装版 | [LumaLyrics-1.2.0-setup-win-x64.exe](https://github.com/jackie9449/LumaLyrics/releases/download/v1.2.0/LumaLyrics-1.2.0-setup-win-x64.exe) | 双击安装，默认安装到当前用户目录，并创建名为 **浮光歌词** 的桌面快捷方式与开始菜单入口。无需管理员权限。 |
+| 便携版 | [LumaLyrics-1.2.0-portable-win-x64.zip](https://github.com/jackie9449/LumaLyrics/releases/download/v1.2.0/LumaLyrics-1.2.0-portable-win-x64.zip) | 完整解压后双击 **浮光歌词.exe**。程序不写入系统安装目录，个人资料仍独立存储。 |
 
 两种版本使用同一程序与随包 .NET 运行时，无需另装 SDK 或填写 Apple API 密钥。启动器使用 Windows 自带的 .NET Framework，保留 `Launch.vbs` 作为兼容入口。发布页同时提供 SHA-256 校验文件。程序与安装包暂未进行代码签名。
 
 升级前从旧版托盘菜单选择 **退出**，再运行安装程序或解压新版。安装、升级与卸载均保留原有个人歌词、译文、封面和设置；关闭主窗口后程序可继续留在托盘，卸载前请先退出。
 
-## 1.1.0 带来什么
+## 1.2.0 带来什么
+
+- **四种界面语言与歌词简繁。** 应用支持简体中文、繁体中文、English、日本語；歌词可按原文、简体或繁体显示，保持原始歌词、时间轴和中文译文来源。
+- **播放与快捷键。** 修复快照投递延迟和进度跳转的录音校验；软件内按空格播放／暂停，软件外可使用八项可配置全局快捷键，并处理占用与冲突。
+- **内嵌设置与悬浮工具栏。** 设置、诊断在主窗口内打开；悬浮功能与播放控制合并为一条，随独立主题、材质及自定义颜色变化，保持中央播放键和工作区边界。
 
 - **资料库与歌词统一管理。** 总览、歌曲、任务、显示四页共用一个工作区；新增专辑可手动刷新，大库选择、搜索及滚动保持流畅，页面内容充分利用窗口宽度。
 - **一次交接批量中文翻译。** 优先使用现有译文，缺失或主动重译时生成本地 agent 任务；复制一份提示词即可开始，支持分块续做、结果校验接收及旧版恢复。
 - **原词与音乐浏览改进。** 手动／自动补充搜索保留录音核对；歌单支持具体位置选择和原生播放模式，进度条支持跳转与拖动预览。原生歌单操作仍受客户端现场兼容性限制。
 
-- **悬停即可控制播放。** 悬浮歌词未锁定时，指针移到歌词上，下方出现上一曲、播放/暂停、下一曲；移入按钮可继续操作，离开后收起。锁定后保持点击穿透，外观编辑、拖动和纯音乐状态不显示控制条。
+- **悬停即可控制播放。** 悬浮歌词未锁定时，指针移到歌词上，合并工具栏出现上一曲、播放/暂停、下一曲与功能按钮；移入按钮可继续操作，离开后收起。锁定后保持点击穿透，外观编辑、拖动和纯音乐状态不显示控制条。
 
-悬浮上方工具栏的「居中」只调整横向位置，纵向保持不变。两排工具栏跟随当前悬浮主题及自定义颜色；靠近屏幕底部时播放按钮紧贴歌词上方，功能栏继续向上避让。移动、缩放及屏幕变化时，歌词窗口限制在当前显示器的工作区内。
+悬浮工具栏的「居中」只调整横向位置，纵向保持不变。工具栏整体贴近歌词并避让屏幕边缘，窄窗时两侧功能区换行。移动、缩放及屏幕变化时，歌词窗口限制在当前显示器的工作区内。
 - **六套完整主应用设计。** 液态玻璃、雾白、柔塑、纸间、夜航、构成，各有排版、字体、面板形状、封面装帧和导航风格。音乐库、设置与弹窗使用同一套设计语言。
 - **安装与便携两种分发。** 安装版自动创建桌面入口，并支持 Windows“已安装的应用”卸载；便携版完整解压即可运行。
 
-![未锁定时的悬浮播放控制](docs/verification-v100/floating-playback-controls.png)
+完整行为见[全部更新索引](docs/updates-2026-11-11.md)、[界面语言](docs/interface-languages.md)及[快捷键说明](docs/keyboard-shortcuts.md)。
 
 ## 歌词与中文译文
 
@@ -89,7 +93,7 @@ C# / WPF，.NET 10，Windows x64。使用仓库的 SDK 选择脚本（有 `.tool
 
 可用 `./scripts/publish-ui.ps1 -PreviewLabel manual-search` 生成独立命名的本地预览包，保留正在使用的默认预览目录；该参数仅用于预览包。
 
-UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.1.0 验证记录](docs/verification-v110/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
+UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.2.0 验证记录](docs/verification-v120/README.md) · [1.1.0 历史记录](docs/verification-v110/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
 
 [资料库导入工具](docs/library-assets.md) · [原词校对](docs/lyrics-review.md) · [第三方组件](THIRD-PARTY-NOTICES.md) · [协作规范](AGENTS.md) · [Codex 换机接手](CODEX_HANDOFF.md) · [本地开发记录](docs/development-log.md)
 

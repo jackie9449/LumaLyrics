@@ -89,6 +89,7 @@ public partial class MainWindow
     {
         var original=OverlayAppearance.From(settings);var profiles=settings.OverlayThemeProfiles;string app=settings.UiTheme;
         bool visible=overlay.IsVisible,locked=overlay.IsLocked,pref=settings.OverlayVisible;
+        double originalWidth=Width,originalHeight=Height;var originalState=WindowState;
         async Task Settle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(70);}
         static Slider Size(AppearanceEditor editor)=>Descendants<Slider>(editor).Single(s=>AutomationProperties.GetName(s)=="主歌词字号");
         static string PreviewPixels(AppearanceEditor editor)
@@ -101,66 +102,75 @@ public partial class MainWindow
             overlay.Hide();overlay.SetLocked(true,false);settings.OverlayVisible=false;
             foreach(var theme in AppThemes.All)
             {
+                WindowState=WindowState.Normal;Width=1120;Height=940;
                 SelectUiTheme(theme.Id,false);ShowAppearance();await Settle();
                 var parent=settingsWindow!;var editor=appearanceWindow!;
+                bool SettingsVisible()=>ReferenceEquals(embeddedPage,parent) && embeddedPageHost.IsVisible && !parent.IsVisible && embeddedPageHost.Content is FrameworkElement view && view.IsVisible;
+                void Capture(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
                 bool typography=Descendants<Slider>(editor).Any(s=>AutomationProperties.GetName(s)=="主歌词字号") && editor.FontPicker.IsVisible;
                 editor.SelectLayoutTab();await Settle();
                 bool layout=new[]{"圆角比例","背景不透明度","桌面歌词宽度","卡片留白"}.All(name=>Descendants<Slider>(editor).Any(s=>AutomationProperties.GetName(s)==name));
                 Descendants<TabControl>(editor).Single().SelectedIndex=0;await Settle();
-                checks[$"integrated.{theme.Id}.allControlsLiveInsideSettings"]=ReferenceEquals(Window.GetWindow(editor),parent) && typography && layout && !Application.Current.Windows.OfType<AppearanceWindow>().Any();
+                checks[$"integrated.{theme.Id}.allControlsLiveInsideSettings"]=SettingsVisible() && ReferenceEquals(Window.GetWindow(editor),this) && typography && layout && !Application.Current.Windows.OfType<AppearanceWindow>().Any() && !Application.Current.Windows.OfType<SettingsWindow>().Any(w=>w.IsVisible);
                 checks[$"integrated.{theme.Id}.modelessPreviewRetainsPreferences"]=overlay.AppearanceEditing && overlay.CanDrag && overlay.IsVisible && !settings.OverlayVisible && overlay.IsLocked;
                 var parentPaint=parent.Background;var mainPaint=LyricsPanel.Background;
                 foreach(var floating in OverlayThemes.All)
                 {
                     editor.PreviewTheme(floating);await Settle();
                     checks[$"integrated.{theme.Id}.{floating.Tag}.editorControlsKeepAppChrome"]=editor.Foreground==parent.Foreground && editor.FindResource("ControlBrush")==FindResource("ControlBrush") && editor.FindResource("AccentBrush")==FindResource("AccentBrush") && Descendants<Button>(editor).All(button=>button.Template==FindResource("AppActionTemplate"));
-                    if(floating.Tag=="FROST")VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-frost-preview-{theme.Id}.png"),true);
+                    if(floating.Tag=="FROST")Capture($"settings-frost-preview-{theme.Id}.png");
                 }
                 editor.PreviewTheme(OverlayThemes.All[1]);Size(editor).Value=42;
                 checks[$"integrated.{theme.Id}.previewThemeKeepsSettingsPalette"]=parent.Background==parentPaint && LyricsPanel.Background==mainPaint && settings.UiTheme==theme.Id && editor.Foreground==parent.Foreground && editor.FindResource("WindowBrush")==parent.Background;
-                await Settle();var appearance=OverlayAppearance.From(settings);string pixels=PreviewPixels(editor);
+                // Application themes change rail widths. Compare the same live preview
+                // at fixed scene dimensions so a responsive resize is not a paint change.
+                var scene=Descendants<GlassPreviewScene>(editor).Single();double sceneWidth=scene.Width,sceneHeight=scene.Height;
+                scene.Width=scene.ActualWidth;scene.Height=scene.ActualHeight;await Settle();
+                var appearance=OverlayAppearance.From(settings);string pixels=PreviewPixels(editor);var previewSize=editor.PreviewSurface.RenderSize;
                 SelectUiTheme(theme.Id=="frost"?"material":"frost",false);await Settle();
-                checks[$"integrated.{theme.Id}.appChangeUpdatesEditorAndRetainsPreviewPixels"]=editor.Foreground==parent.Foreground && parent.Background==FindResource("WindowBrush") && OverlayAppearance.From(settings)==appearance && PreviewPixels(editor)==pixels;
-                SelectUiTheme(theme.Id,false);await Settle();
+                checks[$"integrated.{theme.Id}.appChangePreviewState"]=$"foreground={editor.Foreground==parent.Foreground};background={parent.Background==FindResource("WindowBrush")};appearance={OverlayAppearance.From(settings)==appearance};pixels={PreviewPixels(editor)==pixels};size={previewSize}/{editor.PreviewSurface.RenderSize}";
+                checks[$"integrated.{theme.Id}.appChangeUpdatesEditorAndRetainsPreviewPixels"]=editor.Foreground==parent.Foreground && parent.Background==FindResource("WindowBrush") && OverlayAppearance.From(settings)==appearance && editor.PreviewSurface.RenderSize==previewSize && PreviewPixels(editor)==pixels;
+                SelectUiTheme(theme.Id,false);scene.Width=sceneWidth;scene.Height=sceneHeight;await Settle();
                 editor.Save();await Settle();var saved=OverlayAppearance.From(settings);
-                checks[$"integrated.{theme.Id}.saveStaysInSettingsAndEndsPreview"]=parent.IsVisible && appearanceWindow is null && !overlay.AppearanceEditing && !overlay.IsVisible && OverlayAppearance.From(store.Load())==saved;
+                checks[$"integrated.{theme.Id}.saveStaysInSettingsAndEndsPreview"]=SettingsVisible() && appearanceWindow is null && !overlay.AppearanceEditing && !overlay.IsVisible && OverlayAppearance.From(store.Load())==saved;
                 ShowAppearance();await Settle();editor=appearanceWindow!;Size(editor).Value=55;editor.Close();await Settle();
-                checks[$"integrated.{theme.Id}.cancelRestoresSavedSession"]=OverlayAppearance.From(settings)==saved && parent.IsVisible && !overlay.AppearanceEditing;
+                checks[$"integrated.{theme.Id}.cancelRestoresSavedSession"]=OverlayAppearance.From(settings)==saved && SettingsVisible() && !overlay.AppearanceEditing;
                 ShowAppearance();await Settle();editor=appearanceWindow!;Size(editor).Value=56;parent.SelectApplicationTab();await Settle();
                 checks[$"integrated.{theme.Id}.leavingPageCancelsDraft"]=OverlayAppearance.From(settings)==saved && appearanceWindow is null && !overlay.AppearanceEditing;
                 parent.SelectOverlayTab();await Settle();editor=appearanceWindow!;
-                foreach(double size in new[]{1120d,840d,640d})
+                foreach(double size in new[]{1120d,980d,820d})
                 {
-                    parent.Width=size;await Settle();
-                    checks[$"integrated.{theme.Id}.{size:0}.fitsSettingsViewport"]=editor.ActualWidth<=parent.ActualWidth-146 && editor.ActualWidth>=350;
+                    Width=size;await Settle();
+                    var bounds=editor.TransformToAncestor(embeddedPageHost).TransformBounds(new Rect(editor.RenderSize));
+                    checks[$"integrated.{theme.Id}.{size:0}.fitsSettingsViewport"]=SettingsVisible() && bounds.Left>=-.5 && bounds.Right<=embeddedPageHost.ActualWidth+.5 && editor.ActualWidth>=350;
                     var sectionTabs=Descendants<TabControl>(editor).Single();
                     checks[$"integrated.{theme.Id}.{size:0}.horizontalSectionsFit"]=sectionTabs.TabStripPlacement==Dock.Top && Descendants<TabItem>(sectionTabs).All(item=>item.ActualWidth>70 && item.ActualWidth<=sectionTabs.ActualWidth);
-                    if(size==640)VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-compact-{theme.Id}.png"),true);
+                    if(size==820)Capture($"settings-compact-{theme.Id}.png");
                 }
-                parent.Width=1120;await Settle();
-                VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-integrated-{theme.Id}.png"),true);
+                Width=1120;await Settle();
+                Capture($"settings-integrated-{theme.Id}.png");
                 parent.SelectLibraryTab();await Settle();
                 var library=parent.Library;library.SourcePath.Text="Apple Music / Library.musicdb（原创界面示例）";
                 var libraryCommands=Descendants<Button>(library).Select(b=>b.Content?.ToString()).ToHashSet();
-                checks[$"integrated.{theme.Id}.libraryManagementLivesInsideSettings"]=library.IsVisible && library.IsSubscribed && ReferenceEquals(Window.GetWindow(library),parent) && !Application.Current.Windows.OfType<LibraryWindow>().Any() && new[]{"刷新资料库清单","选择歌曲开始准备","暂停后台预缓存"}.All(libraryCommands.Contains);
-                VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-library-{theme.Id}.png"),true);
-                parent.Width=640;await Settle();
+                checks[$"integrated.{theme.Id}.libraryManagementLivesInsideSettings"]=library.IsVisible && library.IsSubscribed && ReferenceEquals(Window.GetWindow(library),this) && SettingsVisible() && !Application.Current.Windows.OfType<LibraryWindow>().Any() && new[]{"刷新资料库清单","选择歌曲开始准备","暂停后台预缓存"}.All(libraryCommands.Contains);
+                Capture($"settings-library-{theme.Id}.png");
+                Width=820;await Settle();
                 checks[$"integrated.{theme.Id}.compactLibraryControlsStayWithinViewport"]=Descendants<Button>(library).All(button=>{var rect=button.TransformToAncestor(library).TransformBounds(new Rect(button.RenderSize));return rect.Left>=0 && rect.Right<=library.ActualWidth+.5;});
-                VisualVerification.Save((FrameworkElement)parent.Content,Path.Combine(directory,$"settings-library-compact-{theme.Id}.png"),true);
-                parent.Width=1120;await Settle();
+                Capture($"settings-library-compact-{theme.Id}.png");
+                Width=1120;await Settle();
                 parent.SelectApplicationTab();await Settle();
                 checks[$"integrated.{theme.Id}.hiddenLibraryDetachesProgress"]=!library.IsSubscribed;
                 LibraryClicked(this,new());await Settle();
-                checks[$"integrated.{theme.Id}.cacheShortcutReusesSettings"]=ReferenceEquals(settingsWindow,parent) && parent.Library.IsVisible && parent.Library.IsSubscribed && Application.Current.Windows.OfType<SettingsWindow>().Count()==1;
-                parent.Close();await Settle();
+                checks[$"integrated.{theme.Id}.cacheShortcutReusesSettings"]=ReferenceEquals(settingsWindow,parent) && parent.Library.IsVisible && parent.Library.IsSubscribed && SettingsVisible() && !Application.Current.Windows.OfType<SettingsWindow>().Any(w=>w.IsVisible);
+                CloseEmbeddedPage();await Settle();
                 checks[$"integrated.{theme.Id}.closedLibraryDetachesProgress"]=!library.IsSubscribed;
                 checks[$"integrated.{theme.Id}.closingSettingsCleansPreview"]=appearanceWindow is null && !overlay.AppearanceEditing && !overlay.IsVisible && overlay.IsLocked;
             }
         }
         finally
         {
-            settingsWindow?.Close();settings.OverlayThemeProfiles=profiles;original.Apply(settings);settings.OverlayVisible=pref;
-            overlay.SetLocked(locked,false);overlay.ApplyStyle();if(visible)overlay.Show();else overlay.Hide();SelectUiTheme(app,false);coordinator.SaveSettings();
+            CloseEmbeddedPage();ShowLyricsPage();settings.OverlayThemeProfiles=profiles;original.Apply(settings);settings.OverlayVisible=pref;
+            overlay.SetLocked(locked,false);overlay.ApplyStyle();if(visible)overlay.Show();else overlay.Hide();SelectUiTheme(app,false);Width=originalWidth;Height=originalHeight;WindowState=originalState;coordinator.SaveSettings();await Settle();
         }
     }
 }

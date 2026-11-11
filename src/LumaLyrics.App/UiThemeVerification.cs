@@ -85,6 +85,10 @@ public partial class MainWindow
             await VerifyTrayIconAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
+        if(Environment.GetCommandLineArgs().Contains("--verify-integrated-appearance"))
+        {
+            await VerifyIntegratedAppearanceAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-responsive-layout"))
         {
             await VerifyResponsiveLayoutAsync(directory,checks);await VerifyIntegratedAppearanceAsync(directory,checks);

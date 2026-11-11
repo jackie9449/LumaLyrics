@@ -38,6 +38,7 @@ Copy-Item -LiteralPath docs/theme-memory.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/music-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/playback-controls.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/keyboard-shortcuts.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/interface-languages.md,docs/updates-2026-11-11.md,docs/development-log.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
 foreach($agentDocKind in @('specs','plans')){
@@ -95,12 +96,14 @@ Copy-Item -LiteralPath docs/screenshots-ui-v0180 -Destination $guide -Recurse -F
 Copy-Item -LiteralPath docs/verification-v0180 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v110 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-v120 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-wide-lyrics -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-existing-chinese -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-overlay-native-update -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-09-existing-chinese-filter.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-wide-lyrics.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-08-release-1.1.0.md -Destination (Join-Path $guide "superpowers/plans") -Force
+Copy-Item -LiteralPath docs/superpowers/plans/2026-11-11-release-1.2.0.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/verification-playlists -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-playlist-continuation -Destination $guide -Recurse -Force
 & "$PSScriptRoot/verify-distribution.ps1" -PackageDirectory $destination
