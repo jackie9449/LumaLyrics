@@ -29,17 +29,15 @@
 - Map covers through Apple Music persistent IDs and confirmed album references. Count high resolution from actual image dimensions, preserve usable fallbacks, and keep personal metadata, images and downloaded lyrics out of Git.
 - Keep personal data outside software directories and archives. Export readable personal lyrics/covers with consistent database snapshots; restore only into a new directory. Never replace existing personal files or silently create an empty profile when a selected location is unavailable. Validate distribution boundaries before creating a software ZIP.
 
-## Authorized GitHub synchronization
+## Local development records
 
-The repository owner explicitly requested that every subsequent update to this repository be committed and synchronized to GitHub.
+Keep development changes in local Git and record each completed task in [docs/development-log.md](docs/development-log.md). This workflow supersedes the GitHub synchronization instructions in earlier plans and handoff packages.
 
-1. Inspect working-tree changes and the remote head before editing or publishing. Preserve unrelated user work.
+1. Inspect the local branch, HEAD and working-tree changes before editing. Preserve unrelated user work.
 2. Implement the requested change, run relevant unit tests and UI verification, and update release notes or instructions when behavior changes.
-3. Use descriptive conventional commit messages. Exclude .tools, build outputs, local settings, media libraries, databases, credentials and private test data.
-4. Synchronize tested updates to jackie9449/LumaLyrics. The user's standing instruction authorizes ordinary commits and pushes for requested repository changes; do not stop to request the same permission again.
-5. Never force-push or overwrite newer remote changes. Use a checked expected SHA when updating a ref through GitHub tools. Integrate concurrent changes first.
-6. Honor branch protection. If direct updates are disallowed, push a feature branch and create a pull request, attach it to the task, and report the link.
-7. Verify the remote commit and source tree after synchronization. Report the actual commit or pull request URL and any remaining verification limits.
+3. Record the date, change summary, actual validation results and any remaining checks in the development log. Commit the log with the corresponding changes using a descriptive conventional commit message. Exclude .tools, build outputs, local settings, media libraries, databases, credentials and private test data.
+4. Verify the local commit and working-tree status. Report the commit SHA and any remaining verification limits.
+5. Keep routine development local. Configure a GitHub remote, fetch, push, open a pull request or publish a release only when explicitly requested for that task.
 
 ## Validation
 

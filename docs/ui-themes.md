@@ -88,4 +88,4 @@ $themeCheck = Join-Path $env:LOCALAPPDATA ("LumaLyrics-Checks/" + [guid]::NewGui
 
 实图：[主界面](screenshots-ui-v051/cover-liquid-warm.png)、[应用界面设置](screenshots-ui-v051/settings-liquid.png)、[悬浮歌词设置](screenshots-ui-v041/settings-overlay-liquid.png)、[独立外观编辑器](screenshots-ui-v041/appearance-liquid.png)。
 
-机器可读结果见 [ui-check.json](screenshots-ui-v051/ui-check.json)。后续提交、验证与 GitHub 同步规范记录在仓库根目录 [AGENTS.md](../AGENTS.md)。
+机器可读结果见 [ui-check.json](screenshots-ui-v051/ui-check.json)。后续提交、验证与本地开发记录的流程见仓库根目录 [AGENTS.md](../AGENTS.md)。

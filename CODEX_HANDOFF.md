@@ -1,32 +1,31 @@
 # 浮光歌词 · 换机开发接手说明
 
-更新日期：2026-11-11。适用于另一台 Windows 电脑上的 Codex 或其他本地开发 agent。本文替换旧的 2026-10-25 接手状态；旧说明仍可从 Git 历史查看。
+更新日期为 2026-11-11。适用于 Windows 上的本地开发。当前协作流程以本地 Git 和[开发记录](docs/development-log.md)为准。
 
 ## 1. 当前状态与本次交接范围
 
 | 项目 | 交接基线 |
 | --- | --- |
-| 仓库 | https://github.com/jackie9449/LumaLyrics |
+| 开发仓库 | 本地 `LumaLyrics` Git 仓库 |
 | 分支 | main |
-| 本文更新前的应用源码基线 | 2a5524269abda90fb040569d4465e1e16cad0e96 |
-| 远端核对 | 编写前已 fetch；本地与 origin/main 同为上述提交，工作区干净 |
+| 原交接包源码提交 | 571ba0e4f825ac5f953ff563ff5a14d06030a5c6 |
+| 交接运行包的应用源码基线 | 2a5524269abda90fb040569d4465e1e16cad0e96 |
 | 当前应用版本 | Directory.Build.props 中为 1.1.0 |
 | 最近正式版本 | v1.1.0；正式发布的源码基线为 5b711a0 |
 | 最新已测运行包 | LumaLyrics-1.1.0-ui-preview-overlay-native-update-win-x64.zip |
-| 运行包对应应用源码 | 2a5524269abda90fb040569d4465e1e16cad0e96；当前交接仅更新文档 |
 | 技术栈 | C# 14、.NET 10、WPF、WinForms 托盘、SQLite、GSMTC、FlaUI/UI Automation |
 | 系统目标 | Windows 10 2004 / build 19041 及以上或 Windows 11，x64 |
 | 开发 SDK | global.json 锁定 10.0.402，rollForward 为 latestPatch |
 
 本次用户明确选择：**只迁移开发工作，个人资料另行备份。** 工作包不含个人歌词、agent 译文、封面、设置、真实音乐库、账号凭据或私人现场诊断。无需为了接手扫描用户个人资料。
 
-本文会产生一个新的文档提交，工作包 manifest.json 记录其准确 SHA；恢复时保留此文档提交，不要把仓库退回上面的应用源码 SHA。GitHub 在交接后可能继续更新，开始工作前重新核对。
+工作包 `manifest.json` 记录原交接包的提交和源码树。日常开发从现有仓库的本地 `HEAD` 继续。换机时若要保留交接后的改动，应从当前仓库另存包含最新提交的 Git bundle。
 
-当前没有本轮尚未完成的产品开发指令。本轮完成文档和打包后，下一位 agent 应等待用户下一项具体需求；下文“尚未验证”表示验证边界，不是自动改功能或发布新版本的授权。
+本次仅交接开发工作。按用户接下来的具体需求继续，并在相关任务中复核下文列出的验证边界。
 
 ## 2. 工作包包含什么
 
-工作包顶层 START_HERE.md 是使用入口，说明适用于该次实际打包的文件和校验信息：
+工作包顶层 `START_HERE.md` 说明原包的文件和校验信息。恢复时采用下一节的本地流程。
 
 - source/：交接提交的完整 Git 跟踪文件快照，含源码、锁文件、脚本、AGENTS.md、本文件、说明、许可与公开验证材料。它不含 .git，适合先阅读；推荐通过 bundle 恢复 Git 仓库后开发。
 - history/LumaLyrics.bundle：main 的完整可达提交历史及 v1.0.0、v1.1.0 标签，可离线克隆。不是复制旧机 .git/config，不携带凭据、用户配置、hooks 或无关远端分支。
@@ -36,43 +35,33 @@
 
 不携带 .tools、bin、obj、TestResults、NuGet 缓存、旧预览、私人 QA、Apple 登录或 GitHub 凭据。**离线可以恢复仓库和运行现成程序；首次重新编译仍需另装匹配 SDK、联网恢复 NuGet，或自行准备对应离线开发依赖。** 不要把“带了运行时”误认为“带了 SDK”。
 
-## 3. 新电脑先做这几步
+## 3. 检查现有仓库或离线恢复
 
-1. 把整个外层 ZIP 和旁边的 .sha256 带到新电脑，校验 ZIP 散列，再完整解压到新目录。
-2. 阅读 START_HERE.md，运行 scripts/Verify-Handoff.ps1 核对工作包内所有文件。
-3. 使用 scripts/Restore-Repository.ps1 恢复到一个尚不存在的开发目录。不要覆盖已有仓库。助手把 origin 指回 GitHub，不自动联网拉取、不执行个人数据恢复。
-4. 打开恢复后的仓库，先读 AGENTS.md，再读本文件、README.md 和 docs/release-notes.md。
-5. 检查工作区和远端，安装 SDK，先构建与单元测试，再按下一项任务选择界面验证。
+如果已有开发仓库，先读 `AGENTS.md`、本文件、`README.md` 和 `docs/release-notes.md`。用 `git status --short --branch` 和 `git log -5 --oneline` 核对当前分支、提交及未提交改动，再按第 4 节检查开发环境。
 
-手动恢复的等价示例（先在解压后的工作包顶层打开 PowerShell；D: 路径可自行更换）：
+如果仅有原始交接包，先用旁边的 `.sha256` 核对外层 ZIP，完整解压到新目录，再在解压目录顶层打开 PowerShell。原包自带的恢复脚本沿用旧远端配置，下面的命令直接从包里的 bundle 恢复。
 
 ~~~powershell
 $handoffRoot = (Get-Location).Path
 $lumaDestination = 'D:\Work\LumaLyrics'
 if (Test-Path -LiteralPath $lumaDestination) { throw '目标已存在，请选择新的目录。' }
+& (Join-Path $handoffRoot 'scripts/Verify-Handoff.ps1')
+$lumaManifest = Get-Content -Raw -LiteralPath (Join-Path $handoffRoot 'manifest.json') | ConvertFrom-Json
 git clone --branch main (Join-Path $handoffRoot 'history/LumaLyrics.bundle') $lumaDestination
 if ($LASTEXITCODE -ne 0) { throw '克隆失败，保留现场，不要覆盖其它目录。' }
-git -C $lumaDestination remote set-url origin https://github.com/jackie9449/LumaLyrics.git
 Set-Location -LiteralPath $lumaDestination
-git status --short
-git log -5 --oneline
+if ((git rev-parse HEAD) -ne $lumaManifest.SourceCommit -or
+    (git rev-parse 'HEAD^{tree}') -ne $lumaManifest.SourceTree) {
+    throw '恢复后的提交或源码树与交接包不符。'
+}
+git remote remove origin
+if ($LASTEXITCODE -ne 0) { throw '无法移除克隆生成的 origin。' }
 git fsck --full
+if ($LASTEXITCODE -ne 0) { throw 'Git 对象校验失败。' }
+git status --short --branch
 ~~~
 
-如果不使用工作包，可直接从 GitHub 克隆，但必须确保已取得不早于本次交接提交的源码。联网后按下列顺序检查：
-
-~~~powershell
-git remote -v
-git branch --show-current
-git status --short
-git fetch origin --prune
-git log --oneline HEAD..origin/main
-git log --oneline origin/main..HEAD
-~~~
-
-远端领先且本地无修改、无分叉时，可 git pull --ff-only。出现分叉或用户改动时先检查再整合；不得 reset --hard、force-push 或覆盖新提交。离线时记录无法 fetch，继续本地阅读和验证，不把离线快照称作当前远端最新。
-
-GitHub 登录在新机重新配置，不复制旧机令牌或凭据存储。AGENTS.md 已持续授权请求范围内的普通提交与推送；直推受保护时走功能分支和 PR，不重复询问同一授权。
+原包恢复到 `571ba0e`，仍含当时的协作说明。继续本地开发时使用当前版 `AGENTS.md` 和开发记录，或从包含当前提交的新版 Git bundle 恢复。
 
 ## 4. 开发环境、构建与启动
 
@@ -201,10 +190,10 @@ Get-Content -LiteralPath "$lumaCheckRoot/report/ui-check.json"
 
 正式便携包入口为 scripts/publish.ps1；只有用户提出发布需求时执行正式发布。安装包需 Inno Setup 6.7+ 和 scripts/publish-installer.ps1；普通开发无需安装该工具。打包脚本依赖 SDK 的 host/fxr、Roslyn 和 Windows 的 .NET Framework reference 文件，不能拿现成运行包 runtime/dotnet.exe 当开发 SDK。
 
-产品变更后按范围构建、测试、更新说明，排除 .tools、生成物和个人内容，使用 conventional commit 并同步 jackie9449/LumaLyrics；不 force-push。复核远端提交和源码树，报告实际 SHA 或 PR 链接。
+产品变更后按范围构建、测试、更新说明，在[开发记录](docs/development-log.md)中记下改动、验证结果和待验证事项。用 conventional commit 将改动与记录一起提交到本地 Git，排除 `.tools`、生成物和个人内容。复核本地提交与工作区，报告实际 SHA。
 
 先前合规讨论只是历史分析和待决策建议，没有授权本次停用原词来源、自动下架 Release、改变项目许可或宣称整改已经完成。如用户另提该任务，再结合当时现行资料专项核查；旧记录可从 Git 历史中的 2026-10-25 CODEX_HANDOFF.md 查看。
 
 ## 10. 给新电脑 agent 的开场提示词
 
-> 请接手浮光歌词 Windows 项目。完整阅读 AGENTS.md、CODEX_HANDOFF.md、README.md 和最新 release notes；若从工作包开始，先读 START_HERE.md、校验文件，并从 Git bundle 恢复到新目录。核对 manifest 中提交、本地改动、origin/main、global.json 和 1.1.0 后续修复，不回退、不覆盖用户文件。配置 scripts/common.ps1 选择的 SDK，构建与测试；UI 检查使用软件目录外全新 --data-dir。旧机验证数字只作基线，原生单曲成功不代表专辑或队列均已实测。个人资料不在开发包中，不自动扫描或迁移。此次交接没有新增产品任务，请根据我接下来的具体需求继续；按 AGENTS.md 保存行为、记录真实验证和限制，提交同步 GitHub 并核对远端。不得自动发布、恢复已撤销的乐器实验或实施旧合规建议。
+> 请接手浮光歌词 Windows 项目。先读 AGENTS.md、CODEX_HANDOFF.md、README.md、最新 release notes 和本地开发记录。核对本地 HEAD、工作区、global.json 和 1.1.0 后续修复。若只有原交接包，按第 3 节校验并离线恢复到新目录。按任务范围构建与测试，UI 检查使用软件目录外全新的 --data-dir。旧机验证数字只作历史基线。个人资料另行迁移。后续按 AGENTS.md 记录实际验证结果，提交到本地 Git 并报告提交 SHA。
