@@ -19,19 +19,20 @@ public sealed class OverlayScreenLayoutTests
         Assert.Equal(-1370,centered.Left);Assert.Equal(box.Top,centered.Top);Assert.Equal(box.Height,centered.Height);
     }
     [Theory]
-    [InlineData(200,200,900,120)]
-    [InlineData(200,870,900,120)]
-    [InlineData(0,0,1200,1000)]
     [InlineData(0,0,360,100)]
     [InlineData(0,900,360,100)]
-    public void PopupsStayInsideWorkAreaWithoutOverlapping(double x,double y,double width,double height)
+    [InlineData(840,0,360,100)]
+    [InlineData(840,900,360,100)]
+    [InlineData(100,400,820,100)]
+    [InlineData(0,0,1200,1000)]
+    public void UnifiedToolbarIsContainedAndCentered(double x,double y,double width,double height)
     {
-        var area=new OverlayBounds(0,0,1200,1000);var surface=new OverlayBounds(x,y,width,height);
-        var (f,p)=OverlayScreenLayout.Controls(surface,new(0,0,520,44),new(0,0,154,56),area);
-        foreach(var box in new[]{f,p})Assert.True(box.Left>=area.Left&&box.Top>=area.Top&&box.Right<=area.Right&&box.Bottom<=area.Bottom);
-        Assert.False(f.Overlaps(p));
-        if(surface.Top==area.Top&&surface.Height<area.Height/2)Assert.False(f.Overlaps(surface));
-        if(surface.Bottom+62<=area.Bottom)Assert.Equal(surface.Bottom+6,p.Top);
-        else if(surface.Top>=62)Assert.Equal(surface.Top-62,p.Top);
+        var area=new OverlayBounds(0,0,1200,1000);
+        var surface=new OverlayBounds(x,y,width,height);
+        var result=OverlayScreenLayout.Toolbar(surface,new(0,0,Math.Min(720,width),110),area);
+        Assert.True(result.Left>=area.Left&&result.Top>=area.Top&&result.Right<=area.Right&&result.Bottom<=area.Bottom);
+        Assert.Equal(surface.Left+surface.Width/2,result.Left+result.Width/2);
+        if(y>=116)Assert.Equal(y-116,result.Top);
+        else if(surface.Bottom+116<=area.Bottom)Assert.Equal(surface.Bottom+6,result.Top);
     }
 }

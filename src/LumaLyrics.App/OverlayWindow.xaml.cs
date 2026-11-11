@@ -38,8 +38,7 @@ public partial class OverlayWindow : Window
     public OverlayWindow(MainWindow owner,PlayerViewModel vm,AppSettings settings,Func<string,Task>? transport=null)
     {
         InitializeComponent(); this.owner=owner; this.settings=settings;this.transport=transport??owner.ControlOverlayPlaybackAsync; DataContext=vm;backdrop=new(this);RefreshTranslationToggle();
-        ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>PlaceHoverPopup(false,popup,target);
-        PlaybackPopup.CustomPopupPlacementCallback=(popup,target,offset)=>PlaceHoverPopup(true,popup,target);
+        ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>PlaceHoverPopup(popup,target);
         foreach(var bar in new[]{Toolbar,PlaybackToolbar})
         {
             bar.PreviewKeyDown+=(_,e)=>{keyboardControls=true;if(e.Key==Key.Escape){HideHoverControls();e.Handled=true;}};
@@ -136,7 +135,7 @@ public partial class OverlayWindow : Window
         if(NativeWindow.Handle(this)!=0)NativeWindow.ClickThrough(this,IsLocked && !appearanceEditing || instrumental);
         UpdateAdaptiveText();
     }
-    internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen && !PlaybackPopup.IsOpen;
+    internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen;
     public void SetLocked(bool locked,bool showTip=true)
     {
         if(locked && !owner.CanRecoverOverlay) { MessageBox.Show("托盘暂不可用，无法安全锁定。请先重新连接托盘。","浮光歌词"); return; }
@@ -153,10 +152,10 @@ public partial class OverlayWindow : Window
         toolbarDelay.Stop();if(closed || !IsVisible || IsLocked || instrumental || appearanceEditing || interactiveMove)return;
         EnsureVisibleBounds();UpdateToolbarLimits();
         var animation=CurrentAppearance.Animations && !settings.ReduceMotion && SystemParameters.ClientAreaAnimation?System.Windows.Controls.Primitives.PopupAnimation.Fade:System.Windows.Controls.Primitives.PopupAnimation.None;
-        ToolbarPopup.PopupAnimation=PlaybackPopup.PopupAnimation=animation;
-        ToolbarPopup.IsOpen=PlaybackPopup.IsOpen=true;
+        ToolbarPopup.PopupAnimation=animation;
+        ToolbarPopup.IsOpen=true;
     }
-    internal void HideHoverControls(){toolbarDelay.Stop();keyboardControls=false;ToolbarPopup.IsOpen=PlaybackPopup.IsOpen=false;}
+    internal void HideHoverControls(){toolbarDelay.Stop();keyboardControls=false;ToolbarPopup.IsOpen=false;}
     async void TransportClicked(object sender,RoutedEventArgs e)
     {
         e.Handled=true;if(transportBusy || IsLocked || instrumental || appearanceEditing || sender is not System.Windows.Controls.Button{Tag:string action})return;

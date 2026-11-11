@@ -10,8 +10,7 @@ public partial class OverlayWindow
 {
     bool constraining;
     DispatcherOperation? geometryRefresh;
-    internal string FunctionPlacement {get;private set;}="";
-    internal string PlaybackPlacement {get;private set;}="";
+    internal string ToolbarPlacement {get;private set;}="";
     [StructLayout(LayoutKind.Sequential)]struct WindowPosition{public nint Window,After;public int X,Y,Width,Height;public uint Flags;}
     static OverlayBounds Box(System.Drawing.Rectangle r)=>new(r.Left,r.Top,r.Width,r.Height);
     void ConstrainPosition(nint address)
@@ -51,29 +50,28 @@ public partial class OverlayWindow
     void CenterClicked(object sender,RoutedEventArgs e){e.Handled=true;CenterHorizontally();}
     void UpdateToolbarLimits()
     {
-        var area=Screen.FromHandle(NativeWindow.Handle(this)).WorkingArea;var dpi=VisualTreeHelper.GetDpi(this);
-        foreach(var bar in new[]{Toolbar,PlaybackToolbar}){bar.MaxWidth=area.Width/dpi.DpiScaleX;bar.MaxHeight=area.Height/dpi.DpiScaleY;bar.Measure(new Size(bar.MaxWidth,bar.MaxHeight));}
+        var area=Screen.FromHandle(NativeWindow.Handle(this)).WorkingArea;
+        var dpi=VisualTreeHelper.GetDpi(this);
+        Toolbar.Width=Math.Min(720,Math.Min(LyricSurface.ActualWidth,area.Width/dpi.DpiScaleX));
+        Toolbar.MaxHeight=area.Height/dpi.DpiScaleY;
+        Toolbar.Measure(new Size(Toolbar.Width,Toolbar.MaxHeight));
     }
-    CustomPopupPlacement[] PlaceHoverPopup(bool playback,Size popup,Size target)
+    CustomPopupPlacement[] PlaceHoverPopup(Size popup,Size target)
     {
-        UpdateToolbarLimits();var area=Screen.FromHandle(NativeWindow.Handle(this)).WorkingArea;var dpi=VisualTreeHelper.GetDpi(LyricSurface);var origin=LyricSurface.PointToScreen(new());
-        // WPF supplies device-pixel sizes to custom popup placement. DesiredSize is
-        // still in DIPs; keep both popups and the monitor in the same physical space.
+        var area=Screen.FromHandle(NativeWindow.Handle(this)).WorkingArea;
+        var dpi=VisualTreeHelper.GetDpi(LyricSurface);
+        var origin=LyricSurface.PointToScreen(new());
+        // Custom popup placement sizes and screen coordinates are device pixels.
         var work=new OverlayBounds(area.Left-origin.X,area.Top-origin.Y,area.Width,area.Height);
-        var functions=playback?new Size(Toolbar.DesiredSize.Width*dpi.DpiScaleX,Toolbar.DesiredSize.Height*dpi.DpiScaleY):popup;
-        var transport=playback?popup:new Size(PlaybackToolbar.DesiredSize.Width*dpi.DpiScaleX,PlaybackToolbar.DesiredSize.Height*dpi.DpiScaleY);
-        var placedControls=OverlayScreenLayout.Controls(new(0,0,target.Width,target.Height),new(0,0,functions.Width,functions.Height),new(0,0,transport.Width,transport.Height),work,6*dpi.DpiScaleY);
-        var placement=playback?placedControls.Playback:placedControls.Functions;
-        string diagnostic=$"target={target};popup={popup};function={functions};playback={transport};origin={origin};work={work};placed={placement}";
-        if(playback)PlaybackPlacement=diagnostic;else FunctionPlacement=diagnostic;
+        var placement=OverlayScreenLayout.Toolbar(new(0,0,target.Width,target.Height),new(0,0,popup.Width,popup.Height),work,6*dpi.DpiScaleY);
+        ToolbarPlacement=$"target={target};popup={popup};origin={origin};work={work};placed={placement}";
         return[new(new Point(placement.Left,placement.Top),PopupPrimaryAxis.None)];
     }
     void RefreshPopupPlacement()
     {
-        foreach(var popup in new[]{ToolbarPopup,PlaybackPopup})if(popup.IsOpen)
-        {
-            // Re-evaluate custom placement after a native position change without changing its final offset.
-            double offset=popup.HorizontalOffset;popup.SetCurrentValue(Popup.HorizontalOffsetProperty,offset+.01);popup.SetCurrentValue(Popup.HorizontalOffsetProperty,offset);
-        }
+        if(!ToolbarPopup.IsOpen)return;
+        double offset=ToolbarPopup.HorizontalOffset;
+        ToolbarPopup.SetCurrentValue(Popup.HorizontalOffsetProperty,offset+.01);
+        ToolbarPopup.SetCurrentValue(Popup.HorizontalOffsetProperty,offset);
     }
 }

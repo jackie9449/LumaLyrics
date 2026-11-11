@@ -16,8 +16,9 @@
   <local:OverlaySurface x:Name="LyricSurface"/>
   <Popup x:Name="ToolbarPopup" Placement="Custom" PlacementTarget="{Binding ElementName=LyricSurface}" AllowsTransparency="True" StaysOpen="True" Focusable="False">
   <Border x:Name="Toolbar" CornerRadius="{DynamicResource OverlayToolbarRadius}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4" TextElement.FontFamily="{DynamicResource OverlayControlFont}" MouseEnter="ToolbarEntered" MouseLeave="ToolbarLeft">
-   <WrapPanel Orientation="Horizontal">
-    <TextBlock Text="拖动移动" FontSize="10" Foreground="{DynamicResource MutedBrush}" VerticalAlignment="Center" Margin="8,0,10,0"/>
+   <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+   <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
     <ToggleButton x:Name="ChineseTranslationToggle" Content="中文译文" AutomationProperties.Name="悬浮歌词中文译文开关" ToolTip="开启或关闭悬浮歌词的中文译文" FontSize="11" Padding="9,3" Margin="0,0,3,0" Checked="TranslationToggled" Unchecked="TranslationToggled">
      <ToggleButton.Style><Style TargetType="ToggleButton">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="{DynamicResource ControlBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="MinHeight" Value="32"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -37,15 +38,14 @@
      </Style></ToggleButton.Style>
     </ToggleButton>
     <Button x:Name="CenterButton" Content="居中" Style="{StaticResource FloatingAction}" ToolTip="仅横向居中，保持纵向位置" AutomationProperties.Name="悬浮歌词横向居中" Click="CenterClicked"/>
+   </WrapPanel>
+   <WrapPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
     <Button Content="外观" Style="{StaticResource FloatingAction}" Click="AppearanceClicked"/>
     <Button Content="锁定" Style="{StaticResource FloatingAction}" ToolTip="锁定并允许鼠标穿透；可从托盘解锁" Click="LockClicked"/>
     <Button Content="主窗口" Style="{StaticResource FloatingAction}" Click="MainClicked"/>
     <Button Content="×" Style="{StaticResource FloatingAction}" ToolTip="隐藏桌面歌词" Margin="0" Click="HideClicked"/>
    </WrapPanel>
-  </Border>
-  </Popup>
-  <Popup x:Name="PlaybackPopup" Placement="Custom" PlacementTarget="{Binding ElementName=LyricSurface}" AllowsTransparency="True" StaysOpen="True" Focusable="False">
-   <Border x:Name="PlaybackToolbar" CornerRadius="{DynamicResource OverlayToolbarRadius}" Background="{DynamicResource RaisedBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="5" MouseEnter="ToolbarEntered" MouseLeave="ToolbarLeft" KeyboardNavigation.TabNavigation="Cycle" DataContext="{Binding DataContext,ElementName=LyricSurface}">
+   <Border x:Name="PlaybackToolbar" Grid.Column="1" Background="Transparent" Padding="5" VerticalAlignment="Center" KeyboardNavigation.TabNavigation="Cycle" DataContext="{Binding DataContext,ElementName=LyricSurface}">
     <Border.Resources>
      <Style x:Key="FloatingTransport" TargetType="Button" BasedOn="{StaticResource FloatingAction}">
       <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="MinHeight" Value="0"/>
@@ -66,6 +66,8 @@
      <Button x:Name="OverlayNext" Style="{StaticResource FloatingTransport}" Content="&#xE893;" IsEnabled="{Binding CanNext}" ToolTip="下一曲" AutomationProperties.Name="悬浮歌词下一曲" Tag="next" Click="TransportClicked"/>
     </StackPanel>
    </Border>
+   </Grid>
+  </Border>
   </Popup>
  </Grid>
 </Window>
