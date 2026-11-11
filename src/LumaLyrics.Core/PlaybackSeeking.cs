@@ -6,13 +6,15 @@ public static class PlaybackSeeking
 {
     public static bool Available(PlaybackSnapshot? snapshot,bool nativeSeek=false)=>snapshot is {Status:PlayState.Playing or PlayState.Paused,Track.DurationMs:>0} && (snapshot.CanSeek || nativeSeek) && double.IsFinite(snapshot.Track.DurationMs.Value);
     public static bool SameRecording(PlaybackSnapshot expected,PlaybackSnapshot? actual)=>actual is not null && expected.SessionId==actual.SessionId && expected.Generation==actual.Generation && expected.Revision==actual.Revision && expected.Track.Fingerprint==actual.Track.Fingerprint;
-    public static bool MatchesNativeLabels(Track expected,string title,string details)
+    public static bool MatchesNativeRecording(Track expected,Track actual)
     {
-        if(string.IsNullOrWhiteSpace(expected.Title) || string.IsNullOrWhiteSpace(expected.Artist) || MatchRules.Normalize(title)!=MatchRules.Normalize(expected.Title))return false;
-        // WinUI's scrolling detail exposes artist + album, sometimes repeated for its
-        // scrolling copies. Accept only an exact complete label or its exact double.
-        string label=MatchRules.Normalize(expected.Artist+expected.Album),actual=MatchRules.Normalize(details);
-        return actual==label || actual==label+label;
+        // QueueCurrent has already split the native scrolling artist/album label.
+        // Compare those fields separately; passing only Artist to the old combined
+        // label check rejected every recording with a nonempty album.
+        return !string.IsNullOrWhiteSpace(expected.Title) && !string.IsNullOrWhiteSpace(expected.Artist)
+            && MatchRules.Normalize(actual.Title)==MatchRules.Normalize(expected.Title)
+            && MatchRules.Normalize(actual.Artist)==MatchRules.Normalize(expected.Artist)
+            && MatchRules.Normalize(actual.Album)==MatchRules.Normalize(expected.Album);
     }
     public static double? Target(PlaybackSnapshot? snapshot,double requested,bool nativeSeek=false)=>Available(snapshot,nativeSeek) && double.IsFinite(requested)?Math.Clamp(requested,0,snapshot!.Track.DurationMs!.Value):null;
     public static bool Confirmed(PlaybackSnapshot expected,PlaybackSnapshot? actual,double target,DateTimeOffset issued)

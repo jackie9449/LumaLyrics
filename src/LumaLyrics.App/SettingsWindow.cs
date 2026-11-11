@@ -78,8 +78,6 @@ public sealed class SettingsWindow : Window
         var reduce=DialogUi.Check(general,UiText.T("减少界面动画（含歌词切换）"),settings.ReduceMotion);
         var fade=DialogUi.Check(general,UiText.T("暂停 10 秒后淡出悬浮歌词"),settings.FadeOnPause);
         var offset=DialogUi.Field(general,UiText.T("全局歌词偏移（毫秒；正数延后，负数提前）"),settings.GlobalOffsetMs.ToString());
-        var toggle=DialogUi.Field(general,UiText.T("显示 / 隐藏快捷键"),settings.ToggleHotkey);
-        var unlock=DialogUi.Field(general,UiText.T("解锁快捷键"),settings.UnlockHotkey);
         bool originalStartup=StartupEnabled();
         var startup=DialogUi.Check(general,UiText.T("登录 Windows 时启动（默认关闭）"),originalStartup);
         DialogUi.Button(general,UiText.T("清理查词响应缓存（保留全部个人资料）"),()=>{coordinator.ClearCache();MessageBox.Show(Owner ?? this,UiText.T("查词响应缓存已清理。个人歌词、封面、绑定与校准均已保留。"));});
@@ -90,12 +88,13 @@ public sealed class SettingsWindow : Window
             catch(Exception ex){MessageBox.Show(Owner ?? this,UiText.T("开机启动保存失败：")+UiText.Status(ex.Message));return;}
             settings.AppleMusicOriginalLyrics=nativeOriginal.IsChecked==true;settings.OnlineLookup=online.IsChecked==true;settings.AutoPrefetchLibrary=prefetch.IsChecked==true;
             settings.CloseToTray=close.IsChecked==true;settings.ReduceMotion=reduce.IsChecked==true;settings.FadeOnPause=fade.IsChecked==true;
-            settings.GlobalOffsetMs=off;settings.ToggleHotkey=toggle.Text;settings.UnlockHotkey=unlock.Text;
+            settings.GlobalOffsetMs=off;
             AppMotion.Configure(settings.ReduceMotion);coordinator.SettingsChanged();coordinator.SaveSettings();Close();
         });
         save.SetResourceReference(StyleProperty,"PrimaryButton");tabs.Items.Add(Tab(UiText.T("常规"),general));
         PersonalLibrary=new(coordinator.DataRoot);tabs.Items.Add(Tab(UiText.T("个人资料"),PersonalLibrary));Closed+=(_,_)=>PersonalLibrary.Cancel();
         Library=new(coordinator);ChineseTranslations=Library.Display;tabs.Items.Add(new TabItem{Header=UiText.T("资料库与歌词"),Content=Library});Closed+=(_,_)=>Library.Dispose();
+        tabs.Items.Add(Tab(UiText.T("快捷键"),new HotkeySettingsPanel(coordinator,()=>Owner as MainWindow)));
         var done=new Button{Content=UiText.T("完成"),MinWidth=88,HorizontalAlignment=HorizontalAlignment.Right,Margin=new(0,20,0,0),IsCancel=true};
         done.Click+=(_,_)=>Close();Grid.SetRow(done,2);root.Children.Add(done);
         Loaded+=(_,_)=>{
@@ -137,6 +136,7 @@ public sealed class SettingsWindow : Window
     internal void SelectApplicationTheme(string id)=>themeChoices[AppThemes.Find(id).Id].IsChecked=true;
     internal void SelectApplicationTab()=>tabs.SelectedIndex=0;
     internal void SelectGeneralTab()=>tabs.SelectedIndex=2;
+    internal void SelectShortcutsTab()=>tabs.SelectedIndex=5;
     internal void SelectOverlayTab()=>tabs.SelectedIndex=1;
     internal void SelectPersonalTab()=>tabs.SelectedIndex=3;
     internal void SelectTranslationTab(){tabs.SelectedIndex=4;Library.Select(3);}

@@ -46,9 +46,9 @@ public partial class MainWindow
                     Width=width;await Settle();
                     string key=$"locale.main.{appTheme.Id}.{width:0}";
                     var controls=Bounds(PlaybackActions,this);var offsets=Bounds(OffsetActions,this);
-                    var selector=(ComboBox)ChineseScriptHost.Content;var selectorBounds=Bounds(selector,LyricContent);
+                    var selector=(ComboBox)ChineseScriptHost.Content;var selectorBounds=Bounds(selector,PlaybackFooter);
                     checks[key+".footerFits"]=controls.Right<=ActualWidth-3 && controls.Left>=0 && !controls.IntersectsWith(offsets);
-                    checks[key+".selectorFits"]=selectorBounds.Left>=0 && selectorBounds.Right<=LyricContent.ActualWidth+.5;
+                    checks[key+".selectorFits"]=!selector.IsVisible || selectorBounds.Left>=0 && selectorBounds.Right<=PlaybackFooter.ActualWidth+.5;
                     checks[key+".buttonLabelsFit"]=LabelsFit(LyricsPage);
                     if(width==820 || appTheme.Id=="liquid" && width==1220)VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"locale-main-{appTheme.Id}-{width:0}.png"),true);
                 }
@@ -62,12 +62,12 @@ public partial class MainWindow
             languagePanel.Selector.SelectedValue=language=="en"?"ja":"en";await Settle();
             checks["locale.preferenceSavedForRestart"]=store.Load().UiLanguage==(language=="en"?"ja":"en") && UiText.Language==language;
             languagePanel.Selector.SelectedValue=language;await Settle();
-            foreach(var (name,select) in new (string,Action)[]{("application",()=>settingsWindow!.SelectApplicationTab()),("general",()=>settingsWindow!.SelectGeneralTab()),("appearance",()=>settingsWindow!.SelectOverlayTab()),("personal",()=>settingsWindow!.SelectPersonalTab()),("library",()=>settingsWindow!.SelectLibraryTab()),("songs",()=>settingsWindow!.SelectLibrarySongs()),("tasks",()=>settingsWindow!.SelectLibraryTasks()),("display",()=>settingsWindow!.SelectTranslationTab())})
+            foreach(var (name,select) in new (string,Action)[]{("application",()=>settingsWindow!.SelectApplicationTab()),("general",()=>settingsWindow!.SelectGeneralTab()),("appearance",()=>settingsWindow!.SelectOverlayTab()),("personal",()=>settingsWindow!.SelectPersonalTab()),("library",()=>settingsWindow!.SelectLibraryTab()),("songs",()=>settingsWindow!.SelectLibrarySongs()),("tasks",()=>settingsWindow!.SelectLibraryTasks()),("display",()=>settingsWindow!.SelectTranslationTab()),("shortcuts",()=>settingsWindow!.SelectShortcutsTab())})
             {
                 select();await Settle();checks["locale.settings."+name+".labelsFit"]=LabelsFit(embeddedPageHost);
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-settings-"+name+".png"),true);
                 Width=820;await Settle();checks["locale.settings."+name+".narrowLabelsFit"]=LabelsFit(embeddedPageHost);
-                if(name is "application" or "general" or "appearance")VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-settings-"+name+"-820.png"),true);
+                if(name is "application" or "general" or "appearance" or "shortcuts")VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-settings-"+name+"-820.png"),true);
                 Width=1220;await Settle();
             }
             ShowLyricsPage();await Settle();

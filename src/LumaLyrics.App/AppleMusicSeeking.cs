@@ -32,7 +32,7 @@ internal static partial class AppleMusicLibraryHandoff
                 if(!target.HasValue)return PlaybackSeeking.SameRecording(expected,latest());
                 var current=QueueCurrent(root);
                 trace?.Invoke("seekNativeRecording",new{current,expected=expected.Track});
-                if(current is null || !PlaybackSeeking.MatchesNativeLabels(expected.Track,current.Title,current.Artist))return false;
+                if(current is null || !PlaybackSeeking.MatchesNativeRecording(expected.Track,current))return false;
                 bounded.Token.ThrowIfCancellationRequested();
                 if(!PlaybackSeeking.SameRecording(expected,latest()) || !CanUseSeekControl(controls[0],expected))return false;
                 var seconds=Math.Clamp(target.Value/1000,0,controls[0].Patterns.RangeValue.Pattern.Maximum.Value);

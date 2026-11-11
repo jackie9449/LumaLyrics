@@ -16,6 +16,18 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-seek-input"))
+        {
+            await VerifySeekInputAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--verify-interaction-updates"))
+        {
+            await VerifyInteractionUpdatesAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
+        if(Environment.GetCommandLineArgs().Contains("--verify-shortcut-input"))
+        {
+            await VerifyGlobalShortcutInputAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-localization"))
         {
             await VerifyLocalizationAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;

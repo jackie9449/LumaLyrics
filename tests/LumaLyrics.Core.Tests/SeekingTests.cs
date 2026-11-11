@@ -3,10 +3,14 @@ namespace LumaLyrics.Core.Tests;
 
 public class SeekingTests
 {
-    [Fact] public void NativeScrollingLabelRequiresExactArtistAndAlbumIncludingRepeatedCopies()
+    [Fact] public void ParsedNativeRecordingRequiresExactTitleArtistAndAlbum()
     {
         var track=new Track("原创录音","演示歌手","演示专辑",180000);
-        Assert.True(PlaybackSeeking.MatchesNativeLabels(track,track.Title,"演示歌手 — 演示专辑"));Assert.True(PlaybackSeeking.MatchesNativeLabels(track,track.Title,"演示歌手 — 演示专辑 演示歌手 — 演示专辑"));Assert.False(PlaybackSeeking.MatchesNativeLabels(track,track.Title,"演示歌手 — 其他专辑"));Assert.False(PlaybackSeeking.MatchesNativeLabels(track,track.Title,"演示歌手"));Assert.False(PlaybackSeeking.MatchesNativeLabels(track,"另一个录音","演示歌手 — 演示专辑"));
+        Assert.True(PlaybackSeeking.MatchesNativeRecording(track,track with{DurationMs=null}));
+        Assert.False(PlaybackSeeking.MatchesNativeRecording(track,track with{Album="其他专辑"}));
+        Assert.False(PlaybackSeeking.MatchesNativeRecording(track,track with{Album=""}));
+        Assert.False(PlaybackSeeking.MatchesNativeRecording(track,track with{Artist="其他歌手"}));
+        Assert.False(PlaybackSeeking.MatchesNativeRecording(track,track with{Title="另一个录音"}));
     }
     static PlaybackSnapshot Snapshot()=>new("AppleMusic",1,2,new("原创录音","演示","示例专辑",180000),PlayState.Playing,1,10000,DateTimeOffset.UtcNow.AddSeconds(-1),DateTimeOffset.UtcNow,0,PositionQuality.Estimated,CanSeek:true);
     [Theory][InlineData(-100,0)][InlineData(250000,180000)][InlineData(32500,32500)]

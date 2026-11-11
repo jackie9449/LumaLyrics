@@ -35,6 +35,7 @@ public partial class MainWindow : Window
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
         BrandLatinSuffix.Visibility=UiText.Language is "en" or "ja"?Visibility.Collapsed:Visibility.Visible;
         ChineseScriptHost.Content=ChineseScriptDisplay.CreateSelector(coordinator);
+        FooterActions.SizeChanged+=(_,_)=>ApplyFooterLayout();
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
         ArtworkMat.SizeChanged+=(_,_)=>ClipArtwork();
@@ -95,7 +96,7 @@ public partial class MainWindow : Window
             catch(Exception ex){store.Log("UI verification: "+ex);Directory.CreateDirectory(startupArgs[uiArg+1]);File.WriteAllText(Path.Combine(startupArgs[uiArg+1],"failure.txt"),ex.ToString());}
             if(startupArgs.Contains("--exit-after-capture"))await QuitAsync();return;
         }
-        SetupTray(); hotkeys=new(this,id=>{if(id==1)ToggleOverlay();else {if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);}});
+        SetupTray();
         RegisterHotkeys(); if(settings.OverlayVisible)overlay.Show();
         try { await coordinator.StartAsync(); } catch(Exception ex) { vm.Status=UiText.T("连接失败，可在诊断页重新连接");store.Log("Start: "+ex.Message); }
         playbackSidebar.Enable();
@@ -134,7 +135,6 @@ public partial class MainWindow : Window
         if(previous is not null){previous.Visible=false;var menu=previous.ContextMenuStrip;previous.Dispose();menu?.Dispose();}
         trayIcon?.Dispose();trayIcon=null;
     }
-    void RegisterHotkeys() { hotkeyError=hotkeys?.Register(settings.ToggleHotkey,settings.UnlockHotkey);if(!string.IsNullOrEmpty(hotkeyError) && !Environment.GetCommandLineArgs().Contains("--capture-dir"))MessageBox.Show(this,UiText.Status(hotkeyError)+UiText.T("。仍可通过托盘解锁。"),UiText.T("快捷键提示")); }
     void Update()
     {
         var s=coordinator.Snapshot;
@@ -147,6 +147,8 @@ public partial class MainWindow : Window
         vm.LyricStatus=DisplayLyricsStatus();vm.Duration=s?.Track.DurationMs is >0 and var duration && double.IsFinite(duration)?duration:1;
         overlay.RefreshTranslationToggle();
         RefreshMainTranslationToggle();
+        ChineseScriptHost.Visibility=ChineseScriptVisibility.ShouldShow(coordinator.Document,settings.ShowChineseTranslation,settings.OverlayShowChineseTranslation)?Visibility.Visible:Visibility.Collapsed;
+        ApplyFooterLayout();
         vm.Library=UiText.Status(coordinator.LibraryStatus.ToString())+"\n"+UiText.Status(coordinator.ArtworkStatus.ToString());
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);

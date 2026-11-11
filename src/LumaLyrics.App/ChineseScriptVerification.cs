@@ -72,9 +72,9 @@ public partial class MainWindow
                 foreach(double targetWidth in new[]{1220d,980d,820d})
                 {
                     Width=targetWidth;await Settle();Activate();
-                    var bounds=choice.TransformToAncestor(LyricContent).TransformBounds(new Rect(choice.RenderSize));
+                    var bounds=choice.TransformToAncestor(PlaybackFooter).TransformBounds(new Rect(choice.RenderSize));
                     string key=$"chineseScript.selector.{app.Id}.{targetWidth:0}";
-                    checks[key+".fitsLyricHeader"]=choice.IsVisible && choice.ActualWidth>=120 && bounds.Left>=0 && bounds.Top>=0 && bounds.Right<=LyricContent.ActualWidth+.5 && bounds.Bottom<=LyricContent.ActualHeight;
+                    checks[key+".fitsPlaybackFooter"]=choice.IsVisible && choice.ActualWidth>=120 && bounds.Left>=0 && bounds.Top>=0 && bounds.Right<=PlaybackFooter.ActualWidth+.5 && bounds.Bottom<=PlaybackFooter.ActualHeight;
                     checks[key+".keyboardFocus"]=choice.Focus() && choice.IsKeyboardFocusWithin;
                     choice.IsDropDownOpen=true;await Settle();
                     var popup=choice.Template.FindName("PART_Popup",choice) as Popup;

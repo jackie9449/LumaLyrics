@@ -53,6 +53,7 @@ public sealed class AppSettings
     public bool FadeOnPause { get; set; }
     public string ToggleHotkey { get; set; } = "Ctrl+Alt+L";
     public string UnlockHotkey { get; set; } = "Ctrl+Alt+U";
+    public Dictionary<string,string> Shortcuts { get; set; } = new();
     public string? PreferredSession { get; set; }
 }
 public sealed class SettingsStore

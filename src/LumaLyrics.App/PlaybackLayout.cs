@@ -51,6 +51,7 @@ public partial class MainWindow
         LyricContent.Margin=new(lyricInset,22,lyricInset,20);
         EmptyState.MaxWidth=compact?460:390;
         EmptyState.LayoutTransform=new ScaleTransform(compact?.68:1,compact?.68:1);
+        ApplyFooterLayout();
         // One refresh per render frame during native sizing; never queue a scroll for every mouse event.
         if(resizeRefresh is not {Status:DispatcherOperationStatus.Pending})
             resizeRefresh=Dispatcher.BeginInvoke(DispatcherPriority.Render,()=>{
@@ -58,5 +59,14 @@ public partial class MainWindow
                 StyleLyricLines(-1,currentIndex);
                 if(currentIndex>=0 && DateTime.UtcNow>=manualUntil)CenterLine(true);
             });
+    }
+    void ApplyFooterLayout()
+    {
+        if(FooterActions is null || FooterActions.ActualWidth<=0)return;
+        var space=new Size(double.PositiveInfinity,double.PositiveInfinity);
+        OffsetActions.Measure(space);ChineseScriptHost.Measure(space);PlaybackActions.Measure(space);
+        bool stacked=OffsetActions.DesiredSize.Width+ChineseScriptHost.DesiredSize.Width+PlaybackActions.DesiredSize.Width+8>FooterActions.ActualWidth;
+        Grid.SetRow(PlaybackActions,stacked?1:0);Grid.SetColumn(PlaybackActions,stacked?0:2);Grid.SetColumnSpan(PlaybackActions,stacked?3:1);
+        PlaybackActions.HorizontalAlignment=HorizontalAlignment.Right;PlaybackActions.Margin=stacked?new Thickness(0,8,0,0):new Thickness(0);
     }
 }

@@ -38,22 +38,3 @@ internal static class NativeWindow
     }
     public static void ClampVisible(Window w) { var p=Location(w); Place(w,p.Left,p.Top); }
 }
-internal sealed class Hotkeys : IDisposable
-{
-    readonly nint handle; readonly HwndSource source; readonly Action<int> action;
-    public Hotkeys(Window window,Action<int> action) { handle=NativeWindow.Handle(window); source=HwndSource.FromHwnd(handle); this.action=action; source.AddHook(Hook); }
-    public string Register(string toggle,string unlock)
-    {
-        NativeWindow.UnregisterHotKey(handle,1); NativeWindow.UnregisterHotKey(handle,2);
-        var errors=new List<string>();
-        if (!RegisterOne(1,toggle)) errors.Add($"显示快捷键 {toggle} 注册失败或已占用");
-        if (!RegisterOne(2,unlock)) errors.Add($"解锁快捷键 {unlock} 注册失败或已占用");
-        return string.Join("；",errors);
-    }
-    bool RegisterOne(int id,string value)
-    {
-        try { var gesture=(System.Windows.Input.KeyGesture)new System.Windows.Input.KeyGestureConverter().ConvertFromInvariantString(value)!; uint mod=0x4000; if(gesture.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Control))mod|=2; if(gesture.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Alt))mod|=1; if(gesture.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift))mod|=4; if(gesture.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Windows))return false; return NativeWindow.RegisterHotKey(handle,id,mod,(uint)System.Windows.Input.KeyInterop.VirtualKeyFromKey(gesture.Key)); } catch { return false; }
-    }
-    nint Hook(nint h,int msg,nint w,nint l,ref bool handled) { if(msg==0x312) { action((int)w); handled=true; } return 0; }
-    public void Dispose() { NativeWindow.UnregisterHotKey(handle,1); NativeWindow.UnregisterHotKey(handle,2); source.RemoveHook(Hook); }
-}
