@@ -52,7 +52,7 @@ public partial class OverlayWindow
     {
         var area=Screen.FromHandle(NativeWindow.Handle(this)).WorkingArea;
         var dpi=VisualTreeHelper.GetDpi(this);
-        Toolbar.Width=Math.Min(720,Math.Min(LyricSurface.ActualWidth,area.Width/dpi.DpiScaleX));
+        Toolbar.Width=Math.Min(480,Math.Min(LyricSurface.ActualWidth,area.Width/dpi.DpiScaleX));
         Toolbar.MaxHeight=area.Height/dpi.DpiScaleY;
         Toolbar.Measure(new Size(Toolbar.Width,Toolbar.MaxHeight));
     }

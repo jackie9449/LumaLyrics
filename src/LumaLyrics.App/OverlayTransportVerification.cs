@@ -134,18 +134,37 @@ public partial class MainWindow
             checks["overlayTransport.reducedMotionState"]=$"enabled={AppMotion.GetAnimationsEnabled(floating.OverlayNext)},hover={AppMotion.GetHover(floating.OverlayNext)},pressed={AppMotion.GetPressed(floating.OverlayNext)},clocks={floating.OverlayNext.HasAnimatedProperties},scope={AppMotion.GetEnabled(floating.OverlayNext)},loaded={floating.OverlayNext.IsLoaded},visible={floating.OverlayNext.IsVisible},usable={floating.OverlayNext.IsEnabled},open={floating.ToolbarPopup.IsOpen}";
             checks["overlayTransport.reducedMotionFeedbackIsImmediate"]=AppMotion.GetHover(floating.OverlayNext)==1 && AppMotion.GetPressed(floating.OverlayNext)==1 && !floating.OverlayNext.HasAnimatedProperties;
             AppMotion.PreviewFeedback(floating.OverlayNext,false);
-            string paint=floating.Toolbar.Background.ToString();
-            foreach(var app in AppThemes.All){SelectUiTheme(app.Id,false);checks[$"overlayTransport.{app.Id}.independentAppearance"]=floating.Toolbar.Background.ToString()==paint;}
+            string SurfacePixels()
+            {
+                var bitmap=VisualVerification.Render(floating.ToolbarMaterial);
+                var pixels=new byte[bitmap.PixelWidth*bitmap.PixelHeight*4];
+                bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);
+                return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(pixels));
+            }
+            string paint=SurfacePixels();
+            foreach(var app in AppThemes.All){SelectUiTheme(app.Id,false);checks[$"overlayTransport.{app.Id}.independentAppearance"]=SurfacePixels()==paint;}
+            var gallery=new System.Windows.Controls.Primitives.UniformGrid{Columns=2,Background=new SolidColorBrush(Color.FromRgb(26,29,35))};
             foreach(var overlayTheme in OverlayThemes.All)
             {
-                (overlayTheme.Appearance with{Width=820,Background="#342545",Color="#F1EEE8",Accent="#F8A84A"}).Apply(appearance);floating.ApplyStyle();await Settle();floating.ShowHoverControls();await Settle();
-                checks[$"overlayTransport.{overlayTheme.Tag}.customToolbarPalette"]=floating.Toolbar.Background.ToString()=="#FF342545" && floating.PlaybackToolbar.Background.ToString()=="#00FFFFFF" && floating.CenterButton.Foreground.ToString()=="#FFF1EEE8" && floating.FindResource("AccentBrush").ToString()=="#FFF8A84A";
+                (overlayTheme.Appearance with{Width=820,AdaptiveContrast=false}).Apply(appearance);floating.ApplyStyle();await Settle();floating.ShowHoverControls();await Settle();
+                string originalMaterial=SurfacePixels();
+                var sample=new StackPanel{Margin=new(20)};
+                sample.Children.Add(new TextBlock{Text=overlayTheme.Name,FontSize=13,Foreground=Brushes.WhiteSmoke,Margin=new(0,0,0,12)});
+                sample.Children.Add(new Image{Source=VisualVerification.Render(floating.Toolbar),Width=480});gallery.Children.Add(sample);
+                CaptureControls($"floating-theme-{overlayTheme.Tag.ToLowerInvariant()}.png");
+                (overlayTheme.Appearance with{Width=820,Background="#342545",Color="#F1EEE8",Accent="#F8A84A",CornerRatio=.72,Opacity=.72,Border=true}).Apply(appearance);floating.ApplyStyle();await Settle();floating.ShowHoverControls();await Settle();
+                checks[$"overlayTransport.{overlayTheme.Tag}.customToolbarPalette"]=originalMaterial!=SurfacePixels() && floating.CenterButton.Foreground.ToString()=="#FFF1EEE8" && floating.OverlayPlayPause.Background.ToString()=="#FFF8A84A";
+                string customized=SurfacePixels();
+                (OverlayAppearance.From(appearance) with{Opacity=0,CornerRatio=0,Border=false}).Apply(appearance);floating.ApplyStyle();await Settle();
+                checks[$"overlayTransport.{overlayTheme.Tag}.customShapeAndOpacity"]=SurfacePixels()!=customized && ((CornerRadius)floating.FindResource("OverlayControlRadius")).TopLeft==0;
                 if(overlayTheme.Tag is "PAPER" or "GLASS")
                 {
                     (overlayTheme.Appearance with{Width=820,AdaptiveContrast=false}).Apply(appearance);floating.ApplyStyle();await Settle();floating.HideHoverControls();NativeWindow.Place(floating,monitor.Left+140,monitor.Bottom-floating.ActualHeight*dpi.DpiScaleY-2);floating.ShowHoverControls();await Settle();
                     CaptureControls($"floating-bottom-{overlayTheme.Tag.ToLowerInvariant()}.png");
                 }
             }
+            gallery.Measure(new Size(1040,double.PositiveInfinity));gallery.Arrange(new Rect(new Point(),gallery.DesiredSize));
+            VisualVerification.Save(gallery,Path.Combine(directory,"toolbar-theme-gallery.png"));
             text.IsPlaying=true;floating.ShowHoverControls();await Settle();
             var preview=new StackPanel{Margin=new(26)};
             preview.Children.Add(new TextBlock{Text="未锁定 · 悬停播放控制",Foreground=Brushes.WhiteSmoke,FontSize=15,Margin=new(0,0,0,16)});

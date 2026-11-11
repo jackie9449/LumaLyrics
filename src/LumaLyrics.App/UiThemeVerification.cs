@@ -52,6 +52,7 @@ public partial class MainWindow
         if(Environment.GetCommandLineArgs().Contains("--verify-overlay-transport"))
         {
             await VerifyOverlayTransportAsync(directory,checks);
+            await VerifyThemeProfilesAsync(directory,checks);
             File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
         }
         if(Environment.GetCommandLineArgs().Contains("--verify-theme-collection"))

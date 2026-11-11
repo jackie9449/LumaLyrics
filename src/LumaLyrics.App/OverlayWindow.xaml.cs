@@ -39,6 +39,10 @@ public partial class OverlayWindow : Window
     {
         InitializeComponent(); this.owner=owner; this.settings=settings;this.transport=transport??owner.ControlOverlayPlaybackAsync; DataContext=vm;backdrop=new(this);RefreshTranslationToggle();
         ToolbarPopup.CustomPopupPlacementCallback=(popup,target,offset)=>PlaceHoverPopup(popup,target);
+        Toolbar.MouseMove+=(_,e)=>{
+            var point=e.GetPosition(Toolbar);
+            ToolbarMaterial.SetInteraction(new(point.X/Math.Max(1,Toolbar.ActualWidth),point.Y/Math.Max(1,Toolbar.ActualHeight)),true);
+        };
         foreach(var bar in new[]{Toolbar,PlaybackToolbar})
         {
             bar.PreviewKeyDown+=(_,e)=>{keyboardControls=true;if(e.Key==Key.Escape){HideHoverControls();e.Handled=true;}};
@@ -81,6 +85,8 @@ public partial class OverlayWindow : Window
         ThemeManager.ApplyOverlayResources(this,a);
         ThemeManager.ApplyOverlayResources(Toolbar,a);
         ThemeManager.ApplyOverlayResources(PlaybackToolbar,a);
+        // The control surface retains a readable tint even for transparent lyrics.
+        ToolbarMaterial.Apply(a with{Transparent=false,Opacity=.82+.18*a.Opacity,Material=a.Transparent?"card":a.Material},settings.ReduceMotion);
         AppMotion.SetEnabled(Toolbar,true);
         AppMotion.SetAnimationsEnabled(Toolbar,a.Animations&&!settings.ReduceMotion && SystemParameters.ClientAreaAnimation);
         AppMotion.SetEnabled(PlaybackToolbar,true);
@@ -164,7 +170,7 @@ public partial class OverlayWindow : Window
         finally{transportBusy=false;PlaybackToolbar.IsEnabled=true;}
     }
     void ToolbarEntered(object s,System.Windows.Input.MouseEventArgs e)=>toolbarDelay.Stop();
-    void ToolbarLeft(object s,System.Windows.Input.MouseEventArgs e)=>toolbarDelay.Start();
+    void ToolbarLeft(object s,System.Windows.Input.MouseEventArgs e){ToolbarMaterial.SetInteraction(new(.25,0),false);toolbarDelay.Start();}
     void RememberPosition(){var p=NativeWindow.Location(this);settings.OverlayLeft=p.Left;settings.OverlayTop=p.Top;}
     double DefaultBottomInset()
     {
