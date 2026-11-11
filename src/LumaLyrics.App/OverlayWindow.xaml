@@ -1,5 +1,5 @@
 <Window x:Class="LumaLyrics.App.OverlayWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:LumaLyrics.App"
- Title="浮光歌词 · 桌面歌词" Width="820" SizeToContent="Height" MinWidth="360" MinHeight="90" MaxHeight="640" WindowStyle="None" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowActivated="False" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip">
+ Title="{local:Loc Text='浮光歌词 · 桌面歌词'}" Width="820" SizeToContent="Height" MinWidth="360" MinHeight="90" MaxHeight="640" WindowStyle="None" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowActivated="False" ShowInTaskbar="False" ResizeMode="CanResizeWithGrip">
  <Window.Resources>
   <Style x:Key="FloatingAction" TargetType="Button">
    <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/><Setter Property="Width" Value="32"/><Setter Property="Height" Value="32"/><Setter Property="FontFamily" Value="Segoe MDL2 Assets"/><Setter Property="MinHeight" Value="32"/><Setter Property="FontSize" Value="14"/><Setter Property="Margin" Value="2"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -21,7 +21,7 @@
    <Grid Margin="10,6">
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-    <ToggleButton x:Name="ChineseTranslationToggle" Content="译" AutomationProperties.Name="悬浮歌词中文译文开关" ToolTip="开启或关闭悬浮歌词的中文译文" FontSize="13" FontWeight="Medium" Width="32" Height="32" Padding="0" Margin="2" Checked="TranslationToggled" Unchecked="TranslationToggled">
+    <ToggleButton x:Name="ChineseTranslationToggle" Content="{local:Loc Text='译'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词中文译文开关'}" ToolTip="{local:Loc Text='开启或关闭悬浮歌词的中文译文'}" FontSize="13" FontWeight="Medium" Width="32" Height="32" Padding="0" Margin="2" Checked="TranslationToggled" Unchecked="TranslationToggled">
      <ToggleButton.Style><Style TargetType="ToggleButton">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="MinHeight" Value="32"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
@@ -39,13 +39,13 @@
       </ControlTemplate></Setter.Value></Setter>
      </Style></ToggleButton.Style>
     </ToggleButton>
-    <Button x:Name="CenterButton" Content="&#xE8E3;" Style="{StaticResource FloatingAction}" ToolTip="仅横向居中，保持纵向位置" AutomationProperties.Name="悬浮歌词横向居中" Click="CenterClicked"/>
+    <Button x:Name="CenterButton" Content="&#xE8E3;" Style="{StaticResource FloatingAction}" ToolTip="{local:Loc Text='仅横向居中，保持纵向位置'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词横向居中'}" Click="CenterClicked"/>
    </WrapPanel>
    <WrapPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-    <Button Content="&#xE790;" ToolTip="调整悬浮外观" AutomationProperties.Name="调整悬浮外观" Style="{StaticResource FloatingAction}" Click="AppearanceClicked"/>
-    <Button Content="&#xE72E;" AutomationProperties.Name="锁定悬浮歌词" Style="{StaticResource FloatingAction}" ToolTip="锁定并允许鼠标穿透；可从托盘解锁" Click="LockClicked"/>
-    <Button Content="&#xE80F;" ToolTip="打开主窗口" AutomationProperties.Name="打开主窗口" Style="{StaticResource FloatingAction}" Click="MainClicked"/>
-    <Button Content="&#xE8BB;" AutomationProperties.Name="隐藏桌面歌词" Style="{StaticResource FloatingAction}" ToolTip="隐藏桌面歌词" Margin="2" Click="HideClicked"/>
+    <Button Content="&#xE790;" ToolTip="{local:Loc Text='调整悬浮外观'}" AutomationProperties.Name="{local:Loc Text='调整悬浮外观'}" Style="{StaticResource FloatingAction}" Click="AppearanceClicked"/>
+    <Button Content="&#xE72E;" AutomationProperties.Name="{local:Loc Text='锁定悬浮歌词'}" Style="{StaticResource FloatingAction}" ToolTip="{local:Loc Text='锁定并允许鼠标穿透；可从托盘解锁'}" Click="LockClicked"/>
+    <Button Content="&#xE80F;" ToolTip="{local:Loc Text='打开主窗口'}" AutomationProperties.Name="{local:Loc Text='打开主窗口'}" Style="{StaticResource FloatingAction}" Click="MainClicked"/>
+    <Button Content="&#xE8BB;" AutomationProperties.Name="{local:Loc Text='隐藏桌面歌词'}" Style="{StaticResource FloatingAction}" ToolTip="{local:Loc Text='隐藏桌面歌词'}" Margin="2" Click="HideClicked"/>
    </WrapPanel>
    <Border x:Name="PlaybackToolbar" Grid.Column="1" Background="Transparent" Padding="5" VerticalAlignment="Center" KeyboardNavigation.TabNavigation="Cycle" DataContext="{Binding DataContext,ElementName=LyricSurface}">
     <Border.Resources>
@@ -63,9 +63,9 @@
      </Style>
     </Border.Resources>
     <StackPanel Orientation="Horizontal">
-     <Button x:Name="OverlayPrevious" Style="{StaticResource FloatingTransport}" Content="&#xE892;" IsEnabled="{Binding CanPrevious}" ToolTip="上一曲" AutomationProperties.Name="悬浮歌词上一曲" Tag="previous" Click="TransportClicked"/>
+     <Button x:Name="OverlayPrevious" Style="{StaticResource FloatingTransport}" Content="&#xE892;" IsEnabled="{Binding CanPrevious}" ToolTip="{local:Loc Text='上一曲'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词上一曲'}" Tag="previous" Click="TransportClicked"/>
      <Button x:Name="OverlayPlayPause" Style="{StaticResource FloatingTransport}" Content="{Binding PlayGlyph}" IsEnabled="{Binding CanPlay}" Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource AccentTextBrush}" ToolTip="{Binding PlayLabel}" AutomationProperties.Name="{Binding PlayLabel}" Tag="toggle" Click="TransportClicked" Margin="5,0"/>
-     <Button x:Name="OverlayNext" Style="{StaticResource FloatingTransport}" Content="&#xE893;" IsEnabled="{Binding CanNext}" ToolTip="下一曲" AutomationProperties.Name="悬浮歌词下一曲" Tag="next" Click="TransportClicked"/>
+     <Button x:Name="OverlayNext" Style="{StaticResource FloatingTransport}" Content="&#xE893;" IsEnabled="{Binding CanNext}" ToolTip="{local:Loc Text='下一曲'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词下一曲'}" Tag="next" Click="TransportClicked"/>
     </StackPanel>
    </Border>
    </Grid>

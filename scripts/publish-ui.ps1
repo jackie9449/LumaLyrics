@@ -57,6 +57,7 @@ Copy-Item -LiteralPath docs/verification-library-workspace -Destination $guide -
 Copy-Item -LiteralPath docs/lyrics-review.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/apple-original-lyrics.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/release-notes.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/interface-languages.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v041 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v050 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/screenshots-ui-v051 -Destination $guide -Recurse -Force

@@ -129,6 +129,7 @@
   </Grid></ControlTemplate></Setter.Value></Setter>
  </Style>
  <Style TargetType="TabItem"><Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/><Setter Property="Padding" Value="14,12"/><Setter Property="Margin" Value="0,0,0,6"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+  <Setter Property="HeaderTemplate"><Setter.Value><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></Setter.Value></Setter>
   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TabItem"><Grid>
    <Border Background="{DynamicResource HoverBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/>
    <Border Background="{DynamicResource AccentSoftBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Selected),RelativeSource={RelativeSource TemplatedParent}}"/>

@@ -49,9 +49,10 @@ internal static class ThemeManager
         ReplaceBrush(resources,"ArtworkBrush",t.Id=="material"?Solid(t.AccentSoft):Gradient(t.Glow,t.WindowEnd),animate);
         ReplaceBrush(resources,"SheenBrush",Sheen(t.Accent),animate);
         var design=ThemeDesign.For(t.Id);
-        resources["ThemeId"]=t.Id;resources["DisplayFont"]=new FontFamily(design.DisplayFont);
-        resources["LyricFont"]=new FontFamily(t.Id is "paper" or "studio"?design.DisplayFont:"Segoe UI Variable, Microsoft YaHei UI");
-        resources["LabelFont"]=new FontFamily(t.Id=="studio"?"Consolas, Microsoft YaHei UI":"Segoe UI Variable, Microsoft YaHei UI");
+        resources["ThemeId"]=t.Id;resources["DisplayFont"]=new FontFamily(UiTypography.Display(design.DisplayFont));
+        resources["BodyFont"]=new FontFamily(UiTypography.Sans);
+        resources["LyricFont"]=new FontFamily(t.Id is "paper" or "studio"?UiTypography.Display(design.DisplayFont):UiTypography.Sans);
+        resources["LabelFont"]=new FontFamily(t.Id=="studio"?UiTypography.Display("Consolas, Microsoft YaHei UI"):UiTypography.Sans);
         resources["HeadlineSize"]=design.Headline;resources["HeadlineWeight"]=design.Weight;
         resources["PanelRadius"] = design.Panel;
         resources["SurfaceSheenOpacity"] = t.Id == "liquid" ? .16 : t.Id == "frost" ? .035 : 0d;

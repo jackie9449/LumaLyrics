@@ -27,7 +27,7 @@ internal sealed class PlaybackQueueSidebar:IDisposable
     internal PlaybackQueueSidebar(Window owner,FrameworkElement scope,Func<CancellationToken,Task<MusicQueueSnapshot>> read,Func<CancellationToken,Task<MusicLibraryResult>> library,Action openLibrary,Func<bool>? busy=null,Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? play=null,Action? activate=null,Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorder=null)
     {
         this.owner=owner;this.scope=scope;this.read=read;this.library=library;this.busy=busy??(()=>false);
-        View=new(openLibrary,()=>{libraryLoaded=false;_=RefreshAsync();},true,play,activate,reorder){Visibility=Visibility.Visible};View.Apply(MusicQueueSnapshot.Unavailable("连接 Apple Music 后显示播放列表"));View.PlaybackCompleted+=RequestRefresh;
+        View=new(openLibrary,()=>{libraryLoaded=false;_=RefreshAsync();},true,play,activate,reorder){Visibility=Visibility.Visible};View.Apply(MusicQueueSnapshot.Unavailable(UiText.T("连接 Apple Music 后显示播放列表")));View.PlaybackCompleted+=RequestRefresh;
         View.PlaybackStarting+=()=>{timer.Stop();reading?.Cancel();versions.Next();ActiveRefresh=null;};
         scope.IsVisibleChanged+=VisibilityChanged;owner.StateChanged+=WindowStateChanged;timer.Tick+=Poll;
     }
@@ -85,7 +85,7 @@ internal sealed class PlaybackQueueSidebar:IDisposable
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException)
-        {if(!disposed && Active && versions.IsCurrent(version))View.Apply(MusicQueueSnapshot.Unavailable("播放列表暂不可用，可稍后刷新。"));}
+        {if(!disposed && Active && versions.IsCurrent(version))View.Apply(MusicQueueSnapshot.Unavailable(UiText.T("播放列表暂不可用，可稍后刷新。")));}
         finally
         {
             if(!disposed && versions.IsCurrent(version))

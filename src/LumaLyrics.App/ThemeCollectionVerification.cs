@@ -50,7 +50,7 @@ public partial class MainWindow
             {
                 browser.Visibility=Visibility.Collapsed;ShowLyricsPage();SelectUiTheme(theme.Id,false);StyleLyricLines(-1,2);await Settle();
                 string key="collection."+theme.Id;
-                structures.Add(NavigationColumn.ActualWidth+"/"+ArtworkMat.Margin+"/"+LyricsPanel.CornerRadius+"/"+LyricsPanel.BorderThickness+"/"+Grid.GetRow(PlaybackHeadline));typefaces.Add(PlaybackHeadline.FontFamily.Source);
+                structures.Add(NavigationColumn.ActualWidth+"/"+ArtworkMat.Margin+"/"+LyricsPanel.CornerRadius+"/"+LyricsPanel.BorderThickness);typefaces.Add(TrackTitle.FontFamily.Source);
                 var picture=VisualVerification.Render((FrameworkElement)Content,true);images.Add((theme.Name,picture));
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"collection-playback-"+theme.Id+".png"),true);
                 checks[key+".originalAndQueueRetained"]=displayed?.Groups.Count==6 && playbackSidebar.View.Snapshot?.Upcoming.Count==8 && currentIndex==2;

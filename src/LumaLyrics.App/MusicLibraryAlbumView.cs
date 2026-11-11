@@ -22,7 +22,7 @@ internal sealed class MusicLibraryAlbumView:ListBox
         ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
         var style=new Style(typeof(ListBoxItem));style.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(0)));style.Setters.Add(new Setter(MarginProperty,new Thickness(0)));style.Setters.Add(new Setter(Control.BorderThicknessProperty,new Thickness(0)));style.Setters.Add(new Setter(FocusableProperty,false));style.Setters.Add(new Setter(Control.BackgroundProperty,Brushes.Transparent));style.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty,HorizontalAlignment.Stretch));
         var template=new ControlTemplate(typeof(ListBoxItem));var presenter=new FrameworkElementFactory(typeof(ContentPresenter));template.VisualTree=presenter;style.Setters.Add(new Setter(Control.TemplateProperty,template));ItemContainerStyle=style;
-        ItemTemplate=new DataTemplate{VisualTree=new FrameworkElementFactory(typeof(AlbumRowPresenter))};SizeChanged+=(_,_)=>ArrangeRows();AutomationProperties.SetName(this,"音乐库专辑");
+        ItemTemplate=new DataTemplate{VisualTree=new FrameworkElementFactory(typeof(AlbumRowPresenter))};SizeChanged+=(_,_)=>ArrangeRows();AutomationProperties.SetName(this,UiText.T("音乐库专辑"));
     }
     internal void SetAlbums(IReadOnlyList<MusicAlbum> value,bool resetScroll=true)
     {
@@ -50,16 +50,16 @@ internal sealed class MusicLibraryAlbumView:ListBox
             for(int i=0;i<row.Albums.Length;i++)
             {
                 var album=row.Albums[i];var tile=new Grid{Margin=new(0,0,16,20)};var button=new Button{DataContext=album,Margin=new(0)};button.SetResourceReference(StyleProperty,"AlbumCardButton");tile.Children.Add(button);
-                AutomationProperties.SetName(button,"打开专辑 · "+album.Title+" · "+album.Artist);button.ToolTip=album.Title+" · "+album.Artist;button.Click+=(_,_)=>owner.open(album);
+                AutomationProperties.SetName(button,UiText.T("打开专辑 · ")+LocalizedAlbumLabels.Title(album)+" · "+LocalizedAlbumLabels.Artist(album));button.ToolTip=LocalizedAlbumLabels.Title(album)+" · "+LocalizedAlbumLabels.Artist(album);button.Click+=(_,_)=>owner.open(album);
                 var card=new StackPanel();button.Content=card;var cover=new ArtworkFrame{BorderThickness=new(1)};ThemeManager.Bind(cover,Border.BackgroundProperty,"ArtworkFrameBrush");ThemeManager.Bind(cover,Border.BorderBrushProperty,"BorderBrush");ThemeManager.Bind(cover,Border.CornerRadiusProperty,"AlbumArtworkRadius");ThemeManager.Bind(cover,Border.PaddingProperty,"AlbumImagePadding");cover.SizeChanged+=(_,_)=>cover.Height=cover.ActualWidth;
                 var image=album.CoverPaths.Select(p=>owner.covers.Get(p)).FirstOrDefault(p=>p is not null);cover.Child=image is not null?new Image{Source=image,Stretch=Stretch.UniformToFill}:new TextBlock{Text="◉",FontSize=46,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Opacity=.35};card.Children.Add(cover);
-                var title=new TextBlock{Text=album.Title,FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new(0,12,0,0)};ThemeManager.Bind(title,TextBlock.ForegroundProperty,"TextBrush");card.Children.Add(title);
+                var title=new TextBlock{Text=LocalizedAlbumLabels.Title(album),FontSize=14,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new(0,12,0,0)};ThemeManager.Bind(title,TextBlock.ForegroundProperty,"TextBrush");card.Children.Add(title);
                 ThemeManager.Bind(title,TextBlock.FontFamilyProperty,"DisplayFont");ThemeManager.Bind(title,TextBlock.FontSizeProperty,"AlbumTitleSize");
-                var artist=new TextBlock{Text=album.Artist,FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new(0,5,0,0)};ThemeManager.Bind(artist,TextBlock.ForegroundProperty,"MutedBrush");card.Children.Add(artist);
-                var summary=new TextBlock{Text=album.Summary,FontSize=10,Margin=new(0,5,0,0)};ThemeManager.Bind(summary,TextBlock.ForegroundProperty,"MutedBrush");card.Children.Add(summary);
+                var artist=new TextBlock{Text=LocalizedAlbumLabels.Artist(album),FontSize=11,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new(0,5,0,0)};ThemeManager.Bind(artist,TextBlock.ForegroundProperty,"MutedBrush");card.Children.Add(artist);
+                var summary=new TextBlock{Text=UiText.Status(album.Summary),FontSize=10,Margin=new(0,5,0,0)};ThemeManager.Bind(summary,TextBlock.ForegroundProperty,"MutedBrush");card.Children.Add(summary);
                 // Sibling controls keep opening and playing separate for mouse and keyboard.
-                var play=new Button{DataContext=album,Content="▷",Width=38,Height=38,FontSize=18,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new(0,0,16,0),Cursor=Cursors.Hand,ToolTip="播放整张专辑",IsEnabled=owner.canPlay && album.CanPlay};
-                AutomationProperties.SetName(play,"播放专辑 · "+album.Title+" · "+album.Artist);play.SetResourceReference(StyleProperty,"AlbumPlayButton");
+                var play=new Button{DataContext=album,Content="▷",Width=38,Height=38,FontSize=18,Padding=new(0),HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new(0,0,16,0),Cursor=Cursors.Hand,ToolTip=UiText.T("播放整张专辑"),IsEnabled=owner.canPlay && album.CanPlay};
+                AutomationProperties.SetName(play,UiText.T("播放专辑 · ")+LocalizedAlbumLabels.Title(album)+" · "+LocalizedAlbumLabels.Artist(album));play.SetResourceReference(StyleProperty,"AlbumPlayButton");
                 play.Click+=(_,e)=>{e.Handled=true;owner.play(album);};cover.SizeChanged+=(_,_)=>play.Margin=new(0,Math.Max(8,cover.ActualHeight-48),16,0);tile.Children.Add(play);Grid.SetColumn(tile,i);Children.Add(tile);
             }
         }

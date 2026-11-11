@@ -12,13 +12,13 @@ internal static partial class AppleMusicLibraryHandoff
     internal static async Task<MusicQueueSnapshot> ReadQueueAsync(CancellationToken token,Action<string,object?>? trace=null,HandoffContext? command=null)
     {
         if(command is null)return await ReadPassiveAsync((process,automation,nativeToken)=>ReadQueueSurface(automation,automation.FromHandle(process.MainWindowHandle),nativeToken,trace),
-            MusicQueueSnapshot.Unavailable("Apple Music 暂不可读；超时后暂停自动读取，重新启动客户端可恢复。"),TimeSpan.FromSeconds(18),token);
+            MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 暂不可读；超时后暂停自动读取，重新启动客户端可恢复。")),TimeSpan.FromSeconds(18),token);
         var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(18));
         var worker=Task.Run(()=>ReadQueue(bounded.Token,trace,command),bounded.Token);
         try{return await worker.WaitAsync(TimeSpan.FromSeconds(19),token);}
-        catch(OperationCanceledException) when(!token.IsCancellationRequested){return MusicQueueSnapshot.Unavailable("播放列表读取超时，请稍后刷新。");}
-        catch(TimeoutException){bounded.Cancel();return MusicQueueSnapshot.Unavailable("Apple Music 的播放列表暂未响应，请稍后刷新。");}
-        catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException){return MusicQueueSnapshot.Unavailable("Apple Music 的播放列表暂不可读，请打开客户端后刷新。");}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){return MusicQueueSnapshot.Unavailable(UiText.T("播放列表读取超时，请稍后刷新。"));}
+        catch(TimeoutException){bounded.Cancel();return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 的播放列表暂未响应，请稍后刷新。"));}
+        catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException){return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 的播放列表暂不可读，请打开客户端后刷新。"));}
         finally
         {
             bounded.Cancel();if(worker.IsCompleted)bounded.Dispose();
@@ -31,10 +31,10 @@ internal static partial class AppleMusicLibraryHandoff
         try
         {
             using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);
-            if(process is null)return MusicQueueSnapshot.Unavailable("请先打开并登录 Apple Music，再刷新播放列表。");
+            if(process is null)return MusicQueueSnapshot.Unavailable(UiText.T("请先打开并登录 Apple Music，再刷新播放列表。"));
             token.ThrowIfCancellationRequested();
-            if(command is null && IsIconic(process.MainWindowHandle))return MusicQueueSnapshot.Unavailable("Apple Music 已最小化；暂停读取待播清单，避免弹出窗口。");
-            if(command is not null){command.Capture(process,token);if(WaitForNative(()=>!IsIconic(process.MainWindowHandle)?process:null,TimeSpan.FromSeconds(5),token) is null)return MusicQueueSnapshot.Unavailable("Apple Music 的窗口尚未就绪。");}
+            if(command is null && IsIconic(process.MainWindowHandle))return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 已最小化；暂停读取待播清单，避免弹出窗口。"));
+            if(command is not null){command.Capture(process,token);if(WaitForNative(()=>!IsIconic(process.MainWindowHandle)?process:null,TimeSpan.FromSeconds(5),token) is null)return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 的窗口尚未就绪。"));}
             using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};
             return ReadQueueSurface(automation,automation.FromHandle(process.MainWindowHandle),token,trace,command is not null);
         }
@@ -44,9 +44,9 @@ internal static partial class AppleMusicLibraryHandoff
     {
             var surface=NativeSurfaceTree.Read(root,token).ToArray();
             var toggle=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="PlayQueueToggleButton");
-            if(toggle?.Patterns.Toggle.IsSupported!=true)return MusicQueueSnapshot.Unavailable("当前 Apple Music 版本未提供可读取的播放列表。");
+            if(toggle?.Patterns.Toggle.IsSupported!=true)return MusicQueueSnapshot.Unavailable(UiText.T("当前 Apple Music 版本未提供可读取的播放列表。"));
             bool opened=toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;AutomationElement? history=null;bool restoreHistory=false;
-            if(!allowPanelChanges && !opened)return MusicQueueSnapshot.Unavailable("Apple Music 的待播清单未展开；自动刷新不会打开原生面板。");
+            if(!allowPanelChanges && !opened)return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 的待播清单未展开；自动刷新不会打开原生面板。"));
             var lyrics=surface.FirstOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="LyricsToggleButton");bool lyricsOn=lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
             // Reads do not restore or activate a minimized native window. Unsupported
             // providers return an unavailable snapshot instead of repeatedly flashing it.
@@ -58,11 +58,11 @@ internal static partial class AppleMusicLibraryHandoff
                 {
                     token.ThrowIfCancellationRequested();
                     surface=NativeSurfaceTree.Read(root,token).ToArray();
-                    history=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && Name(b) is "历史记录" or "History");
+                    history=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && NativeMusicLabels.IsHistory(Name(b)));
                     if(history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On)
                     {
-                        if(!allowPanelChanges)return MusicQueueSnapshot.Unavailable("Apple Music 正在显示历史记录；保留原生面板选择。");
-                        var upcoming=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && Name(b) is "待播清单" or "Playing Next");
+                        if(!allowPanelChanges)return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 正在显示历史记录；保留原生面板选择。"));
+                        var upcoming=surface.FirstOrDefault(b=>b.ControlType==ControlType.Button && NativeMusicLabels.IsPlayingNext(Name(b)));
                         if(upcoming?.Patterns.Toggle.IsSupported==true){token.ThrowIfCancellationRequested();upcoming.Patterns.Toggle.Pattern.Toggle();restoreHistory=true;token.WaitHandle.WaitOne(150);}
                     }
                     if(restoreHistory)surface=NativeSurfaceTree.Read(root,token).ToArray();
@@ -76,7 +76,7 @@ internal static partial class AppleMusicLibraryHandoff
                     emptyCandidate=empty;
                     token.WaitHandle.WaitOne(100);
                 }
-                return MusicQueueSnapshot.Unavailable("Apple Music 暂未提供待播清单，请打开客户端的队列后重试。");
+                return MusicQueueSnapshot.Unavailable(UiText.T("Apple Music 暂未提供待播清单，请打开客户端的队列后重试。"));
             }
             finally
             {
@@ -103,10 +103,10 @@ internal static partial class AppleMusicLibraryHandoff
     {
         var current=QueueCurrent(root);
         bool empty=NativeSurfaceTree.Read(root).Where(e=>e.Properties.AutomationId.ValueOrDefault=="PaneRoot").Any(pane=>
-            NativeSurfaceTree.Read(pane).Any(e=>e.ControlType==ControlType.Text && Name(e)=="无待播歌曲。")
-            && NativeSurfaceTree.Read(pane).FirstOrDefault(e=>e.ControlType==ControlType.Button && Name(e) is "待播清单" or "Playing Next") is { } button
+            NativeSurfaceTree.Read(pane).Any(e=>e.ControlType==ControlType.Text && NativeMusicLabels.IsEmptyQueue(Name(e)))
+            && NativeSurfaceTree.Read(pane).FirstOrDefault(e=>e.ControlType==ControlType.Button && NativeMusicLabels.IsPlayingNext(Name(e))) is { } button
             && button.Patterns.Toggle.IsSupported && button.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On);
-        return empty && current==QueueCurrent(root)?new(current,[],true,true,DateTimeOffset.UtcNow,"接下来还没有歌曲"):null;
+        return empty && current==QueueCurrent(root)?new(current,[],true,true,DateTimeOffset.UtcNow,UiText.T("接下来还没有歌曲")):null;
     }
     internal static MusicQueueSnapshot CaptureQueue(UIA3Automation automation,AutomationElement root,IReadOnlyList<AutomationElement> lists,CancellationToken token,Action<string,object?>? trace,List<AutomationElement>? nativeItems=null,bool allowRealize=true)
     {
@@ -154,9 +154,9 @@ internal static partial class AppleMusicLibraryHandoff
             complete&=ended;if(!ended)break;
         }
         var current=QueueCurrent(root);
-        if(before?.Fingerprint!=current?.Fingerprint)return MusicQueueSnapshot.Unavailable("播放刚刚发生变化，请刷新以读取最新列表。");
+        if(before?.Fingerprint!=current?.Fingerprint)return MusicQueueSnapshot.Unavailable(UiText.T("播放刚刚发生变化，请刷新以读取最新列表。"));
         complete&=metadataComplete;
-        var snapshot=new MusicQueueSnapshot(current,entries,true,complete,DateTimeOffset.UtcNow,complete?"与 Apple Music 待播清单同步":$"已读取 {entries.Count:N0} 首；Apple Music 暂未完整提供其余信息。");
+        var snapshot=new MusicQueueSnapshot(current,entries,true,complete,DateTimeOffset.UtcNow,complete?UiText.T("与 Apple Music 待播清单同步"):UiText.F($"已读取 {entries.Count:N0} 首；Apple Music 暂未完整提供其余信息。"));
         trace?.Invoke("queueSnapshot",snapshot);return snapshot;
     }
 }

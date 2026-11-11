@@ -31,8 +31,9 @@ public partial class MainWindow : Window
     public bool CanRecoverOverlay => tray?.Visible == true;
     public MainWindow(string? dataDirectory=null)
     {
-        store=new(dataDirectory);settings=store.Load();AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
+        store=new(dataDirectory);settings=store.Load();UiText.SetLanguage(settings.UiLanguage);AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        BrandLatinSuffix.Visibility=UiText.Language is "en" or "ja"?Visibility.Collapsed:Visibility.Visible;
         ChineseScriptHost.Content=ChineseScriptDisplay.CreateSelector(coordinator);
         playbackBridge=new(coordinator);playbackSidebar=new(this,PlaybackQueueHost,playbackBridge.ReadQueueAsync,token=>Task.Run(()=>new MusicLibraryCatalog(store.Root,settings.LibraryPath).Load(token),token),()=>_=ShowMusicLibraryAsync(),()=>playbackBridge.IsBusy,playbackBridge.PlayQueueAsync,()=>{if(IsVisible && WindowState!=WindowState.Minimized)Activate();},playbackBridge.ReorderQueueAsync);PlaybackQueueHost.Child=playbackSidebar.View;playbackBridge.HandoffCompleted+=playbackSidebar.RequestRefresh;SetPlaybackQueueVisible(settings.ShowPlaybackQueue,false);
         ArtworkBorder.SizeChanged+=(_,_)=>ClipArtwork();Body.SizeChanged+=(_,_)=>ApplyPlaybackLayout();
@@ -96,7 +97,7 @@ public partial class MainWindow : Window
         }
         SetupTray(); hotkeys=new(this,id=>{if(id==1)ToggleOverlay();else {if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);}});
         RegisterHotkeys(); if(settings.OverlayVisible)overlay.Show();
-        try { await coordinator.StartAsync(); } catch(Exception ex) { vm.Status="连接失败，可在诊断页重新连接";store.Log("Start: "+ex.Message); }
+        try { await coordinator.StartAsync(); } catch(Exception ex) { vm.Status=UiText.T("连接失败，可在诊断页重新连接");store.Log("Start: "+ex.Message); }
         playbackSidebar.Enable();
         store.Log("Main window loaded; tray="+CanRecoverOverlay+"; hotkeys="+(string.IsNullOrEmpty(hotkeyError)?"OK":hotkeyError));
         var args=Environment.GetCommandLineArgs();int captureArg=Array.IndexOf(args,"--capture-dir");
@@ -116,16 +117,16 @@ public partial class MainWindow : Window
         try
         {
             trayIcon=ApplicationIcon.CreateTrayIcon();
-            tray=new Forms.NotifyIcon{Icon=trayIcon,Text="浮光歌词 LumaLyrics",ContextMenuStrip=new()};
+            tray=new Forms.NotifyIcon{Icon=trayIcon,Text=UiText.T("浮光歌词 LumaLyrics"),ContextMenuStrip=new()};
             var menu=tray.ContextMenuStrip;
             void Item(string text,Action action)=>menu.Items.Add(text,null,(_,_)=>Dispatcher.Invoke(action));
-            Item("打开浮光歌词",Restore);Item("显示 / 隐藏歌词",ToggleOverlay);Item("解锁歌词",()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);});Item("恢复默认位置",()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.ResetPosition();});
-            Item("桌面歌词外观…",()=>ShowAppearance());
-            menu.Items.Add(new Forms.ToolStripSeparator());Item("退出",()=>_=QuitAsync());
+            Item(UiText.T("打开浮光歌词"),Restore);Item(UiText.T("显示 / 隐藏歌词"),ToggleOverlay);Item(UiText.T("解锁歌词"),()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.SetLocked(false);});Item(UiText.T("恢复默认位置"),()=>{if(!overlay.IsVisible)ToggleOverlay();overlay.ResetPosition();});
+            Item(UiText.T("桌面歌词外观…"),()=>ShowAppearance());
+            menu.Items.Add(new Forms.ToolStripSeparator());Item(UiText.T("退出"),()=>_=QuitAsync());
             tray.DoubleClick+=(_,_)=>Dispatcher.Invoke(Restore);
             tray.Visible=true;
         }
-        catch(Exception ex) {DisposeTray();store.Log("Tray: "+ex.Message);vm.Status="托盘不可用，关闭窗口将退出";}
+        catch(Exception ex) {DisposeTray();store.Log("Tray: "+ex.Message);vm.Status=UiText.T("托盘不可用，关闭窗口将退出");}
     }
     void DisposeTray()
     {
@@ -133,25 +134,25 @@ public partial class MainWindow : Window
         if(previous is not null){previous.Visible=false;var menu=previous.ContextMenuStrip;previous.Dispose();menu?.Dispose();}
         trayIcon?.Dispose();trayIcon=null;
     }
-    void RegisterHotkeys() { hotkeyError=hotkeys?.Register(settings.ToggleHotkey,settings.UnlockHotkey);if(!string.IsNullOrEmpty(hotkeyError) && !Environment.GetCommandLineArgs().Contains("--capture-dir"))MessageBox.Show(this,hotkeyError+"。仍可通过托盘解锁。","快捷键提示"); }
+    void RegisterHotkeys() { hotkeyError=hotkeys?.Register(settings.ToggleHotkey,settings.UnlockHotkey);if(!string.IsNullOrEmpty(hotkeyError) && !Environment.GetCommandLineArgs().Contains("--capture-dir"))MessageBox.Show(this,UiText.Status(hotkeyError)+UiText.T("。仍可通过托盘解锁。"),UiText.T("快捷键提示")); }
     void Update()
     {
         var s=coordinator.Snapshot;
-        vm.Title=coordinator.ActiveTrack?.Title is {Length:>0} t?t:"让歌词，浮在音乐之上。";vm.Artist=s is null?coordinator.ManualTrack is { } mt?$"{mt.Artist} · {mt.Album} · 手动浏览":"打开 Apple Music，播放你喜欢的歌":$"{s.Track.Artist} · {s.Track.Album}";
-        vm.Status=s is null?"等待 Apple Music":$"已连接 · {(s.Status==PlayState.Playing?"正在播放":s.Status==PlayState.Paused?"已暂停":"已停止")}";
+        vm.Title=coordinator.ActiveTrack?.Title is {Length:>0} t?t:UiText.T("让歌词，浮在音乐之上。");vm.Artist=s is null?coordinator.ManualTrack is { } mt?UiText.F($"{mt.Artist} · {mt.Album} · 手动浏览"):UiText.T("打开 Apple Music，播放你喜欢的歌"):$"{s.Track.Artist} · {s.Track.Album}";
+        vm.Status=s is null?UiText.T("等待 Apple Music"):UiText.F($"已连接 · {(s.Status==PlayState.Playing?UiText.T("正在播放"):s.Status==PlayState.Paused?UiText.T("已暂停"):UiText.T("已停止"))}");
         UpdateSeekCapability(s);ValidateSeek(s);
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=CanSeek(s);
-        PlayButton.Content=s?.Status==PlayState.Playing?"Ⅱ 暂停":"▷ 播放";
+        PlayButton.Content=s?.Status==PlayState.Playing?UiText.T("Ⅱ 暂停"):UiText.T("▷ 播放");
         vm.IsPlaying=s?.Status==PlayState.Playing;
-        vm.LyricStatus=coordinator.LyricsStatus;vm.Duration=s?.Track.DurationMs is >0 and var duration && double.IsFinite(duration)?duration:1;
+        vm.LyricStatus=DisplayLyricsStatus();vm.Duration=s?.Track.DurationMs is >0 and var duration && double.IsFinite(duration)?duration:1;
         overlay.RefreshTranslationToggle();
         RefreshMainTranslationToggle();
-        vm.Library=coordinator.LibraryStatus+"\n"+coordinator.ArtworkStatus;
+        vm.Library=UiText.Status(coordinator.LibraryStatus.ToString())+"\n"+UiText.Status(coordinator.ArtworkStatus.ToString());
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
         musicLibrary?.ObserveArtworkProgress(coordinator.ArtworkStatus);
         playbackSidebar.ObserveTrack(coordinator.ActiveTrack);playbackSidebar.ObserveArtwork(coordinator.ArtworkStatus);
-        vm.LibraryLabel=coordinator.LibraryStatus.Total>0?$"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}":"资料库";
-        vm.Offset=$"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒";
+        vm.LibraryLabel=coordinator.LibraryStatus.Total>0?UiText.F($"资料库 {coordinator.LibraryStatus.Cached}/{coordinator.LibraryStatus.Total}"):UiText.T("资料库");
+        vm.Offset=UiText.F($"歌词偏移 {(coordinator.Binding?.OffsetMs ?? 0)/1000:+0.0;-0.0;0.0} 秒");
         if(!ReferenceEquals(displayed,coordinator.Document) || !ReferenceEquals(displayedTranslation,coordinator.Translation) || displayedTranslationEnabled!=settings.ShowChineseTranslation || displayedChineseScript!=ChineseScriptDisplay.Normalize(settings.ChineseScript))BuildLyrics();
         Tick();
     }
@@ -169,13 +170,13 @@ public partial class MainWindow : Window
             var translations=displayTranslationLines.Select(t=>LumaLyrics.Windows.ChineseScriptConverter.Convert(t,displayedChineseScript)).ToArray();
             displayOriginalLines=originals;displayTranslationLines=translations;
         }
-        catch(InvalidOperationException ex){store.Log("Chinese script display: "+ex.Message);vm.LyricStatus="简繁转换暂不可用，已按原文显示。";}
+        catch(InvalidOperationException ex){store.Log("Chinese script display: "+ex.Message);vm.LyricStatus=UiText.T("简繁转换暂不可用，已按原文显示。");}
         bool empty=displayed is null || displayed.Instrumental || string.IsNullOrWhiteSpace(displayed.Raw);
         bool instrumental=displayed?.Instrumental==true;
         overlay.SetInstrumental(instrumental);
         EmptyState.Visibility=empty&&!instrumental?Visibility.Visible:Visibility.Collapsed;
         LyricsScroll.Visibility=instrumental?Visibility.Collapsed:Visibility.Visible;ReturnButton.Visibility=Visibility.Collapsed;
-        EmptyHint.Text=coordinator.Snapshot is null?"在 Apple Music 中播放歌曲，或导入本地歌词进行静态浏览。":coordinator.LyricsStatus;
+        EmptyHint.Text=coordinator.Snapshot is null?UiText.T("在 Apple Music 中播放歌曲，或导入本地歌词进行静态浏览。"):DisplayLyricsStatus();
         if(empty)return;
         foreach(var text in displayOriginalLines)
         {
@@ -203,7 +204,7 @@ public partial class MainWindow : Window
             // rejection/cancel). Explicitly restore its target in that case.
             if(SeekSlider.Value!=vm.Position)SeekSlider.GetBindingExpression(System.Windows.Controls.Primitives.RangeBase.ValueProperty)?.UpdateTarget();
         }
-        vm.Quality=s is null?"尚无播放时间轴":p.HasValue?"GSMTC · 整秒位置插值 · B 级兼容":"同步受限 · 当前无可信播放位置";
+        vm.Quality=s is null?UiText.T("尚无播放时间轴"):p.HasValue?UiText.T("GSMTC · 整秒位置插值 · B 级兼容"):UiText.T("同步受限 · 当前无可信播放位置");
         if(s?.Status==PlayState.Paused) { if(pausedSince==DateTime.MinValue)pausedSince=DateTime.UtcNow; }else pausedSince=DateTime.MinValue;
         overlay.Opacity=!overlay.AppearanceEditing && settings.FadeOnPause && pausedSince!=DateTime.MinValue && DateTime.UtcNow-pausedSince>TimeSpan.FromSeconds(10)?.25:1;
         int index=displayed?.IsSynced==true && p.HasValue?displayed.FindIndex(p.Value,coordinator.Binding?.OffsetMs ?? 0,settings.GlobalOffsetMs):-1;
@@ -215,12 +216,12 @@ public partial class MainWindow : Window
         }
         if(DateTime.UtcNow>=manualUntil && ReturnButton.Visibility==Visibility.Visible) {ReturnButton.Visibility=Visibility.Collapsed;CenterLine(true);}
         if(displayed?.Instrumental==true) {vm.Current="";vm.Next="";}
-        else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayOriginalLines[index]:"前奏";vm.Next=index+1<displayOriginalLines.Length?displayOriginalLines[index+1]:"";}
-        else {vm.Current=s?.Track.Title ?? "浮光歌词";vm.Next=displayed is null?"等待歌词":displayed.IsSynced?"同步受限 · 请在主窗口浏览":"静态歌词 · 请在主窗口浏览";}
+        else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayOriginalLines[index]:UiText.T("前奏");vm.Next=index+1<displayOriginalLines.Length?displayOriginalLines[index+1]:"";}
+        else {vm.Current=s?.Track.Title ?? UiText.T("浮光歌词");vm.Next=displayed is null?UiText.T("等待歌词"):displayed.IsSynced?UiText.T("同步受限 · 请在主窗口浏览"):UiText.T("静态歌词 · 请在主窗口浏览");}
         bool translate=settings.OverlayShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
         vm.CurrentTranslation=translate && index>=0?displayTranslationLines[index]:"";
         vm.NextTranslation=translate && index+1<displayTranslationLines.Length?displayTranslationLines[index+1]:"";
-        if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=coordinator.LyricsStatus;
+        if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=DisplayLyricsStatus();
         var desired=s?.Status==PlayState.Playing && (IsVisible||overlay.IsVisible)?33:500;
         if(timer.Interval.TotalMilliseconds!=desired)timer.Interval=TimeSpan.FromMilliseconds(desired);
     }
@@ -288,7 +289,7 @@ public partial class MainWindow : Window
     async void PlayClicked(object s,RoutedEventArgs e)=>await ControlAsync(coordinator.Snapshot?.Status==PlayState.Playing?"pause":"play");
     async void NextClicked(object s,RoutedEventArgs e)=>await ControlAsync("next");
     async void PreviousClicked(object s,RoutedEventArgs e)=>await ControlAsync("previous");
-    async Task ControlAsync(string action,double? position=null) {if(!await coordinator.Source.ControlAsync(action,position))MessageBox.Show(this,"播放器未接受此操作。","浮光歌词");}
+    async Task ControlAsync(string action,double? position=null) {if(!await coordinator.Source.ControlAsync(action,position))MessageBox.Show(this,UiText.T("播放器未接受此操作。"),UiText.T("浮光歌词"));}
     internal async Task ControlOverlayPlaybackAsync(string action)
     {
         var snapshot=coordinator.Snapshot;if(snapshot is null)return;

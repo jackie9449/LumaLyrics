@@ -14,7 +14,7 @@ internal sealed partial class MusicLibraryView
     readonly Func<MusicLibrarySong,CancellationToken,Task<LibraryPlayResult>>? insertNext;
     readonly Func<MusicQueueSelection,CancellationToken,Task<LibraryPlayResult>>? playQueue;
     readonly Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? reorderQueue;
-    readonly Button queueTab=new(){Content="播放列表",Padding=new(14,8,14,8),Margin=new(0,0,6,0)};
+    readonly Button queueTab=new(){Content=UiText.T("播放列表"),Padding=new(14,8,14,8),Margin=new(0,0,6,0)};
     readonly DispatcherTimer queuePoll=new(){Interval=TimeSpan.FromSeconds(15)};
     readonly CancellationTokenSource queueLifetime=new();
     readonly RequestVersion queueVersions=new();
@@ -34,8 +34,8 @@ internal sealed partial class MusicLibraryView
         queuePanel.PlaybackStarting+=()=>{playing?.Cancel();requests.Next();queueReading?.Cancel();queueVersions.Next();ActiveQueueRefresh=null;queuePanel.CancelLoading();};queuePanel.PlaybackStarted+=task=>ActivePlayback=task;queuePanel.PlaybackCompleted+=RefreshVisibleQueue;
         if(readQueue is not null)
         {
-            heading.Children.OfType<StackPanel>().Single(p=>p!=headingCopy).Children.Insert(2,queueTab);
-            AutomationProperties.SetName(queueTab,"查看当前播放列表");queueTab.Click+=(_,_)=>{if(showingQueue)HideQueue();else ShowQueue();};
+            heading.Children.OfType<WrapPanel>().Single().Children.Insert(2,queueTab);
+            AutomationProperties.SetName(queueTab,UiText.T("查看当前播放列表"));queueTab.Click+=(_,_)=>{if(showingQueue)HideQueue();else ShowQueue();};
         }
         queuePoll.Tick+=(_,_)=>{if(ActiveQueueRefresh?.IsCompleted!=false && insertTail.IsCompleted)ActiveQueueRefresh=RefreshQueueAsync();};
         IsVisibleChanged+=(_,_)=>
@@ -58,7 +58,7 @@ internal sealed partial class MusicLibraryView
         browseBody.Visibility=browseFilters.Visibility=showingQueue?Visibility.Collapsed:Visibility.Visible;queuePanel.Visibility=showingQueue?Visibility.Visible:Visibility.Collapsed;
         queueTab.SetResourceReference(Control.BackgroundProperty,showingQueue?"AccentSoftBrush":"ControlBrush");queueTab.SetResourceReference(Control.ForegroundProperty,showingQueue?"AccentBrush":"MutedBrush");
         AppMotion.SetIsSelected(queueTab,showingQueue);
-        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text="正在播放与接下来播放";playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab,playlistsTab}){AppMotion.SetIsSelected(tab,false);tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
+        if(showingQueue){foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=Visibility.Collapsed;count.Text=UiText.T("正在播放与接下来播放");playSelected.Visibility=Visibility.Collapsed;foreach(var tab in new[]{albumsTab,songsTab,playlistsTab}){AppMotion.SetIsSelected(tab,false);tab.SetResourceReference(Control.BackgroundProperty,"ControlBrush");tab.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}}
     }
     async Task RefreshQueueAsync()
     {
@@ -71,15 +71,15 @@ internal sealed partial class MusicLibraryView
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException)
-        {if(!disposed && showingQueue && queueVersions.IsCurrent(version))queuePanel.Apply(MusicQueueSnapshot.Unavailable("播放列表暂不可用，请稍后刷新。"));}
+        {if(!disposed && showingQueue && queueVersions.IsCurrent(version))queuePanel.Apply(MusicQueueSnapshot.Unavailable(UiText.T("播放列表暂不可用，请稍后刷新。")));}
         finally{if(!disposed && queueVersions.IsCurrent(version))queuePanel.CancelLoading();}
     }
     void RefreshVisibleQueue(){if(showingQueue && IsVisible && ActiveQueueRefresh?.IsCompleted!=false && insertTail.IsCompleted)ActiveQueueRefresh=RefreshQueueAsync();}
     void BeginInsert(MusicRow row)
     {
         if(disposed || insertNext is null)return;
-        if(!row.Song.CanPlay){status.Text="这首歌的录音信息不完整，暂时无法插播。";return;}
-        var request=requests.Next();status.Text="正在加入插播 · "+row.Song.Title;
+        if(!row.Song.CanPlay){status.Text=UiText.T("这首歌的录音信息不完整，暂时无法插播。");return;}
+        var request=requests.Next();status.Text=UiText.T("正在加入插播 · ")+row.Song.Title;
         // Every accepted click is retained. Cancelling earlier insertions would silently
         // lose tracks when several different songs are queued in quick succession.
         insertTail=InsertAfterAsync(insertTail,row.Song,request);ActivePlayback=insertTail;
@@ -90,11 +90,11 @@ internal sealed partial class MusicLibraryView
         try
         {
             await previous;token.ThrowIfCancellationRequested();var result=await insertNext!(song,token);
-            if(!disposed && requests.IsCurrent(request)){status.Text=result.Message;if(result.Confirmed && result.ActivateWindow)activate();}
+            if(!disposed && requests.IsCurrent(request)){status.Text=UiText.Status(result.Message);if(result.Confirmed && result.ActivateWindow)activate();}
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or IOException or TimeoutException)
-        {if(!disposed && requests.IsCurrent(request))status.Text="插播失败，请确认 Apple Music 可用后重试。";}
+        {if(!disposed && requests.IsCurrent(request))status.Text=UiText.T("插播失败，请确认 Apple Music 可用后重试。");}
         finally{if(!disposed && showingQueue)ActiveQueueRefresh=RefreshQueueAsync();}
     }
     void DisposeQueue(){queuePoll.Stop();queueLifetime.Cancel();queueReading?.Cancel();queueReading?.Dispose();queueReading=null;queueLifetime.Dispose();queuePanel.Dispose();}

@@ -1,3 +1,4 @@
+using LumaLyrics.Core;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using FlaUI.Core.AutomationElements;
@@ -26,29 +27,29 @@ internal static partial class AppleMusicLibraryHandoff
         var state=ReadNativePlaybackModes(root,token);trace?.Invoke("playlistModesBefore",state);
         if(options?.Shuffle is { } shuffle && state.Shuffle!=shuffle)
         {
-            if(state.Shuffle is null)return "Apple Music 没有提供可确认的随机播放状态，未切换歌曲。";
+            if(state.Shuffle is null)return UiText.T("Apple Music 没有提供可确认的随机播放状态，未切换歌曲。");
             var controls=NativeSurfaceTree.Read(root,token).Where(e=>e.Properties.AutomationId.ValueOrDefault=="ShuffleButton" && e.Patterns.Toggle.IsSupported).ToArray();
-            if(controls.Length!=1 || !controls[0].IsEnabled || !Owns())return "Apple Music 的播放顺序控制暂不可用。";
+            if(controls.Length!=1 || !controls[0].IsEnabled || !Owns())return UiText.T("Apple Music 的播放顺序控制暂不可用。");
             context.PlaylistModeAttempted=true;controls[0].Patterns.Toggle.Pattern.Toggle();
             var changed=WaitForNative(()=>ReadNativePlaybackModes(root,token) is { } s && s.Shuffle==shuffle?s:null,TimeSpan.FromSeconds(3),token);
-            if(changed is null)return "已发送随机播放设置，但尚未确认状态，未切换歌曲。";state=changed;
+            if(changed is null)return UiText.T("已发送随机播放设置，但尚未确认状态，未切换歌曲。");state=changed;
         }
         if(options?.Repeat is { } repeat)
         {
             var visited=new HashSet<MusicRepeatMode>();
             for(int step=0;state.Repeat!=repeat && step<2;step++)
             {
-                if(state.Repeat is not { } previous || !visited.Add(previous))return "Apple Music 没有提供可确认的循环状态，未切换歌曲。";
+                if(state.Repeat is not { } previous || !visited.Add(previous))return UiText.T("Apple Music 没有提供可确认的循环状态，未切换歌曲。");
                 var button=NativeSurfaceTree.Read(root,token).SingleOrDefault(e=>e.Properties.AutomationId.ValueOrDefault=="RepeatButton");
-                if(button?.Patterns.Invoke.IsSupported!=true || !button.IsEnabled || !Owns())return "Apple Music 的循环控制暂不可用。";
+                if(button?.Patterns.Invoke.IsSupported!=true || !button.IsEnabled || !Owns())return UiText.T("Apple Music 的循环控制暂不可用。");
                 context.PlaylistModeAttempted=true;button.Patterns.Invoke.Pattern.Invoke();
                 var changed=WaitForNative(()=>ReadNativePlaybackModes(root,token) is {Repeat:not null} s && s.Repeat!=previous?s:null,TimeSpan.FromSeconds(3),token);
-                if(changed is null){trace?.Invoke("playlistRepeatUnconfirmed",NativeSurfaceTree.Read(root,token).Where(e=>e.Properties.AutomationId.ValueOrDefault=="RepeatButton").Select(Name).ToArray());return "已发送循环设置，但尚未确认状态，未切换歌曲。";}
+                if(changed is null){trace?.Invoke("playlistRepeatUnconfirmed",NativeSurfaceTree.Read(root,token).Where(e=>e.Properties.AutomationId.ValueOrDefault=="RepeatButton").Select(Name).ToArray());return UiText.T("已发送循环设置，但尚未确认状态，未切换歌曲。");}
                 state=changed;
             }
         }
         state=ReadNativePlaybackModes(root,token);trace?.Invoke("playlistModesApplied",state);
-        return state.Shuffle is not null && MusicPlaybackModeRules.Matches(options,state)?null:"尚未确认 Apple Music 的播放顺序或循环设置，未切换歌曲。";
+        return state.Shuffle is not null && MusicPlaybackModeRules.Matches(options,state)?null:UiText.T("尚未确认 Apple Music 的播放顺序或循环设置，未切换歌曲。");
     }
     internal static async Task<MusicPlaybackModeState> ReadPlaylistModesAsync(CancellationToken token,HandoffContext? context=null)
     {

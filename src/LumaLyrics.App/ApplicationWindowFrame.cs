@@ -21,10 +21,10 @@ internal static class ApplicationWindowFrame
         var rule=new Border{Height=1,VerticalAlignment=VerticalAlignment.Bottom,IsHitTestVisible=false};ThemeManager.Bind(rule,Border.BackgroundProperty,"FrameRuleBrush");Grid.SetColumnSpan(rule,2);header.Children.Add(rule);
         var identity=new StackPanel{Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center};header.Children.Add(identity);
         var mark=new TextBlock{Text="◒",FontSize=18,Margin=new Thickness(0,0,10,0)};ThemeManager.Bind(mark,TextBlock.ForegroundProperty,"AccentBrush");identity.Children.Add(mark);
-        var title=new TextBlock{Text=window.Title.Replace("浮光歌词 · ",""),FontSize=11,VerticalAlignment=VerticalAlignment.Center};ThemeManager.Bind(title,TextBlock.ForegroundProperty,"MutedBrush");identity.Children.Add(title);
+        var title=new TextBlock{Text=window.Title.Contains(" · ")?window.Title[(window.Title.IndexOf(" · ",StringComparison.Ordinal)+3)..]:window.Title,FontSize=11,VerticalAlignment=VerticalAlignment.Center};ThemeManager.Bind(title,TextBlock.ForegroundProperty,"MutedBrush");identity.Children.Add(title);
         ThemeManager.Bind(title,TextBlock.FontFamilyProperty,"LabelFont");
-        var close=new Button{Content="\uE8BB",FontFamily=new FontFamily("Segoe MDL2 Assets"),FontSize=10,Width=34,Height=30,ToolTip="关闭",Margin=new Thickness(0),VerticalAlignment=VerticalAlignment.Center};
-        close.SetResourceReference(FrameworkElement.StyleProperty,"IconButton");WindowChrome.SetIsHitTestVisibleInChrome(close,true);System.Windows.Automation.AutomationProperties.SetName(close,"关闭"+title.Text);
+        var close=new Button{Content="\uE8BB",FontFamily=new FontFamily("Segoe MDL2 Assets"),FontSize=10,Width=34,Height=30,ToolTip=UiText.T("关闭"),Margin=new Thickness(0),VerticalAlignment=VerticalAlignment.Center};
+        close.SetResourceReference(FrameworkElement.StyleProperty,"IconButton");WindowChrome.SetIsHitTestVisibleInChrome(close,true);System.Windows.Automation.AutomationProperties.SetName(close,UiText.F($"关闭{title.Text}"));
         close.Click+=(_,_)=>window.Close();Grid.SetColumn(close,1);header.Children.Add(close);
         content.SetValue(Grid.RowProperty,1);layout.Children.Add(content);AppMotion.SetRevealOnChange(content,true);window.Content=shell;
         window.KeyDown+=(_,e)=>{if(e.Key==Key.Escape && !e.Handled && window is not MainWindow){window.Close();e.Handled=true;}};

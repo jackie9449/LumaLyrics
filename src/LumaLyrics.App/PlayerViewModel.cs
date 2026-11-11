@@ -6,7 +6,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     void Set<T>(ref T field, T value, [CallerMemberName] string name = "") { if (EqualityComparer<T>.Default.Equals(field,value)) return; field = value; PropertyChanged?.Invoke(this,new(name)); }
-    string title = "让歌词，浮在音乐之上。", artist = "打开 Apple Music，播放你喜欢的歌", status = "等待 Apple Music", lyricStatus = "播放后会自动查找歌词", time = "--:-- / --:--", offset = "歌词偏移 0.0 秒", current = "浮光歌词", next = "等待播放", quality = "尚无播放时间轴";
+    string title = UiText.T("让歌词，浮在音乐之上。"), artist = UiText.T("打开 Apple Music，播放你喜欢的歌"), status = UiText.T("等待 Apple Music"), lyricStatus = UiText.T("播放后会自动查找歌词"), time = "--:-- / --:--", offset = UiText.T("歌词偏移 0.0 秒"), current = UiText.T("浮光歌词"), next = UiText.T("等待播放"), quality = UiText.T("尚无播放时间轴");
     public string Title { get => title; set => Set(ref title,value); }
     public string Artist { get => artist; set => Set(ref artist,value); }
     public string Status { get => status; set => Set(ref status,value); }
@@ -19,9 +19,9 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
     public string CurrentTranslation {get=>currentTranslation;set=>Set(ref currentTranslation,value);}
     public string NextTranslation {get=>nextTranslation;set=>Set(ref nextTranslation,value);}
     public string Quality { get => quality; set => Set(ref quality,value); }
-    string library="资料库：等待扫描";
+    string library=UiText.T("资料库：等待扫描");
     public string Library {get=>library;set=>Set(ref library,value);}
-    string libraryLabel="资料库";
+    string libraryLabel=UiText.T("资料库");
     public string LibraryLabel {get=>libraryLabel;set=>Set(ref libraryLabel,value);}
     double position, duration = 1;
     public double Position { get => position; set => Set(ref position,value); }
@@ -34,5 +34,5 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
     bool isPlaying;
     public bool IsPlaying {get=>isPlaying;set{if(isPlaying==value)return;Set(ref isPlaying,value);PropertyChanged?.Invoke(this,new(nameof(PlayGlyph)));PropertyChanged?.Invoke(this,new(nameof(PlayLabel)));}}
     public string PlayGlyph=>IsPlaying?"\uE769":"\uE768";
-    public string PlayLabel=>IsPlaying?"暂停":"播放";
+    public string PlayLabel=>IsPlaying?UiText.T("暂停"):UiText.T("播放");
 }

@@ -30,6 +30,7 @@
 - Keep personal data outside software directories and archives. Export readable personal lyrics/covers with consistent database snapshots; restore only into a new directory. Never replace existing personal files or silently create an empty profile when a selected location is unavailable. Validate distribution boundaries before creating a software ZIP.
 
 - Chinese script display offers original, simplified and traditional choices shared by main and floating lyrics, saved in personal settings. Convert only display strings offline; preserve raw originals, hashes, group indexes, timing, manual bindings and translation provenance. Detectable Japanese/Korean originals stay unchanged while their Chinese translations can convert. Keep both translation visibility switches independent.
+- Interface language is independent of lyric script: zh-Hans (legacy default), zh-Hant, en and ja, persisted and applied on restart. Explicitly localize application copy, formatted templates and canonical status display boundaries; never traverse arbitrary text to translate user metadata, lyrics, paths, theme IDs or stored provenance. Keep native Apple Music label recognition independent of the application language. Per the owner's 2026-11-11 request, omit main/settings page slogans and eyebrows while retaining the application titlebar.
 
 ## Local development records
 

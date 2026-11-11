@@ -54,7 +54,7 @@ public static class MusicPlaybackQueue
 
     // These are complete menu labels, never a prefix or a title search. In particular,
     // Play, Play Last and playlist actions cannot satisfy a Play Next request.
-    public static bool IsPlayNextCommand(string command)=>new[]{"插播","Play Next","次に再生"}.Contains(command.Trim().Normalize(NormalizationForm.FormKC),StringComparer.OrdinalIgnoreCase);
+    public static bool IsPlayNextCommand(string command)=>NativeMusicLabels.IsPlayNext(command);
 
     public static bool ConfirmsInsertion(MusicLibrarySong song,MusicQueueSnapshot before,MusicQueueSnapshot after)
     {

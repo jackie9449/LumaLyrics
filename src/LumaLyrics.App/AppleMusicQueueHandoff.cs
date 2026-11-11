@@ -1,3 +1,4 @@
+using LumaLyrics.Core;
 using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
 using FlaUI.Core.Definitions;
@@ -22,7 +23,7 @@ internal static partial class AppleMusicLibraryHandoff
         try
         {
             if(!opened){toggle.Patterns.Toggle.Pattern.Toggle();await Task.Delay(300,token);}
-            history=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>Name(b) is "历史记录" or "History");
+            history=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>NativeMusicLabels.IsHistory(Name(b)));
             historyWasOn=history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
             if(!historyWasOn && history?.Patterns.Toggle.IsSupported==true){history.Patterns.Toggle.Pattern.Toggle();await Task.Delay(200,token);}
             var historyRead=await ReadQueueAsync(token);bool historyRestored=history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
@@ -87,7 +88,7 @@ internal static partial class AppleMusicLibraryHandoff
                         catch(Exception ex){failure=ex.GetType().Name+": "+ex.Message;}
                         finally{if(vertical>=0 && list.Patterns.Scroll.IsSupported)list.Patterns.Scroll.Pattern.SetScrollPercent(-1,vertical.Value);}
                     }
-                    var tabs=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).Where(b=>Name(b) is "待播清单" or "历史记录").Select(b=>new{name=Name(b),invoke=b.Patterns.Invoke.IsSupported,selection=b.Patterns.SelectionItem.IsSupported,toggle=b.Patterns.Toggle.IsSupported}).ToArray();
+                    var tabs=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).Where(b=>(NativeMusicLabels.IsPlayingNext(Name(b)) || NativeMusicLabels.IsHistory(Name(b)))).Select(b=>new{name=Name(b),invoke=b.Patterns.Invoke.IsSupported,selection=b.Patterns.SelectionItem.IsSupported,toggle=b.Patterns.Toggle.IsSupported}).ToArray();
                     return new{available=true,opened,elements=rows,items,end,failure,vertical,tabs};
                 }
                 finally{if(!opened && toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On)toggle.Patterns.Toggle.Pattern.Toggle();}

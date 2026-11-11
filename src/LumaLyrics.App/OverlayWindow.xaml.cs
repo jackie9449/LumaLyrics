@@ -144,8 +144,8 @@ public partial class OverlayWindow : Window
     internal bool InstrumentalSuppressed=>instrumental && LyricSurface.Visibility==Visibility.Hidden && !ToolbarPopup.IsOpen;
     public void SetLocked(bool locked,bool showTip=true)
     {
-        if(locked && !owner.CanRecoverOverlay) { MessageBox.Show("托盘暂不可用，无法安全锁定。请先重新连接托盘。","浮光歌词"); return; }
-        if(locked && firstLock && showTip) { MessageBox.Show($"锁定后可点击穿透。\n从托盘选择“解锁歌词”，或按 {settings.UnlockHotkey} 解锁。","桌面歌词"); firstLock=false; }
+        if(locked && !owner.CanRecoverOverlay) { MessageBox.Show(UiText.T("托盘暂不可用，无法安全锁定。请先重新连接托盘。"),UiText.T("浮光歌词")); return; }
+        if(locked && firstLock && showTip) { MessageBox.Show(UiText.F($"锁定后可点击穿透。\n从托盘选择“解锁歌词”，或按 {settings.UnlockHotkey} 解锁。"),UiText.T("桌面歌词")); firstLock=false; }
         IsLocked=locked; NativeWindow.ClickThrough(this,locked && !appearanceEditing);HideHoverControls(); ResizeMode=locked && !appearanceEditing?ResizeMode.NoResize:ResizeMode.CanResizeWithGrip;ApplyStyle();
     }
     void DragOverlay(object sender,MouseButtonEventArgs e) { if(CanDrag && e.ButtonState==MouseButtonState.Pressed) { try {SetInteractiveMove(true);DragMove();NativeWindow.ClampVisible(this); } catch(InvalidOperationException) { } finally{SetInteractiveMove(false);} } }

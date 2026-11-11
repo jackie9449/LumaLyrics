@@ -9,7 +9,7 @@ public sealed class AppearanceWindow:Window
     bool closing;
     public AppearanceWindow(AppSettings settings,Action<OverlayAppearance?> previewChanged,Action saveSettings,Func<string> materialStatus)
     {
-        Title="浮光歌词 · 悬浮歌词外观";Width=1120;Height=850;MinWidth=640;MinHeight=520;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        Title=UiText.T("浮光歌词 · 悬浮歌词外观");Width=1120;Height=850;MinWidth=640;MinHeight=520;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         ThemeManager.Bind(this,BackgroundProperty,"WindowBrush");ThemeManager.Bind(this,ForegroundProperty,"TextBrush");
         editor=new(settings,previewChanged,saveSettings,materialStatus);
         Content=new System.Windows.Controls.ScrollViewer{Content=editor,Padding=new(24),VerticalScrollBarVisibility=System.Windows.Controls.ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=System.Windows.Controls.ScrollBarVisibility.Disabled};

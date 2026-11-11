@@ -19,7 +19,7 @@ internal sealed partial class PlaybackQueueView
     void SetupReordering(Func<MusicQueueMove,CancellationToken,Task<LibraryPlayResult>>? move)
     {
         reorder=move;if(move is null)return;
-        upcoming.AllowDrop=true;upcoming.ToolTip="拖动曲目调整实际播放顺序；双击或按 Enter 播放";
+        upcoming.AllowDrop=true;upcoming.ToolTip=UiText.T("拖动曲目调整实际播放顺序；双击或按 Enter 播放");
         upcoming.PreviewMouseLeftButtonDown+=(sender,e)=>
         {
             armedDrag=null;
@@ -85,16 +85,16 @@ internal sealed partial class PlaybackQueueView
     async Task ReorderAsync(MusicQueueMove move)
     {
         playing?.Cancel();playing?.Dispose();playing=new();var token=playing.Token;long version=playVersions.Next();selecting=true;
-        message.Text=playMessage="正在同步播放顺序…";RefreshButton.IsEnabled=false;
+        message.Text=playMessage=UiText.T("正在同步播放顺序…");RefreshButton.IsEnabled=false;
         try
         {
             var result=await reorder!(move,token);token.ThrowIfCancellationRequested();
             if(disposed || !playVersions.IsCurrent(version))return;
-            message.Text=playMessage=result.Message;if(result.Confirmed && result.ActivateWindow)activate?.Invoke();
+            message.Text=playMessage=UiText.Status(result.Message);if(result.Confirmed && result.ActivateWindow)activate?.Invoke();
         }
         catch(OperationCanceledException){}
         catch(Exception ex) when(ex is System.Runtime.InteropServices.ExternalException or InvalidOperationException or System.IO.IOException or TimeoutException)
-        {if(!disposed && playVersions.IsCurrent(version))message.Text=playMessage="排序暂未确认，请刷新播放列表查看。";}
+        {if(!disposed && playVersions.IsCurrent(version))message.Text=playMessage=UiText.T("排序暂未确认，请刷新播放列表查看。");}
         finally{if(!disposed && playVersions.IsCurrent(version)){selecting=false;RefreshButton.IsEnabled=true;PlaybackCompleted?.Invoke();}}
     }
     internal void ShowDropHint(double y)

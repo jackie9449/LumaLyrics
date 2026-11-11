@@ -10,9 +10,9 @@ internal static class ChineseScriptDisplay
 
     internal static ComboBox CreateSelector(PlaybackCoordinator coordinator)
     {
-        var choice=new ComboBox{Width=126,MinHeight=30,FontSize=12,Margin=new(0),Padding=new(10,4,10,4),SelectedValuePath="Tag",ToolTip="中文原词与译文的简繁显示，同时用于主窗口和悬浮歌词"};
-        AutomationProperties.SetName(choice,"歌词简繁显示");
-        foreach(var (id,label) in new[]{("original","按原文"),("simplified","简体中文"),("traditional","繁体中文")})
+        var choice=new ComboBox{Width=UiText.Language is "en" or "ja"?170:126,MinHeight=30,FontSize=12,Margin=new(0),Padding=new(10,4,10,4),SelectedValuePath="Tag",ToolTip=UiText.T("中文原词与译文的简繁显示，同时用于主窗口和悬浮歌词")};
+        AutomationProperties.SetName(choice,UiText.T("歌词简繁显示"));
+        foreach(var (id,label) in new[]{("original",UiText.T("按原文")),("simplified",UiText.T("简体中文")),("traditional",UiText.T("繁体中文"))})
             choice.Items.Add(new ComboBoxItem{Tag=id,Content=label});
         bool syncing=false;
         void Refresh(){syncing=true;try{choice.SelectedValue=Normalize(coordinator.Settings.ChineseScript);}finally{syncing=false;}}

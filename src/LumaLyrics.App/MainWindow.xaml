@@ -1,5 +1,5 @@
 <Window x:Class="LumaLyrics.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:LumaLyrics.App" xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
- Title="浮光歌词 LumaLyrics" Style="{StaticResource {x:Type Window}}" Width="1220" Height="820" MinWidth="820" MinHeight="640" WindowStyle="None" WindowStartupLocation="CenterScreen" AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
+ Title="{local:Loc Text='浮光歌词 LumaLyrics'}" Style="{StaticResource {x:Type Window}}" Width="1220" Height="820" MinWidth="820" MinHeight="640" WindowStyle="None" WindowStartupLocation="CenterScreen" AllowDrop="True" Drop="OnDrop" DragOver="OnDragOver">
  <shell:WindowChrome.WindowChrome><shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False"/></shell:WindowChrome.WindowChrome>
  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Background="{DynamicResource WindowBrush}">
   <Grid>
@@ -11,11 +11,11 @@
    <Grid>
     <Grid.RowDefinitions><RowDefinition Height="42"/><RowDefinition Height="*"/></Grid.RowDefinitions>
     <Grid Background="Transparent" MouseLeftButtonDown="TitleBarPressed" Margin="14,0,8,0">
-     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="◒" Foreground="{DynamicResource AccentBrush}" FontSize="18" Margin="8,0,9,0"/><TextBlock Text="浮光歌词" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/><TextBlock Text=" /  LumaLyrics" Foreground="{DynamicResource MutedBrush}" Opacity=".65" FontSize="10" VerticalAlignment="Center"/></StackPanel>
+     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="◒" Foreground="{DynamicResource AccentBrush}" FontSize="18" Margin="8,0,9,0"/><TextBlock Text="{local:Loc Text='浮光歌词'}" Foreground="{DynamicResource MutedBrush}" FontSize="11" VerticalAlignment="Center"/><TextBlock x:Name="BrandLatinSuffix" Text=" /  LumaLyrics" Foreground="{DynamicResource MutedBrush}" Opacity=".65" FontSize="10" VerticalAlignment="Center"/></StackPanel>
      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-      <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="最小化" AutomationProperties.Name="最小化" Click="MinimizeClicked" Height="32" Margin="0,4"/>
-      <Button Content="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="最大化或还原" AutomationProperties.Name="最大化或还原" Click="MaximizeClicked" Height="32" Margin="0,4"/>
-      <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="关闭窗口" AutomationProperties.Name="关闭窗口" Click="CloseClicked" Height="32" Margin="0,4"/>
+      <Button Content="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='最小化'}" AutomationProperties.Name="{local:Loc Text='最小化'}" Click="MinimizeClicked" Height="32" Margin="0,4"/>
+      <Button Content="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='最大化或还原'}" AutomationProperties.Name="{local:Loc Text='最大化或还原'}" Click="MaximizeClicked" Height="32" Margin="0,4"/>
+      <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='关闭窗口'}" AutomationProperties.Name="{local:Loc Text='关闭窗口'}" Click="CloseClicked" Height="32" Margin="0,4"/>
      </StackPanel>
     </Grid>
     <Grid Grid.Row="1">
@@ -23,12 +23,12 @@
      <Border x:Name="NavigationShell" Background="{DynamicResource NavigationBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0" Margin="0,6,0,20">
       <DockPanel x:Name="NavigationRail" Margin="0,12,0,0">
        <StackPanel DockPanel.Dock="Bottom">
-        <Button x:Name="SettingsNav" local:ThemeIdentity.Label="设置" Style="{StaticResource NavButton}" Content="{StaticResource NavSettingsIcon}" ToolTip="设置" AutomationProperties.Name="设置" Click="SettingsClicked"/>
-        <Button x:Name="DiagnosticsNav" local:ThemeIdentity.Label="诊断" Style="{StaticResource NavButton}" Content="{StaticResource NavDiagnosticsIcon}" ToolTip="诊断" AutomationProperties.Name="诊断" Click="DiagnosticsClicked"/>
+        <Button x:Name="SettingsNav" local:ThemeIdentity.Label="{local:Loc Text='设置'}" Style="{StaticResource NavButton}" Content="{StaticResource NavSettingsIcon}" ToolTip="{local:Loc Text='设置'}" AutomationProperties.Name="{local:Loc Text='设置'}" Click="SettingsClicked"/>
+        <Button x:Name="DiagnosticsNav" local:ThemeIdentity.Label="{local:Loc Text='诊断'}" Style="{StaticResource NavButton}" Content="{StaticResource NavDiagnosticsIcon}" ToolTip="{local:Loc Text='诊断'}" AutomationProperties.Name="{local:Loc Text='诊断'}" Click="DiagnosticsClicked"/>
        </StackPanel>
        <StackPanel>
-        <Button x:Name="LyricsNav" local:ThemeIdentity.Label="聆听" Style="{StaticResource NavButton}" Content="{StaticResource NavLyricsIcon}" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="当前歌词" AutomationProperties.Name="回到当前歌词" Click="ReturnClicked"/>
-        <Button x:Name="MusicNav" local:ThemeIdentity.Label="音乐库" Style="{StaticResource NavButton}" Content="{StaticResource NavMusicIcon}" ToolTip="音乐库 · 在浮光中选歌" AutomationProperties.Name="打开音乐库" Click="MusicLibraryClicked"/>
+        <Button x:Name="LyricsNav" local:ThemeIdentity.Label="{local:Loc Text='聆听'}" Style="{StaticResource NavButton}" Content="{StaticResource NavLyricsIcon}" Background="{DynamicResource AccentSoftBrush}" Foreground="{DynamicResource AccentBrush}" ToolTip="{local:Loc Text='当前歌词'}" AutomationProperties.Name="{local:Loc Text='回到当前歌词'}" Click="ReturnClicked"/>
+        <Button x:Name="MusicNav" local:ThemeIdentity.Label="{local:Loc Text='音乐库'}" Style="{StaticResource NavButton}" Content="{StaticResource NavMusicIcon}" ToolTip="{local:Loc Text='音乐库 · 在浮光中选歌'}" AutomationProperties.Name="{local:Loc Text='打开音乐库'}" Click="MusicLibraryClicked"/>
        </StackPanel>
       </DockPanel>
      </Border>
@@ -36,8 +36,7 @@
      <Grid x:Name="LyricsPage" Margin="28,14,30,18">
       <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <Grid x:Name="PlaybackHeader" MaxWidth="2080" Margin="0,0,0,20"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-       <Grid x:Name="PlaybackIdentity"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock x:Name="PlaybackHeadline" Text="让音乐，有迹可循。" Style="{StaticResource AppHeadline}"/><TextBlock x:Name="PlaybackEyebrow" Grid.Row="1" Text="L I S T E N   C L O S E R" Style="{StaticResource AppEyebrow}" Margin="1,7,0,0"/></Grid>
-       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="{Binding LibraryLabel}" Click="LibraryClicked" ToolTip="{Binding Library}" FontSize="11" Padding="13,9"/><Button x:Name="OverlayToggle" Content="桌面歌词" Click="ToggleOverlayClicked" ToolTip="Ctrl + Alt + L" Style="{StaticResource PrimaryButton}" FontSize="11" Padding="15,9" Margin="0"/></StackPanel>
+       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="{Binding LibraryLabel}" Click="LibraryClicked" ToolTip="{Binding Library}" FontSize="11" Padding="13,9"/><Button x:Name="OverlayToggle" Content="{local:Loc Text='桌面歌词'}" Click="ToggleOverlayClicked" ToolTip="Ctrl + Alt + L" Style="{StaticResource PrimaryButton}" FontSize="11" Padding="15,9" Margin="0"/></StackPanel>
       </Grid>
       <Grid x:Name="Body" Grid.Row="1" MaxWidth="2080">
        <Grid.ColumnDefinitions><ColumnDefinition x:Name="InfoColumn" Width="248"/><ColumnDefinition Width="*"/><ColumnDefinition x:Name="PlaybackQueueColumn" Width="296"/></Grid.ColumnDefinitions>
@@ -56,7 +55,7 @@
             <Ellipse Width="97" Height="97" Stroke="{DynamicResource AccentBrush}" StrokeThickness=".7" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,49,39" Opacity=".3"/>
             <Ellipse Width="15" Height="15" Fill="{DynamicResource AccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,90,80"/>
             <Path Data="M 0,130 C 70,70 125,190 195,115 S 280,60 330,85" Stroke="{DynamicResource AccentBrush}" StrokeThickness="1.4" Opacity=".38"/>
-            <StackPanel Margin="27,30,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"><TextBlock Text="LUMA" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/><TextBlock Text="留一束光，&#10;给正在听的你。" FontSize="21" LineHeight="32" Margin="0,10,0,0" Foreground="{DynamicResource TextBrush}"/><TextBlock Text="YOUR MUSIC. YOUR MOMENT." FontSize="7" Foreground="{DynamicResource MutedBrush}" Margin="1,13,0,0"/></StackPanel>
+            <StackPanel Margin="27,30,0,0" HorizontalAlignment="Left" VerticalAlignment="Top"><TextBlock Text="LUMA" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"/><TextBlock Text="{local:Loc Text='留一束光，&#10;给正在听的你。'}" FontSize="21" LineHeight="32" Margin="0,10,0,0" Foreground="{DynamicResource TextBrush}"/><TextBlock Text="YOUR MUSIC. YOUR MOMENT." FontSize="7" Foreground="{DynamicResource MutedBrush}" Margin="1,13,0,0"/></StackPanel>
            </Grid></Viewbox>
           </Grid>
           <Image x:Name="Artwork" Stretch="UniformToFill"/>
@@ -66,11 +65,11 @@
         <TextBlock x:Name="TrackTitle" Grid.Row="0" Text="{Binding Title}" ToolTip="{Binding Title}" FontFamily="{DynamicResource DisplayFont}" FontSize="25" FontWeight="{DynamicResource HeadlineWeight}" TextWrapping="Wrap" MaxHeight="70" TextTrimming="CharacterEllipsis" Margin="0,20,0,7"/>
         <TextBlock x:Name="TrackArtist" Grid.Row="1" Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" MaxHeight="36" LineHeight="18"/>
         <TextBlock x:Name="TrackTime" Grid.Row="2" Text="{Binding Time}" FontSize="10" Foreground="{DynamicResource MutedBrush}" Margin="0,18,0,2"/>
-        <local:SeekSlider Style="{StaticResource {x:Type Slider}}" Grid.Row="3" x:Name="SeekSlider" SmallChange="5000" LargeChange="10000" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position,Mode=OneWay}" IsEnabled="{Binding CanSeek}" ToolTip="{Binding Time}" AutomationProperties.Name="播放进度" EditStarted="SeekStarted" EditCommitted="SeekCommitted" EditCancelled="SeekCancelled"/>
+        <local:SeekSlider Style="{StaticResource {x:Type Slider}}" Grid.Row="3" x:Name="SeekSlider" SmallChange="5000" LargeChange="10000" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position,Mode=OneWay}" IsEnabled="{Binding CanSeek}" ToolTip="{Binding Time}" AutomationProperties.Name="{local:Loc Text='播放进度'}" EditStarted="SeekStarted" EditCommitted="SeekCommitted" EditCancelled="SeekCancelled"/>
         <StackPanel x:Name="PlaybackControls" Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,12">
-         <Button Content="&#xE892;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="上一首" AutomationProperties.Name="上一首" IsEnabled="{Binding CanPrevious}" Click="PreviousClicked" Margin="0,0,12,0"/>
-         <Button x:Name="PlayButton" Content="▷ 播放" MinWidth="100" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanPlay}" Click="PlayClicked" Margin="0" ToolTip="播放或暂停"/>
-         <Button Content="&#xE893;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="下一首" AutomationProperties.Name="下一首" IsEnabled="{Binding CanNext}" Click="NextClicked" Margin="12,0,0,0"/>
+         <Button Content="&#xE892;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='上一首'}" AutomationProperties.Name="{local:Loc Text='上一首'}" IsEnabled="{Binding CanPrevious}" Click="PreviousClicked" Margin="0,0,12,0"/>
+         <Button x:Name="PlayButton" Content="{local:Loc Text='▷ 播放'}" MinWidth="100" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanPlay}" Click="PlayClicked" Margin="0" ToolTip="{local:Loc Text='播放或暂停'}"/>
+         <Button Content="&#xE893;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='下一首'}" AutomationProperties.Name="{local:Loc Text='下一首'}" IsEnabled="{Binding CanNext}" Click="NextClicked" Margin="12,0,0,0"/>
         </StackPanel>
         <TextBlock x:Name="ConnectionStatus" Grid.Row="5" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
         <TextBlock x:Name="QualityStatus" Grid.Row="6" Text="{Binding Quality}" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,5,0,0"/>
@@ -82,17 +81,17 @@
          <Border CornerRadius="{DynamicResource PanelRadius}" IsHitTestVisible="False" Opacity="{DynamicResource SurfaceSheenOpacity}" Background="{DynamicResource SheenBrush}"/>
          <Grid x:Name="LyricContent" Margin="30,22,30,20">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-          <Grid><TextBlock Text="歌词" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/><ContentControl x:Name="ChineseScriptHost" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+          <Grid><TextBlock Text="{local:Loc Text='歌词'}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/><ContentControl x:Name="ChineseScriptHost" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
           <Grid Grid.Row="1" Margin="0,12,0,0">
            <ScrollViewer x:Name="LyricsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ManualScroll" ScrollChanged="LyricsScrollChanged"><StackPanel x:Name="LyricLines" Margin="0,70,10,100"/></ScrollViewer>
            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="390" Margin="14,0">
             <Border Width="62" Height="62" CornerRadius="22" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,22"><TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-            <TextBlock Text="每一句，都有回响。" FontSize="25" FontWeight="SemiBold" TextAlignment="Center"/>
-            <TextBlock x:Name="EmptyHint" Text="在 Apple Music 中播放歌曲，&#10;让歌词随旋律，在这里慢慢展开。" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="23" Margin="0,15,0,23"/>
-            <Button Content="＋  导入本地歌词" Click="ImportClicked" HorizontalAlignment="Center" Style="{StaticResource PrimaryButton}" Padding="19,11" Margin="0"/>
-            <TextBlock Text="也可以拖入 LRC / TXT 文件" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" Margin="0,15,0,0"/>
+            <TextBlock Text="{local:Loc Text='每一句，都有回响。'}" FontSize="25" FontWeight="SemiBold" TextAlignment="Center"/>
+            <TextBlock x:Name="EmptyHint" Text="{local:Loc Text='在 Apple Music 中播放歌曲，&#10;让歌词随旋律，在这里慢慢展开。'}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="23" Margin="0,15,0,23"/>
+            <Button Content="{local:Loc Text='＋  导入本地歌词'}" Click="ImportClicked" HorizontalAlignment="Center" Style="{StaticResource PrimaryButton}" Padding="19,11" Margin="0"/>
+            <TextBlock Text="{local:Loc Text='也可以拖入 LRC / TXT 文件'}" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" Margin="0,15,0,0"/>
            </StackPanel>
-           <Button x:Name="ReturnButton" Content="回到当前歌词 ↓" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Click="ReturnClicked" Margin="0,0,0,4"/>
+           <Button x:Name="ReturnButton" Content="{local:Loc Text='回到当前歌词 ↓'}" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom" Click="ReturnClicked" Margin="0,0,0,4"/>
           </Grid>
          </Grid>
         </Grid>
@@ -101,8 +100,8 @@
       </Grid>
       <Grid x:Name="PlaybackFooter" MaxWidth="2080" Grid.Row="2" Margin="0,18,0,0"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <StackPanel x:Name="OffsetActions" Orientation="Horizontal"><Button Content="−  0.1s" ToolTip="歌词提前 0.1 秒" AutomationProperties.Name="歌词提前 0.1 秒" Click="EarlierClicked" Padding="12,7" FontSize="11"/><Button Content="＋  0.1s" ToolTip="歌词延后 0.1 秒" AutomationProperties.Name="歌词延后 0.1 秒" Click="LaterClicked" Padding="12,7" FontSize="11"/><Button Content="重置" Click="ResetOffsetClicked" Padding="10,7" FontSize="11" Background="Transparent" BorderThickness="0"/></StackPanel>
-        <StackPanel x:Name="PlaybackActions" Grid.Column="2" Orientation="Horizontal"><Button Content="更换歌词" Click="CandidatesClicked" Padding="12,7" FontSize="11"/><Button Content="导入" Click="ImportClicked" Padding="12,7" FontSize="11"/><Button Content="重新搜索" Click="RetryClicked" Padding="12,7" FontSize="11"/><ToggleButton x:Name="PlaybackQueueToggle" Style="{StaticResource QueueVisibilityToggle}" Checked="PlaybackQueueToggled" Unchecked="PlaybackQueueToggled" AutomationProperties.Name="显示播放列表" ToolTip="显示或隐藏播放列表"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8F1;" FontFamily="Segoe MDL2 Assets" Margin="0,0,7,0" VerticalAlignment="Center"/><TextBlock Text="播放列表"/></StackPanel></ToggleButton><ToggleButton x:Name="MainChineseTranslationToggle" Content="中文译文" Style="{StaticResource QueueVisibilityToggle}" Margin="8,0,0,0" Checked="MainChineseTranslationToggled" Unchecked="MainChineseTranslationToggled" AutomationProperties.Name="主窗口中文译文开关" ToolTip="显示主窗口中文译文"/></StackPanel>
+        <StackPanel x:Name="OffsetActions" Orientation="Horizontal"><Button Content="−  0.1s" ToolTip="{local:Loc Text='歌词提前 0.1 秒'}" AutomationProperties.Name="{local:Loc Text='歌词提前 0.1 秒'}" Click="EarlierClicked" Padding="12,7" FontSize="11"/><Button Content="＋  0.1s" ToolTip="{local:Loc Text='歌词延后 0.1 秒'}" AutomationProperties.Name="{local:Loc Text='歌词延后 0.1 秒'}" Click="LaterClicked" Padding="12,7" FontSize="11"/><Button Content="{local:Loc Text='重置'}" Click="ResetOffsetClicked" Padding="10,7" FontSize="11" Background="Transparent" BorderThickness="0"/></StackPanel>
+        <StackPanel x:Name="PlaybackActions" Grid.Column="2" Orientation="Horizontal"><Button Content="{local:Loc Text='更换歌词'}" Click="CandidatesClicked" Padding="12,7" FontSize="11"/><Button Content="{local:Loc Text='导入'}" Click="ImportClicked" Padding="12,7" FontSize="11"/><Button Content="{local:Loc Text='重新搜索'}" Click="RetryClicked" Padding="12,7" FontSize="11"/><ToggleButton x:Name="PlaybackQueueToggle" Style="{StaticResource QueueVisibilityToggle}" Checked="PlaybackQueueToggled" Unchecked="PlaybackQueueToggled" AutomationProperties.Name="{local:Loc Text='显示播放列表'}" ToolTip="{local:Loc Text='显示或隐藏播放列表'}"><StackPanel Orientation="Horizontal"><TextBlock Text="&#xE8F1;" FontFamily="Segoe MDL2 Assets" Margin="0,0,7,0" VerticalAlignment="Center"/><TextBlock Text="{local:Loc Text='播放列表'}"/></StackPanel></ToggleButton><ToggleButton x:Name="MainChineseTranslationToggle" Content="{local:Loc Text='中文译文'}" Style="{StaticResource QueueVisibilityToggle}" Margin="8,0,0,0" Checked="MainChineseTranslationToggled" Unchecked="MainChineseTranslationToggled" AutomationProperties.Name="{local:Loc Text='主窗口中文译文开关'}" ToolTip="{local:Loc Text='显示主窗口中文译文'}"/></StackPanel>
        </Grid>
        <Grid Grid.Row="1" Margin="0,13,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding LyricStatus}" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/><TextBlock Grid.Column="1" Text="{Binding Offset}" Foreground="{DynamicResource MutedBrush}" FontSize="10"/></Grid>
       </Grid>

@@ -48,10 +48,10 @@ public partial class MainWindow
         {
             var result=await playbackBridge.SeekAsync(expected,seekTarget,nativeSeekAvailable,current.Token);
             if(!current.IsCancellationRequested && ReferenceEquals(seekCancellation,current) && PlaybackSeeking.SameRecording(expected,coordinator.Source.Latest))
-                vm.Status=result.Confirmed?"已跳转至 "+TimeSpan.FromMilliseconds(seekTarget).ToString(@"mm\:ss"):result.Message;
+                vm.Status=result.Confirmed?UiText.T("已跳转至 ")+TimeSpan.FromMilliseconds(seekTarget).ToString(@"mm\:ss"):UiText.Status(result.Message);
         }
         catch(OperationCanceledException){}
-        catch(Exception ex){store.Log("Seek: "+ex.GetType().Name);if(ReferenceEquals(seekCancellation,current))vm.Status="进度跳转暂不可用，请重试。";}
+        catch(Exception ex){store.Log("Seek: "+ex.GetType().Name);if(ReferenceEquals(seekCancellation,current))vm.Status=UiText.T("进度跳转暂不可用，请重试。");}
         finally
         {
             if(ReferenceEquals(seekCancellation,current)){seekCancellation=null;seekRecording=null;seekPending=false;Tick();}

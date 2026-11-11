@@ -17,14 +17,14 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         try
         {
             await coordinator.Source.RefreshAsync().WaitAsync(token);var before=coordinator.Source.Latest;
-            if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || !MusicLibraryPlayback.IsRequestedRecording(track,before.Track))throw new InvalidOperationException("尚未确认 Apple Music 当前录音，请重新连接后重试。");
+            if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || !MusicLibraryPlayback.IsRequestedRecording(track,before.Track))throw new InvalidOperationException(UiText.T("尚未确认 Apple Music 当前录音，请重新连接后重试。"));
             string language=LumaLyrics.Windows.LocalLyricsOcr.PreferredLanguage(original);
-            if(image && !LumaLyrics.Windows.LocalLyricsOcr.Supports(language))throw new InvalidOperationException($"本机尚未安装 {language} 的 Windows OCR。可使用“原生文字参考”；也可在 Windows 语言选项中安装该语言的光学字符识别组件后重试。");
+            if(image && !LumaLyrics.Windows.LocalLyricsOcr.Supports(language))throw new InvalidOperationException(UiText.F($"本机尚未安装 {language} 的 Windows OCR。可使用“原生文字参考”；也可在 Windows 语言选项中安装该语言的光学字符识别组件后重试。"));
             var capture=await AppleMusicLibraryHandoff.CaptureLyricsAsync(track,image,token,trace);
             var recognized=image?await LumaLyrics.Windows.LocalLyricsOcr.RecognizeAsync(capture.Image!,language,token):new LumaLyrics.Windows.LocalOcrResult("native-accessibility",capture.NativeLines);
             await coordinator.Source.RefreshAsync().WaitAsync(token);var after=coordinator.Source.Latest;
-            if(after is null || !MusicLibraryPlayback.IsRequestedRecording(track,after.Track) || coordinator.Document is not { } current || TranslationAlignment.Hash(current.Raw)!=TranslationAlignment.Hash(original.Raw))throw new InvalidOperationException("采集期间录音或原词已变化，本次校对未保存。");
-            if(recognized.Lines.Count==0)throw new InvalidOperationException("没有识别出可比较的文字，未保存空白记录。");
+            if(after is null || !MusicLibraryPlayback.IsRequestedRecording(track,after.Track) || coordinator.Document is not { } current || TranslationAlignment.Hash(current.Raw)!=TranslationAlignment.Hash(original.Raw))throw new InvalidOperationException(UiText.T("采集期间录音或原词已变化，本次校对未保存。"));
+            if(recognized.Lines.Count==0)throw new InvalidOperationException(UiText.T("没有识别出可比较的文字，未保存空白记录。"));
             return (new(track,TranslationAlignment.Hash(original.Raw),capture.CapturedUtc,before.PositionMs,recognized.Language,capture.Bounds,recognized.Lines),capture);
         }
         finally{Interlocked.Decrement(ref pending);HandoffCompleted?.Invoke();}
@@ -41,7 +41,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
     internal Task<LibraryPlayResult> ReorderQueueAsync(MusicQueueMove move,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         await coordinator.Source.RefreshAsync().WaitAsync(requestToken);var before=coordinator.Source.Latest;
-        if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || move.Snapshot.Current is null || !MusicLibraryPlayback.IsRequestedRecording(move.Snapshot.Current,before.Track))return new(false,"尚未确认 Apple Music 当前播放状态，请重新连接后重试。");
+        if(before is null || !before.SessionId.Contains("AppleMusic",StringComparison.OrdinalIgnoreCase) || move.Snapshot.Current is null || !MusicLibraryPlayback.IsRequestedRecording(move.Snapshot.Current,before.Track))return new(false,UiText.T("尚未确认 Apple Music 当前播放状态，请重新连接后重试。"));
         var failure=await AppleMusicLibraryHandoff.ReorderQueueAsync(move,requestToken,context,trace);if(failure is not null)return new(false,failure);
         using var timeout=CancellationTokenSource.CreateLinkedTokenSource(requestToken);timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
@@ -49,12 +49,12 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
             while(true)
             {
                 var queue=await AppleMusicLibraryHandoff.ReadQueueAsync(timeout.Token,trace,context);await coordinator.Source.RefreshAsync().WaitAsync(timeout.Token);var current=coordinator.Source.Latest;
-                if(MusicPlaybackQueue.ConfirmsMove(move,queue) && current is not null && current.Status==before.Status && MusicLibraryPlayback.IsRequestedRecording(before.Track,current.Track))return new(true,"已调整播放顺序，当前歌曲继续播放");
+                if(MusicPlaybackQueue.ConfirmsMove(move,queue) && current is not null && current.Status==before.Status && MusicLibraryPlayback.IsRequestedRecording(before.Track,current.Track))return new(true,UiText.T("已调整播放顺序，当前歌曲继续播放"));
                 await Task.Delay(250,timeout.Token);
             }
         }
         catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
-        return new(false,"已发送排序操作，尚未确认新顺序，请刷新播放列表查看。");
+        return new(false,UiText.T("已发送排序操作，尚未确认新顺序，请刷新播放列表查看。"));
     },token);
     async Task<LibraryPlayResult> RunSelectionAsync(Func<AppleMusicLibraryHandoff.HandoffContext,CancellationToken,Task<LibraryPlayResult>> action,CancellationToken token)
     {
@@ -88,33 +88,33 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
                 // Retry reads only; never send the insertion a second time.
                 await Task.Delay(250,confirmation.Token);var queue=await AppleMusicLibraryHandoff.ReadQueueAsync(confirmation.Token,trace,context);
                 if(MusicPlaybackQueue.ConfirmsInsertion(song,before,queue))
-                    return new(true,"已插播 · "+song.Title+" · 将在当前歌曲结束后播放");
+                    return new(true,UiText.T("已插播 · ")+song.Title+UiText.T(" · 将在当前歌曲结束后播放"));
             }
         }
         catch(OperationCanceledException) when(!token.IsCancellationRequested){}
-        return new(false,"已发送插播请求，暂未确认下一首。请刷新播放列表查看。");
+        return new(false,UiText.T("已发送插播请求，暂未确认下一首。请刷新播放列表查看。"));
     },token);
     internal Task<LibraryPlayResult> PlayAsync(MusicLibrarySong song,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         string? failure=await AppleMusicLibraryHandoff.SelectAsync(song,requestToken,context,trace);
         if(failure is not null)return new(false,failure);
-        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(song.Track,track),"正在播放 · "+song.Title,requestToken,context);
+        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(song.Track,track),UiText.T("正在播放 · ")+song.Title,requestToken,context);
     },token);
     internal Task<LibraryPlayResult> PlayAlbumAsync(MusicAlbum album,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         var selection=await AppleMusicLibraryHandoff.SelectAlbumAsync(album,requestToken,context,trace);
         if(selection.Failure is not null)return new(false,selection.Failure);
-        if(selection.FirstTrack is not { } first)return new(false,"尚无法确认 Apple Music 的专辑首曲，当前歌词继续跟随实际播放。");
-        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),"正在播放专辑 · "+album.Title,requestToken,context);
+        if(selection.FirstTrack is not { } first)return new(false,UiText.T("尚无法确认 Apple Music 的专辑首曲，当前歌词继续跟随实际播放。"));
+        return await ConfirmAsync(track=>MusicLibraryPlayback.IsRequestedRecording(first,track),UiText.T("正在播放专辑 · ")+album.Title,requestToken,context);
     },token);
     internal Task<LibraryPlayResult> PlayPlaylistAsync(MusicPlaylist playlist,CancellationToken token)=>PlayPlaylistSelectionAsync(new(playlist),token);
     internal Task<LibraryPlayResult> PlayPlaylistSelectionAsync(MusicPlaylistSelection request,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
-        if(!MusicPlaylistContinuation.CanSelect(request))return new(false,"歌单位置或播放设置已失效，请刷新后重试。");
+        if(!MusicPlaylistContinuation.CanSelect(request))return new(false,UiText.T("歌单位置或播放设置已失效，请刷新后重试。"));
         var selection=await AppleMusicLibraryHandoff.SelectPlaylistAsync(request,requestToken,context,trace);
         if(selection.Failure is not null)return new(false,selection.Failure);
-        if(selection.Modes is not { } modes)return new(false,"尚未确认 Apple Music 的播放顺序。");
-        string message=request.Index is { } index?"从所选歌曲继续 · "+request.Playlist.Songs[index].Title:"正在播放歌单 · "+request.Playlist.Name;
+        if(selection.Modes is not { } modes)return new(false,UiText.T("尚未确认 Apple Music 的播放顺序。"));
+        string message=request.Index is { } index?UiText.T("从所选歌曲继续 · ")+request.Playlist.Songs[index].Title:UiText.T("正在播放歌单 · ")+request.Playlist.Name;
         var playback=await ConfirmAsync(track=>MusicPlaylistContinuation.MatchesCurrent(request,modes,track),message,requestToken,context);
         if(!playback.Confirmed)return playback;
         using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(requestToken);confirmation.CancelAfter(TimeSpan.FromSeconds(30));
@@ -131,14 +131,14 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
             }
         }
         catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
-        return new(false,"已发送原生歌单播放请求，尚未确认所选位置、播放设置与后续队列，请在 Apple Music 查看。");
+        return new(false,UiText.T("已发送原生歌单播放请求，尚未确认所选位置、播放设置与后续队列，请在 Apple Music 查看。"));
     },token);
     internal Task<LibraryPlayResult> PlayQueueAsync(MusicQueueSelection selection,CancellationToken token)=>RunSelectionAsync(async (context,requestToken)=>
     {
         string? failure=await AppleMusicLibraryHandoff.SelectQueueAsync(selection,requestToken,context,trace);
         if(failure is not null)return new(false,failure);
         var track=selection.Snapshot.Upcoming[selection.Index].Track;
-        var playback=await ConfirmAsync(actual=>MusicLibraryPlayback.IsRequestedRecording(track,actual),"正在播放 · "+track.Title,requestToken,context);
+        var playback=await ConfirmAsync(actual=>MusicLibraryPlayback.IsRequestedRecording(track,actual),UiText.T("正在播放 · ")+track.Title,requestToken,context);
         if(!playback.Confirmed)return playback;
         using var confirmation=CancellationTokenSource.CreateLinkedTokenSource(requestToken);confirmation.CancelAfter(TimeSpan.FromSeconds(30));
         try
@@ -151,7 +151,7 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
             }
         }
         catch(OperationCanceledException) when(!requestToken.IsCancellationRequested){}
-        return new(false,"已发送队列跳转请求，尚未确认目标位置。请刷新播放列表查看。");
+        return new(false,UiText.T("已发送队列跳转请求，尚未确认目标位置。请刷新播放列表查看。"));
     },token);
     async Task<LibraryPlayResult> ConfirmAsync(Func<Track,bool> matches,string message,CancellationToken token,AppleMusicLibraryHandoff.HandoffContext context)
     {
@@ -173,6 +173,6 @@ internal sealed class AppleMusicPlaybackBridge(PlaybackCoordinator coordinator,A
         }
         bool confirmed=await MusicPlaybackConfirmation.WaitAsync(Read,matches,issued,token);
         trace?.Invoke("playbackConfirmation",new{confirmed,elapsed=(DateTimeOffset.UtcNow-issued).TotalSeconds});
-        return confirmed?new(true,message):new(false,"已等待 Apple Music 确认播放，但尚未收到所选录音的有效状态。当前歌词继续跟随实际播放，可稍后重试。");
+        return confirmed?new(true,message):new(false,UiText.T("已等待 Apple Music 确认播放，但尚未收到所选录音的有效状态。当前歌词继续跟随实际播放，可稍后重试。"));
     }
 }

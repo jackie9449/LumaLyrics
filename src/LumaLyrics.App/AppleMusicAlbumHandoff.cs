@@ -1,3 +1,4 @@
+using LumaLyrics.Core;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using FlaUI.Core.AutomationElements;
@@ -22,17 +23,17 @@ internal static partial class AppleMusicLibraryHandoff
             var header=automation.TreeWalkerFactory.GetControlViewWalker().GetParent(play);
             if(header is null || header.Properties.ControlType.ValueOrDefault!=ControlType.Group || header.FindAllDescendants(cf=>cf.ByControlType(ControlType.ListItem)).Length!=0)continue;
             var names=RawNames(automation,header,token);string title=names.FirstOrDefault()??"";
-            var trackRows=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.ListItem)).Where(r=>string.IsNullOrEmpty(r.Properties.AutomationId.ValueOrDefault) && (Name(r).StartsWith("音轨 ",StringComparison.Ordinal) || Name(r).StartsWith("Track ",StringComparison.OrdinalIgnoreCase))).Select(r=>new{Name=Name(r),Names=(IReadOnlyList<string>)RawNames(automation,r,token)}).ToArray();
+            var trackRows=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.ListItem)).Where(r=>string.IsNullOrEmpty(r.Properties.AutomationId.ValueOrDefault) && NativeMusicLabels.AlbumTrackNumber(Name(r)).HasValue).Select(r=>new{Name=Name(r),Names=(IReadOnlyList<string>)RawNames(automation,r,token)}).ToArray();
             var rows=trackRows.Select(r=>r.Names).ToArray();
             trace?.Invoke("albumContext",new{title,header=names.Take(3).ToArray(),rows});
             if(!MusicLibraryPlayback.AlbumContextMatches(album,title,names,rows))continue;
-            var first=trackRows.FirstOrDefault(r=>r.Name.StartsWith("音轨 1 ",StringComparison.Ordinal) || r.Name.StartsWith("Track 1 ",StringComparison.OrdinalIgnoreCase));
+            var first=trackRows.FirstOrDefault(r=>NativeMusicLabels.AlbumTrackNumber(r.Name)==1);
             var firstMatches=first is null?[]:album.Songs.Where(s=>MusicLibraryPlayback.NamesMatch(s.Track,first.Names.Concat(new[]{s.Artist,s.Album}).ToArray())).ToArray();
             if(firstMatches.Length!=1)continue;
             request.FirstTrack=firstMatches[0].Track;
             token.ThrowIfCancellationRequested();context.CommandAttempted=true;play.Patterns.Invoke.Pattern.Invoke();trace?.Invoke("albumPlayInvoked",new{album.Title,album.Artist});return null;
         }
-        return "Apple Music 暂未提供这张专辑的播放按钮，请稍后重试。";
+        return UiText.T("Apple Music 暂未提供这张专辑的播放按钮，请稍后重试。");
     }
     static void RestoreFilter(UIA3Automation automation,AutomationElement root,AutomationElement previous,string temporary,string original,bool albumNavigated,Action<string,object?>? trace)
     {

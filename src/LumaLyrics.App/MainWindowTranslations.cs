@@ -17,6 +17,6 @@ public partial class MainWindow
         updatingMainTranslationToggle=true;
         try{MainChineseTranslationToggle.IsChecked=settings.ShowChineseTranslation;}
         finally{updatingMainTranslationToggle=false;}
-        MainChineseTranslationToggle.ToolTip=settings.ShowChineseTranslation?"隐藏主窗口中文译文":"显示主窗口中文译文";
+        MainChineseTranslationToggle.ToolTip=settings.ShowChineseTranslation?UiText.T("隐藏主窗口中文译文"):UiText.T("显示主窗口中文译文");
     }
 }

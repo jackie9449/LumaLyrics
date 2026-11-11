@@ -1,3 +1,4 @@
+using LumaLyrics.Core;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -24,14 +25,14 @@ internal static partial class AppleMusicLibraryHandoff
     }
     internal static async Task<string?> ReorderQueueAsync(MusicQueueMove move,CancellationToken token,HandoffContext context,Action<string,object?>? trace=null)
     {
-        if(!MusicPlaybackQueue.CanMove(move))return "播放列表信息不完整或位置没有变化，请刷新后重试。";
+        if(!MusicPlaybackQueue.CanMove(move))return UiText.T("播放列表信息不完整或位置没有变化，请刷新后重试。");
         var bounded=CancellationTokenSource.CreateLinkedTokenSource(token);bounded.CancelAfter(TimeSpan.FromSeconds(50));
         var worker=Task.Run(()=>ReorderQueue(move,bounded.Token,context,trace),bounded.Token);
         try{return await worker.WaitAsync(TimeSpan.FromSeconds(51),token);}
-        catch(OperationCanceledException) when(!token.IsCancellationRequested){return context.CommandAttempted?null:"Apple Music 的队列尚未就绪，请稍后重试。";}
-        catch(TimeoutException){return context.CommandAttempted?null:"Apple Music 的队列尚未就绪，请稍后重试。";}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){return context.CommandAttempted?null:UiText.T("Apple Music 的队列尚未就绪，请稍后重试。");}
+        catch(TimeoutException){return context.CommandAttempted?null:UiText.T("Apple Music 的队列尚未就绪，请稍后重试。");}
         catch(Exception ex) when(ex is InvalidOperationException or COMException or FlaUI.Core.Exceptions.FlaUIException)
-        {return context.CommandAttempted?null:"Apple Music 暂不接受队列排序，请刷新后重试。";}
+        {return context.CommandAttempted?null:UiText.T("Apple Music 暂不接受队列排序，请刷新后重试。");}
         finally{bounded.Cancel();if(worker.IsCompleted)bounded.Dispose();else _=worker.ContinueWith(t=>{_=t.Exception;bounded.Dispose();},TaskScheduler.Default);}
     }
     static string? ReorderQueue(MusicQueueMove move,CancellationToken token,HandoffContext context,Action<string,object?>? trace)
@@ -40,11 +41,11 @@ internal static partial class AppleMusicLibraryHandoff
         nint previousDpi=SetThreadDpiAwarenessContext(-4);
         try
         {
-            using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);if(process is null)return "请先打开 Apple Music，再调整播放顺序。";
+            using var process=Process.GetProcessesByName("AppleMusic").FirstOrDefault(p=>p.MainWindowHandle!=0);if(process is null)return UiText.T("请先打开 Apple Music，再调整播放顺序。");
             token.ThrowIfCancellationRequested();context.Capture(process,token);
-            if(WaitForNative(()=>!IsIconic(process.MainWindowHandle)?context:null,TimeSpan.FromSeconds(10),token) is null)return "Apple Music 的窗口尚未就绪。";
+            if(WaitForNative(()=>!IsIconic(process.MainWindowHandle)?context:null,TimeSpan.FromSeconds(10),token) is null)return UiText.T("Apple Music 的窗口尚未就绪。");
             using var automation=new UIA3Automation{ConnectionTimeout=TimeSpan.FromSeconds(1),TransactionTimeout=TimeSpan.FromSeconds(3)};var root=automation.FromHandle(process.MainWindowHandle);
-            var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayQueueToggleButton"));if(toggle?.Patterns.Toggle.IsSupported!=true)return "当前客户端没有可操作的队列。";
+            var toggle=root.FindFirstDescendant(cf=>cf.ByAutomationId("PlayQueueToggleButton"));if(toggle?.Patterns.Toggle.IsSupported!=true)return UiText.T("当前客户端没有可操作的队列。");
             var lyrics=root.FindFirstDescendant(cf=>cf.ByAutomationId("LyricsToggleButton"));bool lyricsOn=lyrics?.Patterns.Toggle.IsSupported==true && lyrics.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;
             bool opened=toggle.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On;AutomationElement? history=null;bool historyOn=false;
             try
@@ -52,20 +53,20 @@ internal static partial class AppleMusicLibraryHandoff
                 if(!opened)toggle.Patterns.Toggle.Pattern.Toggle();
                 var lists=WaitForNative(()=>
                 {
-                    history=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>Name(b) is "历史记录" or "History");
+                    history=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>NativeMusicLabels.IsHistory(Name(b)));
                     if(history?.Patterns.Toggle.IsSupported==true && history.Patterns.Toggle.Pattern.ToggleState.Value==ToggleState.On)
                     {
-                        historyOn=true;var next=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>Name(b) is "待播清单" or "Playing Next");
+                        historyOn=true;var next=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.Button)).FirstOrDefault(b=>NativeMusicLabels.IsPlayingNext(Name(b)));
                         if(next?.Patterns.Toggle.IsSupported==true){next.Patterns.Toggle.Pattern.Toggle();return null;}
                     }
                     var all=root.FindAllDescendants(cf=>cf.ByControlType(ControlType.List)).Where(l=>(l.Properties.AutomationId.ValueOrDefault??"").StartsWith("PlayQueueListView",StringComparison.Ordinal)).ToArray();return all.Length>0?all:null;
                 },TimeSpan.FromSeconds(12),token);
-                if(lists is null)return "待播清单尚未就绪，请刷新后重试。";
+                if(lists is null)return UiText.T("待播清单尚未就绪，请刷新后重试。");
                 var scroll=lists.Select(l=>(List:l,Percent:l.Patterns.Scroll.IsSupported?l.Patterns.Scroll.Pattern.VerticalScrollPercent.Value:(double?)null)).ToArray();
                 try
                 {
                     var items=new List<AutomationElement>();var actual=CaptureQueue(automation,root,lists,token,trace,items);
-                    if(!MusicPlaybackQueue.MatchesMove(move,actual) || items.Count!=actual.Upcoming.Count)return "播放列表已经变化，请刷新后重新拖动。";
+                    if(!MusicPlaybackQueue.MatchesMove(move,actual) || items.Count!=actual.Upcoming.Count)return UiText.T("播放列表已经变化，请刷新后重新拖动。");
                     int destination=move.InsertionIndex==items.Count?items.Count-1:move.InsertionIndex;var source=items[move.SourceIndex];var target=items[destination];
                     return DragQueueOccurrence(automation,root,process,source,target,move,context,token,trace);
                 }
@@ -86,14 +87,14 @@ internal static partial class AppleMusicLibraryHandoff
     }
     static string? DragQueueOccurrence(UIA3Automation automation,AutomationElement root,Process process,AutomationElement source,AutomationElement target,MusicQueueMove move,HandoffContext context,CancellationToken token,Action<string,object?>? trace)
     {
-        if(!source.Patterns.Drag.IsSupported || !source.Patterns.ScrollItem.IsSupported || !target.Patterns.ScrollItem.IsSupported)return "当前 Apple Music 队列暂不支持拖动排序。";
-        if(QueueModifiersDown() || QueueKeyState(1)<0)return "请松开鼠标和快捷键后重试。";
+        if(!source.Patterns.Drag.IsSupported || !source.Patterns.ScrollItem.IsSupported || !target.Patterns.ScrollItem.IsSupported)return UiText.T("当前 Apple Music 队列暂不支持拖动排序。");
+        if(QueueModifiersDown() || QueueKeyState(1)<0)return UiText.T("请松开鼠标和快捷键后重试。");
         source.Patterns.ScrollItem.Pattern.ScrollIntoView();token.WaitHandle.WaitOne(120);token.ThrowIfCancellationRequested();
         QueueSetForegroundWindow(process.MainWindowHandle);
-        if(WaitForNative(()=>QueueForegroundWindow()==process.MainWindowHandle?source:null,TimeSpan.FromSeconds(2),token) is null)return "Apple Music 未获得操作焦点，未更改顺序。";
+        if(WaitForNative(()=>QueueForegroundWindow()==process.MainWindowHandle?source:null,TimeSpan.FromSeconds(2),token) is null)return UiText.T("Apple Music 未获得操作焦点，未更改顺序。");
         var sourceRow=MusicPlaybackQueue.ParseNativeRow(RawNames(automation,source,token));
-        if(sourceRow?.Track!=move.Snapshot.Upcoming[move.SourceIndex].Track || QueueCurrent(root)!=move.Snapshot.Current)return "播放列表已经变化，请刷新后重新拖动。";
-        var bounds=source.BoundingRectangle;if(source.IsOffscreen || bounds.Width<20 || bounds.Height<12)return "目标曲目当前不可见，请刷新后重试。";
+        if(sourceRow?.Track!=move.Snapshot.Upcoming[move.SourceIndex].Track || QueueCurrent(root)!=move.Snapshot.Current)return UiText.T("播放列表已经变化，请刷新后重新拖动。");
+        var bounds=source.BoundingRectangle;if(source.IsOffscreen || bounds.Width<20 || bounds.Height<12)return UiText.T("目标曲目当前不可见，请刷新后重试。");
         var original=Mouse.Position;var last=original;bool pressed=false,completed=false;
         bool Owned(Point point){GetWindowThreadProcessId(WindowFromPoint(point),out uint pid);return pid==process.Id && QueueForegroundWindow()==process.MainWindowHandle;}
         void Move(Point point)
@@ -105,14 +106,14 @@ internal static partial class AppleMusicLibraryHandoff
         try
         {
             var start=new Point(bounds.Left+bounds.Width/2,bounds.Top+bounds.Height/2);
-            if(!Owned(start))return "队列曲目被其他窗口遮挡，未更改顺序。";
+            if(!Owned(start))return UiText.T("队列曲目被其他窗口遮挡，未更改顺序。");
             token.ThrowIfCancellationRequested();QueueMovePointer(start);last=start;token.WaitHandle.WaitOne(250);trace?.Invoke("queueDragBefore",new{bounds,start});
             token.ThrowIfCancellationRequested();var pointer=Mouse.Position;
-            if(Math.Abs(pointer.X-start.X)>8 || Math.Abs(pointer.Y-start.Y)>8 || !Owned(start) || QueueModifiersDown() || QueueKeyState(1)<0)return "输入焦点或鼠标位置已变化，未更改队列。";
+            if(Math.Abs(pointer.X-start.X)>8 || Math.Abs(pointer.Y-start.Y)>8 || !Owned(start) || QueueModifiersDown() || QueueKeyState(1)<0)return UiText.T("输入焦点或鼠标位置已变化，未更改队列。");
             context.CommandAttempted=true;Mouse.Down(MouseButton.Left);pressed=true;token.WaitHandle.WaitOne(350);
             for(int i=1;i<=8;i++){Move(new(start.X+i*3,start.Y+i));token.WaitHandle.WaitOne(40);}
             token.WaitHandle.WaitOne(350);bool grabbed=source.Patterns.Drag.Pattern.IsGrabbed.Value;trace?.Invoke("queueDragThreshold",new{grabbed,position=Mouse.Position});token.ThrowIfCancellationRequested();
-            if(!grabbed)return "Apple Music 尚未接受拖动，未调整队列。";
+            if(!grabbed)return UiText.T("Apple Music 尚未接受拖动，未调整队列。");
             if(target.IsOffscreen){target.Patterns.ScrollItem.Pattern.ScrollIntoView();token.WaitHandle.WaitOne(150);}token.ThrowIfCancellationRequested();
             var targetRow=MusicPlaybackQueue.ParseNativeRow(RawNames(automation,target,token));int targetIndex=move.InsertionIndex==move.Snapshot.Upcoming.Count?move.InsertionIndex-1:move.InsertionIndex;
             if(targetRow?.Track!=move.Snapshot.Upcoming[targetIndex].Track || QueueCurrent(root)!=move.Snapshot.Current)throw new OperationCanceledException("The native queue changed during drag.");

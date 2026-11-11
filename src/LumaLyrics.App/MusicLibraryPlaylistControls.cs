@@ -8,15 +8,15 @@ namespace LumaLyrics.App;
 internal sealed partial class MusicLibraryView
 {
     readonly Func<MusicPlaylistSelection,CancellationToken,Task<LibraryPlayResult>>? playPlaylistSelection;
-    readonly ComboBox playlistOrder=new(){ItemsSource=new[]{"顺序：沿用 Apple Music","顺序播放","随机播放"},SelectedIndex=0,MinWidth=136,Margin=new(8,0,0,0),ToolTip="在开始歌单播放或从所选歌曲继续时应用播放顺序。"};
-    readonly ComboBox playlistRepeat=new(){ItemsSource=new[]{"循环：沿用 Apple Music","不循环","列表循环","单曲循环"},SelectedIndex=0,MinWidth=136,Margin=new(8,0,0,0),ToolTip="在开始歌单播放或从所选歌曲继续时应用循环设置。"};
+    readonly ComboBox playlistOrder=new(){ItemsSource=new[]{UiText.T("顺序：沿用 Apple Music"),UiText.T("顺序播放"),UiText.T("随机播放")},SelectedIndex=0,MinWidth=136,Margin=new(8,0,0,0),ToolTip=UiText.T("在开始歌单播放或从所选歌曲继续时应用播放顺序。")};
+    readonly ComboBox playlistRepeat=new(){ItemsSource=new[]{UiText.T("循环：沿用 Apple Music"),UiText.T("不循环"),UiText.T("列表循环"),UiText.T("单曲循环")},SelectedIndex=0,MinWidth=136,Margin=new(8,0,0,0),ToolTip=UiText.T("在开始歌单播放或从所选歌曲继续时应用循环设置。")};
     internal ComboBox PlaylistOrderChoice=>playlistOrder;
     internal ComboBox PlaylistRepeatChoice=>playlistRepeat;
     MusicPlaybackOptions PlaylistOptions()=>new(playlistOrder.SelectedIndex switch{1=>false,2=>true,_=>(bool?)null},playlistRepeat.SelectedIndex switch{1=>MusicRepeatMode.None,2=>MusicRepeatMode.List,3=>MusicRepeatMode.One,_=>(MusicRepeatMode?)null});
     void SetupPlaylistControls(WrapPanel commands)
     {
         commands.Children.Add(playlistOrder);commands.Children.Add(playlistRepeat);playlistOrder.IsEnabled=playlistRepeat.IsEnabled=playPlaylistSelection is not null;
-        AutomationProperties.SetName(playlistOrder,"歌单播放顺序");AutomationProperties.SetName(playlistRepeat,"歌单循环方式");
+        AutomationProperties.SetName(playlistOrder,UiText.T("歌单播放顺序"));AutomationProperties.SetName(playlistRepeat,UiText.T("歌单循环方式"));
         playlistTracks.SelectionChanged+=(_,_)=>{if(showingPlaylists)playSelected.IsEnabled=playlistTracks.SelectedItem is PlaylistTrack{CanContinue:true};};
         PlaylistTrack? Row(DependencyObject? node)
         {
@@ -28,14 +28,14 @@ internal sealed partial class MusicLibraryView
     void BeginContinuePlaylist(PlaylistTrack row)
     {
         if(disposed)return;
-        if(!ReferenceEquals(row.Playlist,selectedPlaylist) || !row.CanContinue || playPlaylistSelection is null){status.Text="歌单位置已变化或尚未同步完整，请刷新后重新选择。";return;}
+        if(!ReferenceEquals(row.Playlist,selectedPlaylist) || !row.CanContinue || playPlaylistSelection is null){status.Text=UiText.T("歌单位置已变化或尚未同步完整，请刷新后重新选择。");return;}
         var request=new MusicPlaylistSelection(row.Playlist,row.Number-1,PlaylistOptions());
-        ActivePlayback=RequestPlaybackAsync("正在从所选歌曲继续 · "+row.Song.Title,token=>playPlaylistSelection(request,token));
+        ActivePlayback=RequestPlaybackAsync(UiText.T("正在从所选歌曲继续 · ")+row.Song.Title,token=>playPlaylistSelection(request,token));
     }
     void UpdatePlaylistSelectedControl(bool active)
     {
-        if(!showingPlaylists){playSelected.Content="播放所选";playSelected.IsEnabled=songs.SelectedItem is MusicRow{Song.CanPlay:true};return;}
-        playSelected.Content="从所选歌曲播放";playSelected.Visibility=active && selectedPlaylist is not null && playPlaylistSelection is not null?Visibility.Visible:Visibility.Collapsed;
+        if(!showingPlaylists){playSelected.Content=UiText.T("播放所选");playSelected.IsEnabled=songs.SelectedItem is MusicRow{Song.CanPlay:true};return;}
+        playSelected.Content=UiText.T("从所选歌曲播放");playSelected.Visibility=active && selectedPlaylist is not null && playPlaylistSelection is not null?Visibility.Visible:Visibility.Collapsed;
         playSelected.IsEnabled=playlistTracks.SelectedItem is PlaylistTrack{CanContinue:true};
     }
 }

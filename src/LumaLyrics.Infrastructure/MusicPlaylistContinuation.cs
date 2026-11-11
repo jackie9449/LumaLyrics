@@ -16,9 +16,9 @@ public static class MusicPlaybackModeRules
         && (options?.Repeat is not { } repeat || state.Repeat==repeat);
     public static MusicRepeatMode? ParseRepeat(string name)=>name.Trim() switch
     {
-        "不重复" or "不循环" or "Repeat Off" or "Repeat off" or "No Repeat" or "Off"=>MusicRepeatMode.None,
-        "重复所有" or "全部重复" or "重复全部" or "重复所有项目" or "重复播放所有项目" or "Repeat All" or "Repeat all" or "All"=>MusicRepeatMode.List,
-        "重复单曲" or "单曲重复" or "重复单个项目" or "重复播放单曲" or "Repeat One" or "Repeat one" or "One"=>MusicRepeatMode.One,
+        "不重复" or "不循环" or "不要重複" or "リピートしない" or "Do Not Repeat" or "Repeat Off" or "Repeat off" or "No Repeat" or "Off"=>MusicRepeatMode.None,
+        "重复所有" or "全部重复" or "重复全部" or "重复所有项目" or "重复播放所有项目" or "全部重複" or "全項目リピート" or "Repeat All" or "Repeat all" or "All"=>MusicRepeatMode.List,
+        "重复单曲" or "单曲重复" or "重复单个项目" or "重复播放单曲" or "重複單首歌曲" or "1項目リピートする" or "Repeat One" or "Repeat one" or "One"=>MusicRepeatMode.One,
         _=>null
     };
 }

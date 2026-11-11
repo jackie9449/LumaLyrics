@@ -9,10 +9,14 @@ namespace LumaLyrics.App;
 
 internal static class DialogUi
 {
+    public static DataTemplate WrappingLabel()
+    {
+        var text=new FrameworkElementFactory(typeof(TextBlock));text.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding());text.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);return new DataTemplate{VisualTree=text};
+    }
     public static StackPanel Panel(Window window,string heading,string hint,bool embedded=false)
     {
         window.Width=650;window.Height=650;window.MinWidth=480;window.MinHeight=400;window.WindowStartupLocation=WindowStartupLocation.CenterOwner;
-        ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new("Segoe UI Variable, Microsoft YaHei UI");
+        ThemeManager.Bind(window,Window.BackgroundProperty,"WindowBrush");ThemeManager.Bind(window,Window.ForegroundProperty,"TextBrush");window.FontFamily=new(UiTypography.Sans);
         var p=new StackPanel{Margin=new(26)};var title=new TextBlock{Text=heading,Margin=new(0,0,0,12),TextWrapping=TextWrapping.Wrap};title.SetResourceReference(FrameworkElement.StyleProperty,"AppDialogHeadline");p.Children.Add(title);
         var hintLabel=new TextBlock{Text=hint,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,18)};ThemeManager.Bind(hintLabel,TextBlock.ForegroundProperty,"MutedBrush");p.Children.Add(hintLabel);
         var scroll=new ScrollViewer{Content=p,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
@@ -21,12 +25,12 @@ internal static class DialogUi
     public static TextBox Field(Panel p,string label,string value="") {p.Children.Add(new TextBlock{Text=label,Margin=new(0,8,0,4)});var box=new TextBox{Text=value};p.Children.Add(box);return box;}
     public static Button Button(Panel p,string label,Action clicked) {var b=new Button{Content=label,HorizontalAlignment=HorizontalAlignment.Left,Margin=new(0,12,8,0)};b.Click+=(_,_)=>clicked();p.Children.Add(b);return b;}
     public static ComboBox Choice(Panel p,string label,string[] values,string selected) {p.Children.Add(new TextBlock{Text=label,Margin=new(0,8,0,0)});var b=new ComboBox{ItemsSource=values,SelectedItem=selected};p.Children.Add(b);return b;}
-    public static CheckBox Check(Panel p,string label,bool value) {var b=new CheckBox{Content=label,IsChecked=value};p.Children.Add(b);return b;}
+    public static CheckBox Check(Panel p,string label,bool value) {var b=new CheckBox{Content=label,ContentTemplate=WrappingLabel(),HorizontalContentAlignment=HorizontalAlignment.Stretch,IsChecked=value};p.Children.Add(b);return b;}
     public static Track? ManualTrack(Window owner)
     {
-        var d=new Window{Title="手动选歌",Owner=owner};var p=Panel(d,"手动选歌","没有媒体会话时，可以查找或导入歌词进行静态浏览。");
-        var title=Field(p,"歌名");var artist=Field(p,"歌手");var album=Field(p,"专辑（可留空）");var duration=Field(p,"时长，秒（可留空）");Track? result=null;
-        Button(p,"确定",()=>{if(string.IsNullOrWhiteSpace(title.Text)){MessageBox.Show(d,"请填写歌名。");return;}double? ms=double.TryParse(duration.Text,out var v)&&v>0?v*1000:null;result=new(title.Text.Trim(),artist.Text.Trim(),album.Text.Trim(),ms);d.DialogResult=true;});
+        var d=new Window{Title=UiText.T("手动选歌"),Owner=owner};var p=Panel(d,UiText.T("手动选歌"),UiText.T("没有媒体会话时，可以查找或导入歌词进行静态浏览。"));
+        var title=Field(p,UiText.T("歌名"));var artist=Field(p,UiText.T("歌手"));var album=Field(p,UiText.T("专辑（可留空）"));var duration=Field(p,UiText.T("时长，秒（可留空）"));Track? result=null;
+        Button(p,UiText.T("确定"),()=>{if(string.IsNullOrWhiteSpace(title.Text)){MessageBox.Show(d,UiText.T("请填写歌名。"));return;}double? ms=double.TryParse(duration.Text,out var v)&&v>0?v*1000:null;result=new(title.Text.Trim(),artist.Text.Trim(),album.Text.Trim(),ms);d.DialogResult=true;});
         d.ShowDialog();return result;
     }
 }
@@ -37,15 +41,15 @@ public sealed class ImportWindow : Window
     string? file;
     public ImportWindow(PlaybackCoordinator coordinator,string? path)
     {
-        this.coordinator=coordinator;Title="浮光歌词 · 导入";
-        var p=DialogUi.Panel(this,"导入歌词","预览后保存到浮光歌词本地库。原始文件不会被修改。");
-        target=coordinator.ActiveTrack;var trackLabel=new TextBlock{Text=target is null?"未连接歌曲，确认时可以手动填写":$"绑定目标：{target.Title} · {target.Artist}",TextWrapping=TextWrapping.Wrap};p.Children.Add(trackLabel);
-        DialogUi.Button(p,"选择 LRC / TXT 文件",()=>{var d=new OpenFileDialog{Filter="歌词文件|*.lrc;*.txt",CheckFileExists=true};if(d.ShowDialog(this)==true)Read(d.FileName);});
-        encoding=DialogUi.Choice(p,"文件编码（乱码时切换）",["UTF-8 / BOM","GB18030","Big5"],"UTF-8 / BOM");
-        plain=DialogUi.Check(p,"作为静态 TXT 显示",false);
+        this.coordinator=coordinator;Title=UiText.T("浮光歌词 · 导入");
+        var p=DialogUi.Panel(this,UiText.T("导入歌词"),UiText.T("预览后保存到浮光歌词本地库。原始文件不会被修改。"));
+        target=coordinator.ActiveTrack;var trackLabel=new TextBlock{Text=target is null?UiText.T("未连接歌曲，确认时可以手动填写"):UiText.F($"绑定目标：{target.Title} · {target.Artist}"),TextWrapping=TextWrapping.Wrap};p.Children.Add(trackLabel);
+        DialogUi.Button(p,UiText.T("选择 LRC / TXT 文件"),()=>{var d=new OpenFileDialog{Filter=UiText.T("歌词文件|*.lrc;*.txt"),CheckFileExists=true};if(d.ShowDialog(this)==true)Read(d.FileName);});
+        encoding=DialogUi.Choice(p,UiText.T("文件编码（乱码时切换）"),["UTF-8 / BOM","GB18030","Big5"],"UTF-8 / BOM");
+        plain=DialogUi.Check(p,UiText.T("作为静态 TXT 显示"),false);
         content=new TextBox{AcceptsReturn=true,AcceptsTab=true,Height=230,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,TextWrapping=TextWrapping.Wrap,MaxLength=2*1024*1024};p.Children.Add(content);
         preview=new TextBlock{TextWrapping=TextWrapping.Wrap,Margin=new(0,12,0,0)};p.Children.Add(preview);
-        DialogUi.Button(p,"确认导入并绑定",Confirm);
+        DialogUi.Button(p,UiText.T("确认导入并绑定"),Confirm);
         content.TextChanged+=(_,_)=>Preview();plain.Checked+=(_,_)=>Preview();plain.Unchecked+=(_,_)=>Preview();encoding.SelectionChanged+=(_,_)=>{if(file is not null)Read(file);};
         if(path is not null)Read(path);
     }
@@ -53,25 +57,25 @@ public sealed class ImportWindow : Window
     {
         try
         {
-            if(!new[]{".lrc",".txt"}.Contains(Path.GetExtension(path).ToLowerInvariant()))throw new InvalidDataException("请选择 .lrc 或 .txt 文件。");
-            if(new FileInfo(path).Length>2*1024*1024)throw new InvalidDataException("文件不能大于 2 MB。");
+            if(!new[]{".lrc",".txt"}.Contains(Path.GetExtension(path).ToLowerInvariant()))throw new InvalidDataException(UiText.T("请选择 .lrc 或 .txt 文件。"));
+            if(new FileInfo(path).Length>2*1024*1024)throw new InvalidDataException(UiText.T("文件不能大于 2 MB。"));
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             var enc=encoding.SelectedIndex switch{1=>Encoding.GetEncoding("GB18030",EncoderFallback.ExceptionFallback,DecoderFallback.ExceptionFallback),2=>Encoding.GetEncoding("big5",EncoderFallback.ExceptionFallback,DecoderFallback.ExceptionFallback),_=>new UTF8Encoding(false,true)};
             file=path; using var reader=new StreamReader(path,enc,true);content.Text=reader.ReadToEnd();plain.IsChecked=Path.GetExtension(path).Equals(".txt",StringComparison.OrdinalIgnoreCase);Preview();
         }
-        catch(Exception ex) when(ex is IOException or DecoderFallbackException or InvalidDataException){content.Clear();MessageBox.Show(this,ex is DecoderFallbackException?"UTF-8 解码失败，请选择 GB18030 或 Big5 后重试。":ex.Message,"歌词导入");}
+        catch(Exception ex) when(ex is IOException or DecoderFallbackException or InvalidDataException){content.Clear();MessageBox.Show(this,ex is DecoderFallbackException?UiText.T("UTF-8 解码失败，请选择 GB18030 或 Big5 后重试。"):UiText.Status(ex.Message),UiText.T("歌词导入"));}
     }
     void Preview()
     {
-        try {var doc=new LrcParser().Parse(content.Text,plain.IsChecked==true);preview.Text=$"{(doc.IsSynced?"同步 LRC":"静态歌词")} · {doc.Groups.Count} 个时间点 · 文件偏移 {doc.FileOffsetMs/1000:+0.0;-0.0;0.0} 秒（正值延后）\n"+string.Join("\n",doc.Warnings.Take(8));}
-        catch(Exception ex){preview.Text=ex.Message;}
+        try {var doc=new LrcParser().Parse(content.Text,plain.IsChecked==true);preview.Text=UiText.F($"{(doc.IsSynced?UiText.T("同步 LRC"):UiText.T("静态歌词"))} · {doc.Groups.Count} 个时间点 · 文件偏移 {doc.FileOffsetMs/1000:+0.0;-0.0;0.0} 秒（正值延后）\n")+string.Join("\n",doc.Warnings.Take(8).Select(UiText.Status));}
+        catch(Exception ex){preview.Text=UiText.Status(ex.Message);}
     }
     void Confirm()
     {
-        if(string.IsNullOrWhiteSpace(content.Text)){MessageBox.Show(this,"请粘贴歌词或选择文件。");return;}
+        if(string.IsNullOrWhiteSpace(content.Text)){MessageBox.Show(this,UiText.T("请粘贴歌词或选择文件。"));return;}
         var t=target ?? DialogUi.ManualTrack(this);if(t is null)return;
-        if(coordinator.Snapshot is not null && coordinator.ActiveTrack?.Fingerprint!=t.Fingerprint) {MessageBox.Show(this,"播放歌曲已改变，请重新打开导入窗口确认目标。");return;}
-        try{coordinator.Import(t,content.Text,file is null?"手动粘贴":"本地导入",plain.IsChecked==true);DialogResult=true;}catch(Exception ex){MessageBox.Show(this,ex.Message);}
+        if(coordinator.Snapshot is not null && coordinator.ActiveTrack?.Fingerprint!=t.Fingerprint) {MessageBox.Show(this,UiText.T("播放歌曲已改变，请重新打开导入窗口确认目标。"));return;}
+        try{coordinator.Import(t,content.Text,file is null?"手动粘贴":"本地导入",plain.IsChecked==true);DialogResult=true;}catch(Exception ex){MessageBox.Show(this,UiText.Status(ex.Message));}
     }
 }
 public sealed class CandidateWindow : Window
@@ -83,38 +87,40 @@ public sealed class CandidateWindow : Window
         : this(coordinator,owner=>LyricsSearchWindow.Prompt(owner,((CandidateWindow)owner).searchQuery),(owner,message)=>MessageBox.Show(owner,message)) { }
     internal CandidateWindow(PlaybackCoordinator coordinator,Func<Window,Track?> manualTrack,Action<Window,string> notify)
     {
-        this.coordinator=coordinator;target=coordinator.ActiveTrack;searchQuery=target;playbackTarget=coordinator.Snapshot;Title="浮光歌词 · 更换歌词";
-        var p=DialogUi.Panel(this,"选择适合这首歌的版本","手动搜索只改变搜索条件，所选歌词直接应用到绑定目标。确认后锁定绑定，自动查询不会覆盖你的选择。");
+        this.coordinator=coordinator;target=coordinator.ActiveTrack;searchQuery=target;playbackTarget=coordinator.Snapshot;Title=UiText.T("浮光歌词 · 更换歌词");
+        var p=DialogUi.Panel(this,UiText.T("选择适合这首歌的版本"),UiText.T("手动搜索只改变搜索条件，所选歌词直接应用到绑定目标。确认后锁定绑定，自动查询不会覆盖你的选择。"));
         targetLabel=new TextBlock{Text=TargetText(),TextWrapping=TextWrapping.Wrap};p.Children.Add(targetLabel);
         status=new TextBlock{TextWrapping=TextWrapping.Wrap};p.Children.Add(status);
-        DialogUi.Button(p,"手动填写歌名 / 歌手搜索",async()=>
+        DialogUi.Button(p,UiText.T("手动填写歌名 / 歌手搜索"),async()=>
         {
-            if(!coordinator.Settings.OnlineLookup){notify(this,"请先在设置中开启联网查词。");return;}
+            if(!coordinator.Settings.OnlineLookup){notify(this,UiText.T("请先在设置中开启联网查词。"));return;}
             var query=manualTrack(this);if(query is null || closed)return;
             searchQuery=query;
             // Provider metadata is editable; the live song's binding identity is not.
             if(playbackTarget is null)target=query;
             targetLabel.Text=TargetText();var version=++searchVersion;searching=true;
-            ShowCandidates([],"正在搜索…");
+            ShowCandidates([],UiText.T("正在搜索…"));
             var results=await coordinator.LookupManualAsync(query,searchLifetime.Token);
             if(closed || version!=searchVersion)return;
             searching=false;ShowCandidates(results??[],coordinator.LyricsStatus);
         });
-        list=new ListBox{Height=200};p.Children.Add(list);preview=new TextBox{IsReadOnly=true,Height=130,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};p.Children.Add(preview);
+        list=new ListBox{Height=200};
+        var candidateText=new FrameworkElementFactory(typeof(TextBlock));candidateText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);candidateText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding(){Converter=new CandidateTextConverter()});list.ItemTemplate=new DataTemplate{VisualTree=candidateText};
+        p.Children.Add(list);preview=new TextBox{IsReadOnly=true,Height=130,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};p.Children.Add(preview);
         bool ConfirmTarget()
         {
             if(TargetIsCurrent())return true;
-            notify(this,"播放歌曲或媒体连接已改变，请重新打开更换歌词窗口确认绑定目标。");return false;
+            notify(this,UiText.T("播放歌曲或媒体连接已改变，请重新打开更换歌词窗口确认绑定目标。"));return false;
         }
-        choose=DialogUi.Button(p,"使用所选歌词",()=>
+        choose=DialogUi.Button(p,UiText.T("使用所选歌词"),()=>
         {
             if(closed || searching || target is null || list.SelectedItem is not LyricsCandidate c || !ConfirmTarget())return;
             coordinator.SelectCandidate(target,c);DialogResult=true;
         });
-        DialogUi.Button(p,"恢复自动匹配",async()=>
+        DialogUi.Button(p,UiText.T("恢复自动匹配"),async()=>
         {
             if(closed || !ConfirmTarget())return;
-            var version=++searchVersion;searching=true;ShowCandidates([],"正在恢复自动匹配…");
+            var version=++searchVersion;searching=true;ShowCandidates([],UiText.T("正在恢复自动匹配…"));
             await coordinator.RestoreAutoAsync();
             if(closed || version!=searchVersion)return;
             searching=false;ShowCandidates(coordinator.Candidates,coordinator.LyricsStatus);
@@ -122,13 +128,13 @@ public sealed class CandidateWindow : Window
         list.SelectionChanged+=(_,_)=>
         {
             choose.IsEnabled=!searching && list.SelectedItem is LyricsCandidate;
-            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);preview.Text=$"{score?.Reason} · 置信度 {score?.Score:P0}\n\n"+string.Join("\n",c.Content.Split('\n').Take(10));}
+            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);preview.Text=UiText.F($"{UiText.Status(score?.Reason)} · 置信度 {score?.Score:P0}\n\n")+string.Join("\n",c.Content.Split('\n').Take(10));}
             else preview.Clear();
         };
         Closed+=(_,_)=>{closed=true;searchVersion++;searchLifetime.Cancel();searchLifetime.Dispose();};
         ShowCandidates(coordinator.Candidates,coordinator.LyricsStatus);
     }
-    string TargetText()=>target is null?"尚无绑定目标":$"绑定目标：{target.Title} · {target.Artist}\n{target.Album}";
+    string TargetText()=>target is null?UiText.T("尚无绑定目标"):UiText.F($"绑定目标：{target.Title} · {target.Artist}\n{target.Album}");
     bool TargetIsCurrent()
     {
         if(playbackTarget is null)return coordinator.Snapshot is null && coordinator.Source.Latest is null;
@@ -138,21 +144,31 @@ public sealed class CandidateWindow : Window
     }
     void ShowCandidates(IReadOnlyList<LyricsCandidate> candidates,string message)
     {
-        list.ItemsSource=candidates;list.SelectedItem=null;preview.Clear();choose.IsEnabled=false;status.Text=message;
+        list.ItemsSource=candidates;list.SelectedItem=null;preview.Clear();choose.IsEnabled=false;status.Text=UiText.Status(message);
+    }
+    sealed class CandidateTextConverter:System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)
+        {
+            if(value is not LyricsCandidate candidate)return "";
+            string kind=candidate.Instrumental?UiText.T("纯音乐"):candidate.SyncedLyrics is not null?UiText.T("同步歌词"):UiText.T("静态歌词");
+            return $"{candidate.Track.Title} · {candidate.Track.Artist}\n{candidate.Track.Album} · {candidate.Track.DurationMs/1000:0}s · {kind} · {candidate.SourceLabel}";
+        }
+        public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>System.Windows.Data.Binding.DoNothing;
     }
 }
 public sealed class DiagnosticsWindow : Window
 {
     public DiagnosticsWindow(PlaybackCoordinator c,SettingsStore store,string? hotkeyError,bool embedded=false)
     {
-        Title="浮光歌词 · 诊断";var p=DialogUi.Panel(this,"连接与诊断","查看媒体时钟、歌词时间轴和本机连接状态。",embedded);
+        Title=UiText.T("浮光歌词 · 诊断");var p=DialogUi.Panel(this,UiText.T("连接与诊断"),UiText.T("查看媒体时钟、歌词时间轴和本机连接状态。"),embedded);
         var text=new TextBox{IsReadOnly=true,AcceptsReturn=true,Height=220,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};p.Children.Add(text);
-        void Refresh(){var s=c.Snapshot;text.Text=$"系统：{Environment.OSVersion}\n来源：{s?.SessionId ?? "未发现 Apple Music"}\n会话代次：{s?.Generation} / 曲目修订：{s?.Revision}\n原始位置：{s?.PositionMs} ms\n时间轴更新：{s?.TimelineUtc:O}\n插值位置：{c.Position:F0} ms\n快照年龄：{(s is null?0:System.Diagnostics.Stopwatch.GetElapsedTime(s.MonotonicTicks).TotalMilliseconds):F0} ms\n歌词偏移（文件 / 歌曲 / 全局）：{c.Document?.FileOffsetMs} / {c.Binding?.OffsetMs} / {c.Settings.GlobalOffsetMs} ms\n质量：{c.Quality}\nSeek：{s?.CanSeek}\n快捷键：{hotkeyError ?? "已注册"}\n数据目录：{store.Root}\n歌词状态：{c.LyricsStatus}";}
-        Refresh();var sources=DialogUi.Choice(p,"可用媒体来源（只在明确选择时切换）",c.Source.SessionIds.ToArray(),c.Source.SelectedId ?? "");
-        DialogUi.Button(p,"使用所选来源",async()=>{if(sources.SelectedItem is string id){c.Settings.PreferredSession=id;c.SaveSettings();await c.Source.SelectAsync(id);Refresh();}});
-        DialogUi.Button(p,"重新连接",async()=>{await c.ReconnectAsync();Refresh();});
-        DialogUi.Button(p,"打开本地数据目录",()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe",store.Root){UseShellExecute=true}));
-        DialogUi.Button(p,"刷新诊断",Refresh);
+        void Refresh(){var s=c.Snapshot;text.Text=UiText.F($"系统：{Environment.OSVersion}\n来源：{s?.SessionId ?? UiText.T("未发现 Apple Music")}\n会话代次：{s?.Generation} / 曲目修订：{s?.Revision}\n原始位置：{s?.PositionMs} ms\n时间轴更新：{s?.TimelineUtc:O}\n插值位置：{c.Position:F0} ms\n快照年龄：{(s is null?0:System.Diagnostics.Stopwatch.GetElapsedTime(s.MonotonicTicks).TotalMilliseconds):F0} ms\n歌词偏移（文件 / 歌曲 / 全局）：{c.Document?.FileOffsetMs} / {c.Binding?.OffsetMs} / {c.Settings.GlobalOffsetMs} ms\n质量：{c.Quality}\nSeek：{s?.CanSeek}\n快捷键：{UiText.Status(hotkeyError ?? UiText.T("已注册"))}\n数据目录：{store.Root}\n歌词状态：{UiText.Status(c.LyricsStatus)}");}
+        Refresh();var sources=DialogUi.Choice(p,UiText.T("可用媒体来源（只在明确选择时切换）"),c.Source.SessionIds.ToArray(),c.Source.SelectedId ?? "");
+        DialogUi.Button(p,UiText.T("使用所选来源"),async()=>{if(sources.SelectedItem is string id){c.Settings.PreferredSession=id;c.SaveSettings();await c.Source.SelectAsync(id);Refresh();}});
+        DialogUi.Button(p,UiText.T("重新连接"),async()=>{await c.ReconnectAsync();Refresh();});
+        DialogUi.Button(p,UiText.T("打开本地数据目录"),()=>System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe",store.Root){UseShellExecute=true}));
+        DialogUi.Button(p,UiText.T("刷新诊断"),Refresh);
     }
 }
 public sealed class LibraryWindow : Window
@@ -161,7 +177,7 @@ public sealed class LibraryWindow : Window
     public LibraryWindow(PlaybackCoordinator c)
     {
         // Compatibility host for existing isolated captures. User entries open Settings.
-        Title="浮光歌词 · 资料库";Width=720;Height=760;MinWidth=480;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        Title=UiText.T("浮光歌词 · 资料库");Width=720;Height=760;MinWidth=480;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         Library=new(c);ApplicationWindowFrame.SetContent(this,new ScrollViewer{Content=Library,Margin=new(26),VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled});
         Closed+=(_,_)=>Library.Dispose();
     }

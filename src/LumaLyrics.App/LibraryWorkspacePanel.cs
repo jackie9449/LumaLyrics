@@ -15,10 +15,10 @@ public sealed class LibraryWorkspacePanel:UserControl,IDisposable
     {
         var grid=new Grid();Content=grid;pages.SetResourceReference(StyleProperty,"LibraryWorkspaceTabs");grid.Children.Add(pages);
         Overview=new(coordinator,()=>Select(1));Display=new(coordinator,false);Songs=new(coordinator);Tasks=new(coordinator);
-        pages.Items.Add(new TabItem{Header="总览",Content=new ScrollViewer{Content=Overview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});
-        pages.Items.Add(new TabItem{Header="歌曲",Content=Songs});
-        pages.Items.Add(new TabItem{Header="任务",Content=Tasks});
-        pages.Items.Add(new TabItem{Header="显示",Content=new ScrollViewer{Content=Display,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});
+        pages.Items.Add(new TabItem{Header=UiText.T("总览"),Content=new ScrollViewer{Content=Overview,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});
+        pages.Items.Add(new TabItem{Header=UiText.T("歌曲"),Content=Songs});
+        pages.Items.Add(new TabItem{Header=UiText.T("任务"),Content=Tasks});
+        pages.Items.Add(new TabItem{Header=UiText.T("显示"),Content=new ScrollViewer{Content=Display,VerticalScrollBarVisibility=ScrollBarVisibility.Auto}});
     }
     internal void Select(int page)=>pages.SelectedIndex=page;
     public void Dispose(){Overview.Dispose();Display.Dispose();Songs.Dispose();Tasks.Dispose();}

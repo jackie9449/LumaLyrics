@@ -28,17 +28,32 @@ internal static class LibraryWorkspaceUi
     {
         var content=new StackPanel();content.Children.Add(Text(label,11));value=Text("—",28,false);value.FontWeight=FontWeights.SemiBold;value.Margin=new(0,6,0,0);content.Children.Add(value);var card=Card(content,14);card.Margin=new(0,0,10,14);return card;
     }
-    static FrameworkElementFactory Line(double size,bool muted,string[] paths,string? format=null)
+    static FrameworkElementFactory Line(double size,bool muted,string[] paths,string? format=null,bool localize=false)
     {
         var text=new FrameworkElementFactory(typeof(TextBlock));text.SetValue(TextBlock.FontSizeProperty,size);text.SetValue(TextBlock.FontWeightProperty,FontWeights.Normal);text.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.CharacterEllipsis);text.SetValue(FrameworkElement.MarginProperty,new Thickness(0,0,0,4));text.SetResourceReference(TextBlock.ForegroundProperty,muted?"MutedBrush":"TextBrush");
-        if(paths.Length==1)text.SetBinding(TextBlock.TextProperty,new Binding(paths[0]));else{var binding=new MultiBinding{StringFormat=format};foreach(var path in paths)binding.Bindings.Add(new Binding(path));text.SetBinding(TextBlock.TextProperty,binding);}return text;
+        Binding Bind(string path)=>new(path){Converter=localize?LibraryStatusConverter.Instance:null};
+        if(paths.Length==1)text.SetBinding(TextBlock.TextProperty,Bind(paths[0]));else{var binding=new MultiBinding{StringFormat=format};foreach(var path in paths)binding.Bindings.Add(Bind(path));text.SetBinding(TextBlock.TextProperty,binding);}return text;
     }
     internal static DataTemplate SongTemplate()
     {
-        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Track.Title"]);title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Track.Artist","Track.Album"],"{0} · {1}"));row.AppendChild(Line(10.5,true,["Status.OriginalLabel","Status.ChineseLabel","Status.CoverLabel"],"{0}   ·   {1}   ·   {2}"));return new(){VisualTree=row};
+        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Track.Title"]);title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Track.Artist","Track.Album"],"{0} · {1}"));row.AppendChild(Line(10.5,true,["Status.OriginalLabel","Status.ChineseLabel","Status.CoverLabel"],"{0}   ·   {1}   ·   {2}",true));return new(){VisualTree=row};
     }
-    internal static DataTemplate BatchTemplate()
+    internal static DataTemplate BatchTemplate(bool batch=false)
     {
-        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Title"]);title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Summary"]));row.AppendChild(Line(10.5,true,["Availability"]));return new(){VisualTree=row};
+        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Title"]);if(batch)title.SetBinding(TextBlock.TextProperty,new Binding{Converter=LibraryBatchTitleConverter.Instance});title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Summary"],localize:batch));row.AppendChild(Line(10.5,true,["Availability"],localize:batch));return new(){VisualTree=row};
     }
+}
+
+internal sealed class LibraryStatusConverter : IValueConverter
+{
+    internal static readonly LibraryStatusConverter Instance=new();
+    public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>value is string text?UiText.Status(text):value;
+    public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>Binding.DoNothing;
+}
+internal sealed class LibraryBatchTitleConverter : IValueConverter
+{
+    internal static readonly LibraryBatchTitleConverter Instance=new();
+    internal static string Title(LumaLyrics.Infrastructure.LibraryTaskBatch task)=>task.Id.StartsWith("job:",StringComparison.Ordinal)?task.Jobs.FirstOrDefault()?.Ticket.Request.Target.Track.Title??UiText.T("历史任务"):UiText.Status(task.Title);
+    public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>value is LumaLyrics.Infrastructure.LibraryTaskBatch task?Title(task):"";
+    public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>Binding.DoNothing;
 }
