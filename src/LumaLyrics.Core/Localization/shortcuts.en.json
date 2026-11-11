@@ -1,5 +1,7 @@
 {
   "全局快捷键": "Global shortcuts",
+  "播放 / 暂停（空格）": "Play / pause (Space)",
+  "软件内可按空格播放 / 暂停；输入框、按钮等控件保留原有空格操作。": "Press Space in the app to play or pause. Text fields, buttons and other controls keep their usual Space behavior.",
   "未保存，部分原快捷键也已不可用。请自动解决冲突后保存。": "Not saved. Some previous shortcuts are also unavailable. Resolve conflicts automatically, then save.",
   "快捷键": "Shortcuts",
   "播放 / 暂停": "Play / pause",

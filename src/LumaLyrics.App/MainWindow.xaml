@@ -68,7 +68,7 @@
         <local:SeekSlider Style="{StaticResource {x:Type Slider}}" Grid.Row="3" x:Name="SeekSlider" SmallChange="5000" LargeChange="10000" Minimum="0" Maximum="{Binding Duration}" Value="{Binding Position,Mode=OneWay}" IsEnabled="{Binding CanSeek}" ToolTip="{Binding Time}" AutomationProperties.Name="{local:Loc Text='播放进度'}" EditStarted="SeekStarted" EditCommitted="SeekCommitted" EditCancelled="SeekCancelled"/>
         <StackPanel x:Name="PlaybackControls" Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,12">
          <Button Content="&#xE892;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='上一首'}" AutomationProperties.Name="{local:Loc Text='上一首'}" IsEnabled="{Binding CanPrevious}" Click="PreviousClicked" Margin="0,0,12,0"/>
-         <Button x:Name="PlayButton" Content="{local:Loc Text='▷ 播放'}" MinWidth="100" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanPlay}" Click="PlayClicked" Margin="0" ToolTip="{local:Loc Text='播放或暂停'}"/>
+         <Button x:Name="PlayButton" Content="{local:Loc Text='▷ 播放'}" MinWidth="100" Style="{StaticResource PrimaryButton}" IsEnabled="{Binding CanPlay}" Click="PlayClicked" Margin="0" ToolTip="{local:Loc Text='播放 / 暂停（空格）'}"/>
          <Button Content="&#xE893;" FontFamily="Segoe MDL2 Assets" Style="{StaticResource IconButton}" ToolTip="{local:Loc Text='下一首'}" AutomationProperties.Name="{local:Loc Text='下一首'}" IsEnabled="{Binding CanNext}" Click="NextClicked" Margin="12,0,0,0"/>
         </StackPanel>
         <TextBlock x:Name="ConnectionStatus" Grid.Row="5" Text="{Binding Status}" FontSize="11" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>

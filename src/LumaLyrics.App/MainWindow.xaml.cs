@@ -33,6 +33,7 @@ public partial class MainWindow : Window
     {
         store=new(dataDirectory);settings=store.Load();UiText.SetLanguage(settings.UiLanguage);AppMotion.SetEnabled(this,true);AppMotion.Configure(settings.ReduceMotion);ThemeManager.Apply(settings.UiTheme,applicationScope:Resources);
         InitializeComponent();Icon=ApplicationIcon.CreateWindowIcon();AppMotion.SetIsSelected(LyricsNav,true);DataContext=vm;coordinator=new(Dispatcher,store,settings);
+        LocalPlaybackShortcut.Attach(this,()=>HandleGlobalShortcut(ShortcutAction.PlayPause));
         BrandLatinSuffix.Visibility=UiText.Language is "en" or "ja"?Visibility.Collapsed:Visibility.Visible;
         ChineseScriptHost.Content=ChineseScriptDisplay.CreateSelector(coordinator);
         FooterActions.SizeChanged+=(_,_)=>ApplyFooterLayout();

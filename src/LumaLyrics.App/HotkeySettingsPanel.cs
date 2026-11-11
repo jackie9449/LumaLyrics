@@ -21,6 +21,7 @@ internal sealed class HotkeySettingsPanel : StackPanel
     {
         this.coordinator=coordinator;this.owner=owner;
         Children.Add(LibraryWorkspaceUi.Heading(UiText.T("全局快捷键"),UiText.T("在其他软件中也能控制播放。点击组合键后直接按下新组合；Backspace 清空，Esc 取消录入。")));
+        Children.Add(LibraryWorkspaceUi.Text(UiText.T("软件内可按空格播放 / 暂停；输入框、按钮等控件保留原有空格操作。"),11));
         var bindings=ShortcutSettings.Read(coordinator.Settings);
         foreach(var definition in KeyboardShortcuts.All)
         {
