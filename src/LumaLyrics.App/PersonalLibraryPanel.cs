@@ -31,7 +31,6 @@ internal sealed class PersonalLibraryPanel : StackPanel
         var card=new Border{Child=location,Padding=new(16),CornerRadius=new(16),Margin=new(0,5,0,4)};ThemeManager.Bind(card,Border.BackgroundProperty,"RaisedBrush");Children.Add(card);
         ThemeManager.Bind(card,Border.CornerRadiusProperty,"LocationCardRadius");
         ActionButton(UiText.T("打开个人数据目录"),()=>{var start=new ProcessStartInfo("explorer.exe"){UseShellExecute=true};start.ArgumentList.Add(dataRoot);Process.Start(start);});
-        Children.Add(new TextBlock{Text=UiText.T("单独备份，安心更新。"),FontSize=16,FontWeight=FontWeights.SemiBold,Margin=new(0,18,0,8)});
         var detail=Copy(UiText.T("文件夹中可直接读取歌词与原始封面。个人备份 ZIP 还保留手动绑定、偏移和导入队列，支持离线恢复。"));ThemeManager.Bind(detail,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(detail);
         var exportRow=Row();
         ActionButton(UiText.T("导出个人文件夹…"),async()=>{

@@ -6,7 +6,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     void Set<T>(ref T field, T value, [CallerMemberName] string name = "") { if (EqualityComparer<T>.Default.Equals(field,value)) return; field = value; PropertyChanged?.Invoke(this,new(name)); }
-    string title = UiText.T("让歌词，浮在音乐之上。"), artist = UiText.T("打开 Apple Music，播放你喜欢的歌"), status = UiText.T("等待 Apple Music"), lyricStatus = UiText.T("播放后会自动查找歌词"), time = "--:-- / --:--", offset = UiText.T("歌词偏移 0.0 秒"), current = UiText.T("浮光歌词"), next = UiText.T("等待播放"), quality = UiText.T("尚无播放时间轴");
+    string title = UiText.T("等待播放"), artist = UiText.T("打开 Apple Music，播放你喜欢的歌"), status = UiText.T("等待 Apple Music"), lyricStatus = UiText.T("播放后会自动查找歌词"), time = "--:-- / --:--", offset = UiText.T("歌词偏移 0.0 秒"), current = UiText.T("浮光歌词"), next = UiText.T("等待播放"), quality = UiText.T("尚无播放时间轴");
     public string Title { get => title; set => Set(ref title,value); }
     public string Artist { get => artist; set => Set(ref artist,value); }
     public string Status { get => status; set => Set(ref status,value); }

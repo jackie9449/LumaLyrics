@@ -139,7 +139,7 @@ public partial class MainWindow : Window
     void Update()
     {
         var s=coordinator.Snapshot;
-        vm.Title=coordinator.ActiveTrack?.Title is {Length:>0} t?t:UiText.T("让歌词，浮在音乐之上。");vm.Artist=s is null?coordinator.ManualTrack is { } mt?UiText.F($"{mt.Artist} · {mt.Album} · 手动浏览"):UiText.T("打开 Apple Music，播放你喜欢的歌"):$"{s.Track.Artist} · {s.Track.Album}";
+        vm.Title=coordinator.ActiveTrack?.Title is {Length:>0} t?t:UiText.T("等待播放");vm.Artist=s is null?coordinator.ManualTrack is { } mt?UiText.F($"{mt.Artist} · {mt.Album} · 手动浏览"):UiText.T("打开 Apple Music，播放你喜欢的歌"):$"{s.Track.Artist} · {s.Track.Album}";
         vm.Status=s is null?UiText.T("等待 Apple Music"):UiText.F($"已连接 · {(s.Status==PlayState.Playing?UiText.T("正在播放"):s.Status==PlayState.Paused?UiText.T("已暂停"):UiText.T("已停止"))}");
         UpdateSeekCapability(s);ValidateSeek(s);
         vm.CanPlay=s is not null && (s.Status==PlayState.Playing?s.CanPause:s.CanPlay); vm.CanNext=s?.CanNext==true;vm.CanPrevious=s?.CanPrevious==true;vm.CanSeek=CanSeek(s);

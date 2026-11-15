@@ -10,10 +10,10 @@ internal static class LibraryWorkspaceUi
         var text=new TextBlock{Text=value,FontSize=size,FontWeight=FontWeights.Normal,TextWrapping=TextWrapping.Wrap,LineHeight=size+7};
         ThemeManager.Bind(text,TextBlock.ForegroundProperty,muted?"MutedBrush":"TextBrush");return text;
     }
-    internal static StackPanel Heading(string title,string description)
+    internal static StackPanel Heading(string title,string? description=null)
     {
         var result=new StackPanel{Margin=new(0,0,0,14)};var heading=Text(title,20,false);heading.FontWeight=FontWeights.SemiBold;ThemeManager.BindDisplay(heading);result.Children.Add(heading);
-        var caption=Text(description);caption.Margin=new(0,4,0,0);result.Children.Add(caption);return result;
+        if(!string.IsNullOrEmpty(description)){var caption=Text(description);caption.Margin=new(0,4,0,0);result.Children.Add(caption);}return result;
     }
     internal static Border Card(UIElement content,double padding=16)
     {

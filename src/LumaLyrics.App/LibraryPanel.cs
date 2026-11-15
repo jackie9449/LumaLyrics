@@ -17,7 +17,7 @@ public sealed class LibraryPanel:UserControl,IDisposable
     public LibraryPanel(PlaybackCoordinator coordinator,Action? chooseSongs=null)
     {
         this.coordinator=coordinator;var body=new StackPanel();Content=body;
-        body.Children.Add(LibraryWorkspaceUi.Heading(UiText.T("资料库概况"),UiText.T("同步歌曲、准备原词，让中文译文跟上你的音乐。")));
+        body.Children.Add(LibraryWorkspaceUi.Heading(UiText.T("资料库概况")));
         var metrics=new UniformGrid{Columns=3,Margin=new(0,0,-10,0)};metrics.Children.Add(LibraryWorkspaceUi.Metric(UiText.T("资料库歌曲"),out total));metrics.Children.Add(LibraryWorkspaceUi.Metric(UiText.T("动态原词"),out timed));metrics.Children.Add(LibraryWorkspaceUi.Metric(UiText.T("中文完整"),out chinese));body.Children.Add(metrics);
         var prepare=new StackPanel();prepare.Children.Add(LibraryWorkspaceUi.Text(UiText.T("从选中的歌曲开始"),15,false));var hint=LibraryWorkspaceUi.Text(UiText.T("先补原词，再找现有中文；剩余歌曲交给本地 agent。无需先播放。 "));hint.Margin=new(0,5,0,12);prepare.Children.Add(hint);var start=new WrapPanel();prepare.Children.Add(start);if(chooseSongs is not null)LibraryWorkspaceUi.Button(start,UiText.T("选择歌曲开始准备"),chooseSongs,true);prepare.Children.Add(coverage);body.Children.Add(LibraryWorkspaceUi.Card(prepare));
         var source=new StackPanel();source.Children.Add(LibraryWorkspaceUi.Text(UiText.T("资料库来源"),15,false));var note=LibraryWorkspaceUi.Text(UiText.T("刷新成员清单无需开启联网查词或自动预缓存。"));note.Margin=new(0,4,0,10);source.Children.Add(note);

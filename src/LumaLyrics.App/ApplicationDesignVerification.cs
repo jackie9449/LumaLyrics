@@ -87,6 +87,7 @@ public partial class MainWindow
                         tabs.SelectedIndex=page;await Task.Delay(340);preferences.UpdateLayout();
                         var host=(ContentPresenter)tabs.Template.FindName("PART_SelectedContentHost",tabs);
                         var location=host.TransformToAncestor(preferences).Transform(new Point());
+                        AuditButtonBounds(preferences,checks,$"design.{theme.Id}.settings.{page}");
                         checks[$"design.{theme.Id}.settingsPageFits.{page}"]=host.ActualWidth>300 && location.X>=146 && location.Y+host.ActualHeight<=preferences.ActualHeight;
                         VisualVerification.Save((FrameworkElement)preferences.Content,Path.Combine(directory,$"settings-{theme.Id}-{page}.png"));
                     }
@@ -94,8 +95,9 @@ public partial class MainWindow
                 }
                 finally{preferences.Close();}
                 var import=new ImportWindow(coordinator,null){Owner=this};import.Show();await Task.Delay(340);
+                AuditButtonBounds(import,checks,$"design.{theme.Id}.import");
                 checks[$"design.{theme.Id}.importUsesSharedChrome"]=WindowChrome.GetWindowChrome(import) is not null && import.Background.ToString()==FindResource("WindowBrush").ToString();VisualVerification.Save((FrameworkElement)import.Content,Path.Combine(directory,$"import-{theme.Id}.png"));import.Close();
-                ShowLyricsPage();await Task.Delay(320);VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"application-{theme.Id}.png"));
+                ShowLyricsPage();await Task.Delay(320);AuditButtonBounds(this,checks,$"design.{theme.Id}.main");VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"application-{theme.Id}.png"));
             }
             checks["design.floatingAppearanceUnchanged"]=OverlayAppearance.From(settings)==floating && overlay.Toolbar.Background.ToString()==toolbar && !AppMotion.GetEnabled(overlay);
         }

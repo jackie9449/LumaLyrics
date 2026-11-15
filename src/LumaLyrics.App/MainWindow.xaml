@@ -86,8 +86,8 @@
            <ScrollViewer x:Name="LyricsScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PreviewMouseWheel="ManualScroll" ScrollChanged="LyricsScrollChanged"><StackPanel x:Name="LyricLines" Margin="0,70,10,100"/></ScrollViewer>
            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="390" Margin="14,0">
             <Border Width="62" Height="62" CornerRadius="22" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Center" Margin="0,0,0,22"><TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="24" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-            <TextBlock Text="{local:Loc Text='每一句，都有回响。'}" FontSize="25" FontWeight="SemiBold" TextAlignment="Center"/>
-            <TextBlock x:Name="EmptyHint" Text="{local:Loc Text='在 Apple Music 中播放歌曲，&#10;让歌词随旋律，在这里慢慢展开。'}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="23" Margin="0,15,0,23"/>
+            <TextBlock Text="{local:Loc Text='等待播放'}" FontSize="25" FontWeight="SemiBold" TextAlignment="Center"/>
+            <TextBlock x:Name="EmptyHint" Text="{local:Loc Text='打开 Apple Music，播放你喜欢的歌'}" FontSize="12" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="23" Margin="0,15,0,23"/>
             <Button Content="{local:Loc Text='＋  导入本地歌词'}" Click="ImportClicked" HorizontalAlignment="Center" Style="{StaticResource PrimaryButton}" Padding="19,11" Margin="0"/>
             <TextBlock Text="{local:Loc Text='也可以拖入 LRC / TXT 文件'}" FontSize="10" Foreground="{DynamicResource MutedBrush}" TextAlignment="Center" Margin="0,15,0,0"/>
            </StackPanel>

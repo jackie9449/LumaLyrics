@@ -55,8 +55,6 @@ public sealed class AppearanceEditor : UserControl
         var root=new Grid();Content=root;
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new());root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var heading=new StackPanel{Margin=new(0,0,0,22)};
-        heading.Children.Add(Label("A P P E A R A N C E",10,"#B8AEED"));
-        var title=new TextBlock{Text=UiText.T("让每一句，都有你的风格。"),FontSize=21,Margin=new(0,6,0,7)};ThemeManager.BindDisplay(title);heading.Children.Add(title);
         heading.Children.Add(Label(UiText.T("每个主题独立记忆。保存保留修改；取消或离开此页还原本次预览。"),12,"#9BA4B8"));root.Children.Add(heading);
         var body=new Grid();Grid.SetRow(body,1);root.Children.Add(body);body.ColumnDefinitions.Add(new(){Width=new(180)});body.ColumnDefinitions.Add(new(){Width=new(18)});body.ColumnDefinitions.Add(new());
         var left=new Grid();left.RowDefinitions.Add(new(){Height=GridLength.Auto});left.RowDefinitions.Add(new());

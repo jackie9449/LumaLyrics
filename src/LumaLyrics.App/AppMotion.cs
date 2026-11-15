@@ -194,9 +194,11 @@ public static class AppMotion
             Smooth(control,AvailabilityProperty,usable?1:.38,duration);
             if(ownsTransform)
             {
-                double size=control is Slider?(down?1.34:usable && hover?1.18:1):down?.975:usable && hover?control is Thumb?1.18:control is RadioButton?1.006:1.018:1;
+                // Full-face buttons have no spare layout space for outward scale/lift.
+                // Keep hover on the color layers; an inward press retains tactile feedback.
+                double size=control is Slider?(down?1.34:usable && hover?1.18:1):down?.975:usable && hover && control is Thumb?1.18:1;
                 Smooth(scale,ScaleTransform.ScaleXProperty,size,duration);Smooth(scale,ScaleTransform.ScaleYProperty,size,duration);
-                Smooth(translate,TranslateTransform.YProperty,usable && hover && !down && control is Button?-1:0,duration);
+                Smooth(translate,TranslateTransform.YProperty,0,duration);
             }
         }
         void Smooth(DependencyObject target,DependencyProperty property,double value,int milliseconds)

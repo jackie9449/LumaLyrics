@@ -104,7 +104,6 @@ internal sealed partial class MusicLibraryView
         sort.Visibility=showingPlaylists?Visibility.Collapsed:Visibility.Visible;
         if(!showingPlaylists)return;
         albumShelf.Visibility=songs.Visibility=albumHeader.Visibility=Visibility.Collapsed;sort.Visibility=Visibility.Collapsed;
-        if(active)foreach(var copy in headingCopy.Children.OfType<TextBlock>().Take(2))copy.Visibility=selectedPlaylist is null?Visibility.Visible:Visibility.Collapsed;
         if(active)foreach(var button in new[]{albumsTab,songsTab}){AppMotion.SetIsSelected(button,false);button.SetResourceReference(Control.BackgroundProperty,"ControlBrush");button.SetResourceReference(Control.ForegroundProperty,"MutedBrush");}
     }
     void FilterPlaylists()

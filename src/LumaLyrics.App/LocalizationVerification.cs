@@ -64,9 +64,9 @@ public partial class MainWindow
             languagePanel.Selector.SelectedValue=language;await Settle();
             foreach(var (name,select) in new (string,Action)[]{("application",()=>settingsWindow!.SelectApplicationTab()),("general",()=>settingsWindow!.SelectGeneralTab()),("appearance",()=>settingsWindow!.SelectOverlayTab()),("personal",()=>settingsWindow!.SelectPersonalTab()),("library",()=>settingsWindow!.SelectLibraryTab()),("songs",()=>settingsWindow!.SelectLibrarySongs()),("tasks",()=>settingsWindow!.SelectLibraryTasks()),("display",()=>settingsWindow!.SelectTranslationTab()),("shortcuts",()=>settingsWindow!.SelectShortcutsTab())})
             {
-                select();await Settle();checks["locale.settings."+name+".labelsFit"]=LabelsFit(embeddedPageHost);
+                select();await Settle();checks["locale.settings."+name+".labelsFit"]=LabelsFit(embeddedPageHost);checks["locale.settings."+name+".decorationsRemoved"]=DecorationsRemoved(embeddedPageHost);AuditButtonBounds(embeddedPageHost,checks,"locale.settings."+name);
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-settings-"+name+".png"),true);
-                Width=820;await Settle();checks["locale.settings."+name+".narrowLabelsFit"]=LabelsFit(embeddedPageHost);
+                Width=820;await Settle();checks["locale.settings."+name+".narrowLabelsFit"]=LabelsFit(embeddedPageHost);AuditButtonBounds(embeddedPageHost,checks,"locale.settings."+name+".narrow");
                 if(name is "application" or "general" or "appearance" or "shortcuts")VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-settings-"+name+"-820.png"),true);
                 Width=1220;await Settle();
             }
@@ -89,13 +89,15 @@ public partial class MainWindow
             try
             {
                 await ShowMusicLibraryAsync();await Settle();
+                checks["locale.libraryDecorationsRemoved"]=DecorationsRemoved(browser);
                 checks["locale.libraryAlbumMetadataPreserved"]=browser.AlbumGroups.Any(a=>a.Title=="Original locale fixture");
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-library-albums.png"),true);
                 browser.ShowAllSongs();await Settle();
                 checks["locale.librarySongMetadataPreserved"]=browser.SongList.Items.Cast<MusicLibraryView.MusicRow>().Any(r=>r.Song.Track.Title=="设置" && r.Song.Track.Artist=="播放");
                 checks["locale.libraryActionsLocalized"]=Descendants<Button>(browser).Any(b=>b.Content?.ToString()==UiText.T("播放所选"));
-                foreach(double width in new[]{1220d,980d,820d}){Width=width;await Settle();checks[$"locale.library.{width:0}.labelsFit"]=LabelsFit(browser);VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"locale-library-songs-{width:0}.png"),true);}
+                foreach(double width in new[]{1220d,980d,820d}){Width=width;await Settle();checks[$"locale.library.{width:0}.labelsFit"]=LabelsFit(browser);AuditButtonBounds(browser,checks,$"locale.library.{width:0}");VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,$"locale-library-songs-{width:0}.png"),true);}
                 browser.ShowQueue();await browser.ActiveQueueRefresh!;await Settle();
+                checks["locale.queueHeadingVisible"]=Descendants<TextBlock>(browser).Any(t=>t.IsVisible && t.Text==UiText.T("正在播放与接下来播放"));
                 checks["locale.queueIdentityPreserved"]=browser.QueuePanel.Snapshot!.Upcoming[0].Track.Title=="Refresh" && browser.QueuePanel.Snapshot.Current==track;
                 checks["locale.queueActionsLocalized"]=browser.QueuePanel.RefreshButton.Content?.ToString()==UiText.T("刷新列表");
                 VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"locale-queue-820.png"),true);

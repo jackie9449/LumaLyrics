@@ -82,7 +82,6 @@ internal sealed partial class MusicLibraryView
             albumSortMode=showAlbumShelf;sort.ItemsSource=showAlbumShelf?new[]{UiText.T("按专辑名"),UiText.T("按艺人")}:new[]{UiText.T("按歌曲名"),UiText.T("按艺人"),UiText.T("按专辑")};sort.SelectedIndex=showAlbumShelf?Math.Min(albumSortIndex,1):Math.Min(songSortIndex,2);
         }
         albumShelf.Visibility=showAlbumShelf?Visibility.Visible:Visibility.Collapsed;songs.Visibility=showAlbumShelf?Visibility.Collapsed:Visibility.Visible;albumHeader.Visibility=selectedAlbum is null?Visibility.Collapsed:Visibility.Visible;
-        foreach(var child in headingCopy.Children.OfType<TextBlock>().Take(2))child.Visibility=selectedAlbum is null?Visibility.Visible:Visibility.Collapsed;
         playSelected.Visibility=showAlbumShelf?Visibility.Collapsed:Visibility.Visible;
         foreach(var (button,active) in new[]{(albumsTab,showAlbumShelf || selectedAlbum is not null),(songsTab,!showAlbumShelf && selectedAlbum is null)})
         {AppMotion.SetIsSelected(button,active);button.SetResourceReference(Control.BackgroundProperty,active?"AccentSoftBrush":"ControlBrush");button.SetResourceReference(Control.ForegroundProperty,active?"AccentBrush":"MutedBrush");}

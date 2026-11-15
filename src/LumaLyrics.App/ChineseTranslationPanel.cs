@@ -18,7 +18,7 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         this.coordinator=coordinator;
         if(!includeJobs)
         {
-            Children.Add(LibraryWorkspaceUi.Heading(UiText.T("中文显示，随你选择"),UiText.T("译文开关独立记忆，简繁显示同步；修改后立即保存。")));
+            Children.Add(LibraryWorkspaceUi.Heading(UiText.T("中文译文"),UiText.T("译文开关独立记忆，简繁显示同步；修改后立即保存。")));
             var switches=new System.Windows.Controls.Primitives.UniformGrid{Columns=2,Margin=new(0,0,-10,0)};
             var mainPanel=new StackPanel();mainPanel.Children.Add(LibraryWorkspaceUi.Text(UiText.T("主窗口"),15,false));var mainHint=LibraryWorkspaceUi.Text(UiText.T("在原词下方显示中文。"),11);mainHint.Margin=new(0,5,0,12);mainPanel.Children.Add(mainHint);main=DialogUi.Check(mainPanel,UiText.T("主窗口显示中文译文"),coordinator.Settings.ShowChineseTranslation);var mainCard=LibraryWorkspaceUi.Card(mainPanel);mainCard.Margin=new(0,0,10,12);switches.Children.Add(mainCard);
             var floatingPanel=new StackPanel();floatingPanel.Children.Add(LibraryWorkspaceUi.Text(UiText.T("桌面歌词"),15,false));var floatingHint=LibraryWorkspaceUi.Text(UiText.T("与悬浮工具栏开关同步。"),11);floatingHint.Margin=new(0,5,0,12);floatingPanel.Children.Add(floatingHint);floating=DialogUi.Check(floatingPanel,UiText.T("悬浮歌词显示中文译文"),coordinator.Settings.OverlayShowChineseTranslation);var floatingCard=LibraryWorkspaceUi.Card(floatingPanel);floatingCard.Margin=new(0,0,10,12);switches.Children.Add(floatingCard);Children.Add(switches);switches.SizeChanged+=(_,_)=>switches.Columns=switches.ActualWidth>=560?2:1;
@@ -30,7 +30,7 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
             AutomationProperties.SetName(main,UiText.T("主窗口中文译文开关"));AutomationProperties.SetName(floating,UiText.T("悬浮歌词中文译文开关"));main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
             Attach();return;
         }
-        var title=new TextBlock{Text=UiText.T("听见原词，也读懂心意。"),FontSize=20,Margin=new(0,0,0,12)};ThemeManager.BindDisplay(title);Children.Add(title);
+        var title=new TextBlock{Text=UiText.T("中文译文"),FontSize=20,Margin=new(0,0,0,12)};ThemeManager.BindDisplay(title);Children.Add(title);
         AddText(UiText.T("中文译文跟随原词逐行显示。找不到可靠对应时，译文留空。"),12);
         main=DialogUi.Check(this,UiText.T("主窗口显示中文译文"),coordinator.Settings.ShowChineseTranslation);
         floating=DialogUi.Check(this,UiText.T("悬浮歌词显示中文译文"),coordinator.Settings.OverlayShowChineseTranslation);
