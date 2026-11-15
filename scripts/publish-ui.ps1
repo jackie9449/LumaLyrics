@@ -38,7 +38,7 @@ Copy-Item -LiteralPath docs/theme-memory.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/music-library.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/playback-controls.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/keyboard-shortcuts.md -Destination $guide -Force
-Copy-Item -LiteralPath docs/interface-languages.md,docs/updates-2026-11-11.md,docs/development-log.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/language-fonts.md,docs/interface-languages.md,docs/updates-2026-11-11.md,docs/development-log.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
 foreach($agentDocKind in @('specs','plans')){

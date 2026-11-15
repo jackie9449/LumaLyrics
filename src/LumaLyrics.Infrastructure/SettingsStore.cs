@@ -20,6 +20,8 @@ public sealed class AppSettings
     public double OverlayFontSize { get; set; } = 32;
     public string OverlayColor { get; set; } = "#F5F7FA";
     public string OverlayFont { get; set; } = "Microsoft YaHei UI";
+    public string OverlayFontLanguage { get; set; } = "";
+    public LanguageFontPreferences OverlayLanguageFonts { get; set; } = new();
     public double OverlayBackgroundOpacity { get; set; } = .65;
     public string OverlayPreset { get; set; } = "柔和卡片";
     public Dictionary<string, OverlayAppearance> OverlayThemeProfiles { get; set; } = [];

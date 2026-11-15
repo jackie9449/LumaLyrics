@@ -25,7 +25,11 @@
 
 歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。新增公开截图使用原创几何封面与自写歌词，不含个人资料库内容。
 
-图标为本项目用几何图形生成的原生资产；未使用外部照片、字体文件或商业图标包。显示字体使用系统已有字体，不捆绑分发。
+图标为本项目用几何图形生成的原生资产；未使用外部照片或商业图标包。
+
+悬浮歌词按语言提供本机字体和随程序分发的 Noto 字体：Noto Sans CJK Regular（SC/TC/JP/KR，共享 TTC，Sans 2.004）以及 Noto Sans、Arabic、Hebrew、Devanagari、Thai、Bengali、Tamil 的 Regular 字体，均以 SIL Open Font License 1.1 分发。保留原始字体名称与版权，不修改字体文件，不安装到系统字体目录。原始许可随软件放在 `licenses/OFL-CJK.txt` 和 `licenses/OFL-Noto.txt`，源码副本位于 `src/LumaLyrics.App/Assets/Fonts/`。每个资产的固定上游提交 URL、大小和 SHA-256 记录在 `Assets/Fonts/sources.json`（源码路径前加 `src/LumaLyrics.App/`）。来源：[notofonts/noto-cjk](https://github.com/notofonts/noto-cjk)、[notofonts/noto-fonts](https://github.com/notofonts/noto-fonts)。
+
+共享字母的语言通过 Windows 本地 ELS 服务识别，文字不会提交到在线服务；[Microsoft Language Detection](https://learn.microsoft.com/en-us/windows/win32/intl/microsoft-language-detection) 输出按相关性排序的语言，短句和混合语言仍可能存在歧义。
 
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。
 

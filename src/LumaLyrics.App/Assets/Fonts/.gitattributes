@@ -1,0 +1,4 @@
+# Preserve upstream bytes so sources.json hashes survive Windows checkouts.
+*.ttf -text
+*.ttc -text
+OFL-*.txt -text

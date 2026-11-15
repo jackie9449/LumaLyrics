@@ -45,6 +45,11 @@ public partial class OverlaySurface : UserControl
         ReplaceLine(CurrentLine,OutgoingCurrent,CurrentText??"",1,motion);
         ReplaceLine(NextLine,OutgoingNext,NextText??"",appearance.NextOpacity,motion && appearance.TwoLines);
         CurrentChinese.Text=CurrentTranslation??"";NextChinese.Text=NextTranslation??"";
+        foreach(var line in new[]{CurrentLine,NextLine,OutgoingCurrent,OutgoingNext,CurrentChinese,NextChinese})
+        {
+            string? language=ReferenceEquals(line,CurrentChinese)||ReferenceEquals(line,NextChinese)?LyricFontRenderer.ChineseLanguage(line.Text,appearance.FontLanguage):PreviewLanguage;
+            string family=LyricFontRenderer.Apply(line,appearance,language);if(ReferenceEquals(line,CurrentLine))renderedFont=family+", Global User Interface";
+        }
         CurrentChinese.Visibility=CurrentChinese.Text.Length>0 && !string.IsNullOrEmpty(CurrentText)?Visibility.Visible:Visibility.Collapsed;
         NextChinese.Visibility=appearance.TwoLines && NextChinese.Text.Length>0 && !string.IsNullOrEmpty(NextText)?Visibility.Visible:Visibility.Collapsed;
     }
@@ -88,12 +93,10 @@ public partial class OverlaySurface : UserControl
         PreviewBackdrop.Effect=new BlurEffect{Radius=a.Material=="frost"?24:12,RenderingBias=RenderingBias.Quality};
         UpdatePreviewBackdrop();
         Lines.Margin=new(a.Padding,Math.Max(12,a.Padding*.65),a.Padding,Math.Max(12,a.Padding*.65));
-        FontFamily font;
-        try {font=new FontFamily(a.Font+", Microsoft YaHei UI, Segoe UI");}catch{font=new("Microsoft YaHei UI");}
         var weight=a.Weight switch{"Normal"=>FontWeights.Normal,"Medium"=>FontWeights.Medium,"Bold"=>FontWeights.Bold,_=>FontWeights.SemiBold};
         foreach(var line in new[]{CurrentLine,NextLine,OutgoingCurrent,OutgoingNext,CurrentChinese,NextChinese})
         {
-            line.FontFamily=font;line.Foreground=Solid(a.Color);line.FontWeight=weight;
+            line.Foreground=Solid(a.Color);line.FontWeight=weight;
             line.TextAlignment=Enum.Parse<TextAlignment>(a.Alignment);
             line.Effect=a.Shadow?new DropShadowEffect{Color=Colors.Black,ShadowDepth=1.5,BlurRadius=6,Opacity=a.ShadowStrength}:null;
         }
@@ -105,7 +108,9 @@ public partial class OverlaySurface : UserControl
         NextHost.Visibility=a.TwoLines?Visibility.Visible:Visibility.Collapsed;
         FlushText(false);UpdateClip();
     }
-    internal string RenderedFont=>CurrentLine.FontFamily.Source;
+    internal string? PreviewLanguage {get;set;}
+    string renderedFont="";
+    internal string RenderedFont=>renderedFont;
     internal void SetPreviewBrightness(double value){previewBrightness=value;Apply(appearance,reduceMotion);}
     internal void SetInteraction(Point point,bool active)=>Material.SetInteraction(point,active);
     internal void AttachPreviewBackdrop(FrameworkElement scene)

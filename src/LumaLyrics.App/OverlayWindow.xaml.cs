@@ -21,6 +21,8 @@ public partial class OverlayWindow : Window
     bool syncingTranslationToggle=true;
     HwndSource? nativeSource;
     double opacityBeforeEditing;
+    double stylePositionRemainder;
+    bool placingStyle;
     OverlayAppearance? previewAppearance;
     OverlayAppearance CurrentAppearance=>previewAppearance??OverlayAppearance.From(settings);
     internal bool CanDrag=>!instrumental && (!IsLocked || appearanceEditing);
@@ -56,7 +58,7 @@ public partial class OverlayWindow : Window
         MouseLeave+=(_,_)=>{if(interactiveMove)return;toolbarDelay.Start();LyricSurface.SetInteraction(new(.25,0),false);};
         toolbarDelay.Tick+=(_,_)=>{toolbarDelay.Stop();if(!IsMouseOver && !Toolbar.IsMouseOver && !PlaybackToolbar.IsMouseOver && !(keyboardControls && (Toolbar.IsKeyboardFocusWithin || PlaybackToolbar.IsKeyboardFocusWithin)))HideHoverControls();};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible)HideHoverControls();else QueueGeometryRefresh();UpdateAdaptiveText();backdrop.Refresh();};
-        LocationChanged+=(_,_)=> {if(placed)RememberPosition();QueueGeometryRefresh();backdrop.Refresh();};
+        LocationChanged+=(_,_)=> {if(!placingStyle)stylePositionRemainder=0;if(placed)RememberPosition();QueueGeometryRefresh();backdrop.Refresh();};
         SizeChanged+=(_,_)=> { if(placed) {settings.OverlayWidth=ActualWidth;RoundRegion();}QueueGeometryRefresh();backdrop.Refresh();};
         DpiChanged+=(_,_)=>Dispatcher.BeginInvoke(DispatcherPriority.Loaded,new Action(()=>{if(closed)return;EnsureVisibleBounds();RoundRegion();backdrop.Refresh();}));
         contrastTimer.Tick+=(_,_)=>UpdateAdaptiveText();
@@ -92,9 +94,27 @@ public partial class OverlayWindow : Window
         AppMotion.SetEnabled(PlaybackToolbar,true);
         AppMotion.SetAnimationsEnabled(PlaybackToolbar,a.Animations&&!settings.ReduceMotion && SystemParameters.ClientAreaAnimation);
         double oldCenter=placed?LyricSurface.CurrentCenterY:0;var oldLocation=placed?NativeWindow.Location(this):default;
-        Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(OverlayContrast.Paint(a,darkAdaptiveText),settings.ReduceMotion);backdrop.Apply(a);
-        if(IsLoaded) {UpdateLayout();RoundRegion();if(placed){var dpi=VisualTreeHelper.GetDpi(this);NativeWindow.Place(this,oldLocation.Left,oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY);}}
-        EnsureVisibleBounds();RefreshPopupPlacement();ApplyInstrumentalState();
+        placingStyle=true;
+        try
+        {
+            Width=a.Width;SizeToContent=SizeToContent.Height;LyricSurface.Apply(OverlayContrast.Paint(a,darkAdaptiveText),settings.ReduceMotion);backdrop.Apply(a);
+            if(IsLoaded)
+            {
+                UpdateLayout();RoundRegion();
+                if(placed)
+                {
+                    var dpi=VisualTreeHelper.GetDpi(this);
+                    double target=oldLocation.Top+(oldCenter-LyricSurface.CurrentCenterY)*dpi.DpiScaleY+stylePositionRemainder;
+                    NativeWindow.Place(this,oldLocation.Left,Math.Round(target));
+                    // Native coordinates are integral. Carry the fractional pixel instead of
+                    // accumulating a vertical drift each time a font preview is entered/left.
+                    double remainder=target-NativeWindow.Location(this).Top;
+                    stylePositionRemainder=Math.Abs(remainder)<=1?remainder:0;
+                }
+            }
+            EnsureVisibleBounds();RefreshPopupPlacement();ApplyInstrumentalState();
+        }
+        finally {placingStyle=false;}
     }
     void RoundRegion()=>backdrop.RoundRegion(CurrentAppearance.ResolveCornerRadius(ActualWidth,ActualHeight));
     internal void RefreshTranslationToggle()

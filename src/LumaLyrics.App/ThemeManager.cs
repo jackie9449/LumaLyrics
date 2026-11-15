@@ -157,7 +157,7 @@ internal static class ThemeManager
         Paint("ControlBrush",Mix(background,accent,.08));Paint("HoverBrush",Mix(background,accent,.18));Paint("PressedBrush",Mix(background,accent,.26));
         Paint("BorderBrush",Mix(background,foreground,.28));Paint("AccentSoftBrush",soft);Paint("AccentTextBrush",Readable(foreground,accent));
         Paint("OverlayAccentInkBrush",Readable(accent,soft));
-        target.Resources["OverlayControlFont"]=new FontFamily(appearance.Font);
+        target.Resources["OverlayControlFont"]=LyricFontRenderer.Create(appearance.Normalize(),UiText.Language);
         target.Resources["OverlayControlRadius"]=new CornerRadius(appearance.CornerRatio.GetValueOrDefault() * 16);
         target.Resources["OverlayTransportRadius"]=new CornerRadius(appearance.CornerRatio.GetValueOrDefault() * 22);
         target.Resources["OverlayToolbarRadius"]=new CornerRadius(appearance.CornerRatio.GetValueOrDefault() * 22);

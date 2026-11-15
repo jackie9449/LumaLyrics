@@ -7,6 +7,8 @@ public sealed record OverlayAppearance
     public string Preset { get; init; } = "柔和卡片";
     public string Material { get; init; } = "card";
     public string Font { get; init; } = "Microsoft YaHei UI";
+    public string FontLanguage { get; init; } = "";
+    public LanguageFontPreferences LanguageFonts { get; init; } = new();
     public string Weight { get; init; } = "SemiBold";
     public string Color { get; init; } = "#F5F7FA";
     public string Background { get; init; } = "#101216";
@@ -40,6 +42,8 @@ public sealed record OverlayAppearance
         var a=this with {
         Preset=string.IsNullOrWhiteSpace(Preset)?"柔和卡片":Preset=="极简透明"?"纯净透明":Preset,
         Font=string.IsNullOrWhiteSpace(Font)?"Microsoft YaHei UI":Font,
+        FontLanguage=LyricFontLanguages.NormalizeTag(FontLanguage)??LyricFontLanguages.SystemLanguage,
+        LanguageFonts=(LanguageFonts??new()).Normalize(LyricFontLanguages.NormalizeTag(FontLanguage)??LyricFontLanguages.SystemLanguage),
         Weight=new[]{"Normal","Medium","SemiBold","Bold"}.Contains(Weight)?Weight:"SemiBold",
         Material=new[]{"card","liquid","frost","material","aurora","paper","none"}.Contains(Material)?Material:"card",
         Alignment=new[]{"Left","Center","Right"}.Contains(Alignment)?Alignment:"Center",
@@ -65,7 +69,7 @@ public sealed record OverlayAppearance
         double t=Math.Clamp(Opacity/.1,0,1);return t*t*(3-2*t);
     }
     public static OverlayAppearance From(AppSettings s) => new OverlayAppearance {
-        Preset=s.OverlayPreset=="极简透明"?"纯净透明":s.OverlayPreset,Material=s.OverlayMaterial,Font=s.OverlayFont,Weight=s.OverlayFontWeight,
+        Preset=s.OverlayPreset=="极简透明"?"纯净透明":s.OverlayPreset,Material=s.OverlayMaterial,Font=s.OverlayFont,FontLanguage=s.OverlayFontLanguage,LanguageFonts=s.OverlayLanguageFonts,Weight=s.OverlayFontWeight,
         Color=s.OverlayColor,Background=s.OverlayBackgroundColor,Accent=s.OverlayAccentColor,Alignment=s.OverlayAlignment,
         FontSize=s.OverlayFontSize,Opacity=s.OverlayBackgroundOpacity,Width=s.OverlayWidth,Radius=s.OverlayCornerRadius,CornerRatio=s.OverlayCornerRatio,Padding=s.OverlayPadding,
         LineGap=s.OverlayLineGap,NextScale=s.OverlayNextScale,NextOpacity=s.OverlayNextOpacity,ShadowStrength=s.OverlayShadowStrength,
@@ -74,7 +78,7 @@ public sealed record OverlayAppearance
     }.Normalize();
     public void Apply(AppSettings s)
     {
-        var a=Normalize();s.OverlayPreset=a.Preset;s.OverlayMaterial=a.Material;s.OverlayFont=a.Font;s.OverlayFontWeight=a.Weight;
+        var a=Normalize();s.OverlayPreset=a.Preset;s.OverlayMaterial=a.Material;s.OverlayFont=a.Font;s.OverlayFontLanguage=a.FontLanguage;s.OverlayLanguageFonts=a.LanguageFonts;s.OverlayFontWeight=a.Weight;
         s.OverlayColor=a.Color;s.OverlayBackgroundColor=a.Background;s.OverlayAccentColor=a.Accent;s.OverlayAlignment=a.Alignment;
         s.OverlayFontSize=a.FontSize;s.OverlayBackgroundOpacity=a.Opacity;s.OverlayWidth=a.Width;s.OverlayCornerRadius=a.Radius;s.OverlayCornerRatio=a.CornerRatio;s.OverlayPadding=a.Padding;
         s.OverlayLineGap=a.LineGap;s.OverlayNextScale=a.NextScale;s.OverlayNextOpacity=a.NextOpacity;s.OverlayShadowStrength=a.ShadowStrength;

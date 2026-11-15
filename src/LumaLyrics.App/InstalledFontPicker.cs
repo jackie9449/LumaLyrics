@@ -13,7 +13,7 @@ internal sealed class InstalledFontPicker : ComboBox
     readonly DataTemplate specimen;
     internal event Action<string?>? PreviewFontChanged;
     internal string? HoveredFont=>hovered;
-    public InstalledFontPicker()
+    public InstalledFontPicker(string? sampleText=null)
     {
         SetResourceReference(StyleProperty,typeof(ComboBox));
         IsTextSearchEnabled=true;MaxDropDownHeight=320;
@@ -21,7 +21,7 @@ internal sealed class InstalledFontPicker : ComboBox
         ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
         var row=new FrameworkElementFactory(typeof(StackPanel));row.SetValue(MarginProperty,new Thickness(2,2,2,3));
         var name=new FrameworkElementFactory(typeof(TextBlock));name.SetBinding(TextBlock.TextProperty,new Binding());name.SetValue(TextBlock.FontSizeProperty,11d);name.SetValue(TextBlock.OpacityProperty,.75);row.AppendChild(name);
-        var sample=new FrameworkElementFactory(typeof(TextBlock));sample.Name="FontSpecimen";sample.SetValue(TextBlock.TextProperty,UiText.T("浮光歌词 · Aa Bb 123"));sample.SetValue(TextBlock.FontSizeProperty,18d);sample.SetValue(MarginProperty,new Thickness(0,3,0,0));sample.SetBinding(TextBlock.FontFamilyProperty,new Binding(){Converter=new FamilyConverter()});row.AppendChild(sample);
+        var sample=new FrameworkElementFactory(typeof(TextBlock));sample.Name="FontSpecimen";sample.SetValue(TextBlock.TextProperty,sampleText??UiText.T("浮光歌词 · Aa Bb 123"));sample.SetValue(TextBlock.FontSizeProperty,18d);sample.SetValue(MarginProperty,new Thickness(0,3,0,0));sample.SetBinding(TextBlock.FontFamilyProperty,new Binding(){Converter=new FamilyConverter()});row.AppendChild(sample);
         specimen=new DataTemplate{VisualTree=row};
         var items=new Style(typeof(ComboBoxItem),TryFindResource(typeof(ComboBoxItem)) as Style);
         items.Setters.Add(new Setter(Control.PaddingProperty,new Thickness(10,6,10,6)));
@@ -52,7 +52,7 @@ internal sealed class InstalledFontPicker : ComboBox
     protected override void OnSelectionChanged(SelectionChangedEventArgs e){EndPreview();base.OnSelectionChanged(e);}
     sealed class FamilyConverter : IValueConverter
     {
-        public object Convert(object value,Type target,object parameter,CultureInfo culture)=>new FontFamily(value+", Microsoft YaHei UI, Segoe UI");
+        public object Convert(object value,Type target,object parameter,CultureInfo culture)=>new FontFamily(LanguageFontCatalog.Target(value.ToString()!)+", Global User Interface");
         public object ConvertBack(object value,Type target,object parameter,CultureInfo culture)=>Binding.DoNothing;
     }
 }

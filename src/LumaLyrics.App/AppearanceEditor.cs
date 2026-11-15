@@ -21,9 +21,10 @@ public sealed class AppearanceEditor : UserControl
     readonly Dictionary<string,TextBlock> values=[];
     readonly Dictionary<string,CheckBox> checks=[];
     readonly Dictionary<string,TextBox> colors=[];
-    InstalledFontPicker font=null!;
+    LanguageFontEditor languageFonts=null!;
+    InstalledFontPicker font=>languageFonts.DefaultPicker;
     ComboBox weight=null!,alignment=null!;
-    string? hoverFont;
+    OverlayAppearance? hoverAppearance;
     Button save=null!;
     bool syncing=true,committed,closed,editing;
     bool? compactLayout;
@@ -33,12 +34,13 @@ public sealed class AppearanceEditor : UserControl
     internal void BeginEditing(){if(closed || editing)return;edit=new(settings);editing=true;EditingStarted?.Invoke();}
     public void Close()
     {
-        if(closed)return;closed=true;font.EndPreview();hoverFont=null;
+        if(closed)return;closed=true;languageFonts.EndPreview();hoverAppearance=null;
         if(editing && !committed){edit.Cancel();previewChanged(null);saveSettings();}else if(editing)previewChanged(null);
         Completed?.Invoke();
     }
     internal bool Saved=>committed;
     internal InstalledFontPicker FontPicker=>font;
+    internal LanguageFontEditor LanguageFonts=>languageFonts;
     internal OverlaySurface PreviewSurface=>preview;
     readonly PlayerViewModel previewText=new(){Current=UiText.T("把此刻，轻轻唱成一束光。"),Next=UiText.T("让旋律停留在你身旁")};
     int previewPhrase;
@@ -76,7 +78,7 @@ public sealed class AppearanceEditor : UserControl
         var backgrounds=new WrapPanel{Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right};
         foreach(var (label,id) in new[]{(UiText.T("深色桌面"),0),(UiText.T("浅色桌面"),1),(UiText.T("彩色桌面"),2)}){var b=new Button{Content=label,FontSize=10,Padding=new(9,5,9,5),Margin=new(6,0,0,0)};b.Click+=(_,_)=>SetScene(id);backgrounds.Children.Add(b);}previewHeader.Children.Add(backgrounds);previewPanel.Children.Add(previewHeader);
         var tryMotion=new Button{Content=UiText.T("试播切换"),FontSize=10,Padding=new(9,5,9,5),Margin=new(6,0,0,0)};
-        tryMotion.Click+=(_,_)=>{string[] phrases=[UiText.T("把此刻，轻轻唱成一束光。"),UiText.T("让旋律停留在你身旁"),UiText.T("下一句，随微风慢慢抵达。")];previewPhrase=(previewPhrase+1)%phrases.Length;previewText.Current=phrases[previewPhrase];previewText.Next=phrases[(previewPhrase+1)%phrases.Length];};backgrounds.Children.Insert(0,tryMotion);
+        tryMotion.Click+=(_,_)=>{string[] phrases=[UiText.T("把此刻，轻轻唱成一束光。"),UiText.T("让旋律停留在你身旁"),UiText.T("下一句，随微风慢慢抵达。")];preview.PreviewLanguage=null;previewPhrase=(previewPhrase+1)%phrases.Length;previewText.Current=phrases[previewPhrase];previewText.Next=phrases[(previewPhrase+1)%phrases.Length];};backgrounds.Children.Insert(0,tryMotion);
         Grid.SetRow(scene,1);previewPanel.Children.Add(scene);
         preview.DataContext=previewText;
         subtitle.FontSize=10;ThemeManager.Bind(subtitle,TextBlock.ForegroundProperty,"MutedBrush");subtitle.Margin=new(0,7,0,0);Grid.SetRow(subtitle,2);previewPanel.Children.Add(subtitle);
@@ -84,11 +86,10 @@ public sealed class AppearanceEditor : UserControl
         var tabs=new TabControl();tabs.SetResourceReference(StyleProperty,"AppSectionTabs");Grid.SetRow(tabs,2);right.Children.Add(tabs);
         var typography=Columns();tabs.Items.Add(Tab(UiText.T("文字与排版"),typography.Grid));
         typography.Left.Children.Add(Label(UiText.T("字体 · 悬停预览，点击选定")));
-        var savedFonts=settings.OverlayThemeProfiles?.Values.Where(a=>a is not null).Select(a=>a.Normalize().Font)??[];
-        font=new InstalledFontPicker{ItemsSource=Fonts.SystemFontFamilies.Select(f=>f.Source).Concat(savedFonts).Append(current.Font).Distinct().OrderBy(x=>x).ToArray(),Margin=new(0,0,0,16),MinWidth=80};
-        AutomationProperties.SetName(font,UiText.T("字体"));typography.Left.Children.Add(font);
-        font.SelectionChanged+=(_,_)=>{if(!syncing)Change(a=>a with{Font=font.SelectedItem?.ToString()??a.Font});};
-        font.PreviewFontChanged+=family=>{if(family is not null)BeginEditing();hoverFont=family;previewChanged(family is null?null:current with{Font=family});RefreshPreview();};
+        languageFonts=new LanguageFontEditor();typography.Left.Children.Add(languageFonts);
+        languageFonts.Changed+=options=>{if(!syncing)Change(_=>options);};
+        languageFonts.PreviewChanged+=options=>{if(options is not null)BeginEditing();hoverAppearance=options;previewChanged(options);RefreshPreview();};
+        languageFonts.PreviewLanguageChanged+=tag=>{preview.PreviewLanguage=tag;var sample=LyricFontLanguages.Get(tag).Sample;previewText.Current=sample;previewText.Next=sample;RefreshPreview();};
         weight=Choice(typography.Right,UiText.T("字重"),[UiText.T("常规"),UiText.T("中等"),UiText.T("半粗"),UiText.T("粗体")],a=>a with{Weight=new[]{"Normal","Medium","SemiBold","Bold"}[Math.Max(0,weight.SelectedIndex)]});
         AddSlider(typography.Left,"size",UiText.T("主歌词字号"),18,96,1,a=>a with{FontSize=sliders["size"].Value});
         AddSlider(typography.Right,"nextScale",UiText.T("次行字号比例"),.45,1,.05,a=>a with{NextScale=sliders["nextScale"].Value},true);
@@ -131,7 +132,7 @@ public sealed class AppearanceEditor : UserControl
             if(compact)factory.SetValue(WrapPanel.ItemWidthProperty,Math.Max(130,(ActualWidth-52)/2));
             themes.ItemsPanel=new ItemsPanelTemplate(factory);
         };
-        Unloaded+=(_,_)=>font.EndPreview();
+        Unloaded+=(_,_)=>languageFonts.EndPreview();
         Sync();
     }
     static Brush Brush(string hex)=>new SolidColorBrush(OverlaySurface.ColorOf(hex));
@@ -180,18 +181,18 @@ public sealed class AppearanceEditor : UserControl
     void ValidateColors(){bool valid=colors.Values.All(x=>ValidColor(x.Text));validation.Text=valid?"":UiText.T("颜色请填写完整的 #RRGGBB。");if(save is not null)save.IsEnabled=valid;}
     void Change(Func<OverlayAppearance,OverlayAppearance> change)
     {
-        BeginEditing();edit.Update(change(current));previewChanged(hoverFont is null?null:current with{Font=hoverFont});RefreshPreview();
+        BeginEditing();edit.Update(change(current));languageFonts.UpdateAppearance(current);hoverAppearance=languageFonts.HoverAppearance;previewChanged(hoverAppearance);RefreshPreview();
     }
     void SelectTheme(OverlayTheme theme)
     {
-        BeginEditing();font.EndPreview();edit.Select(theme);previewChanged(null);Sync();
+        BeginEditing();languageFonts.EndPreview();edit.Select(theme);previewChanged(null);Sync();
     }
-    internal void ResetCurrentTheme(){BeginEditing();font.EndPreview();edit.ResetCurrent();previewChanged(null);Sync();}
+    internal void ResetCurrentTheme(){BeginEditing();languageFonts.EndPreview();edit.ResetCurrent();previewChanged(null);Sync();}
     void Sync()
     {
         syncing=true;
         themes.SelectedItem=themes.Items.Cast<ListBoxItem>().FirstOrDefault(x=>((OverlayTheme)x.Tag).Name==current.Preset);
-        font.SelectedItem=current.Font;weight.SelectedIndex=Array.IndexOf(new[]{"Normal","Medium","SemiBold","Bold"},current.Weight);alignment.SelectedIndex=Array.IndexOf(new[]{"Left","Center","Right"},current.Alignment);
+        languageFonts.Sync(current);weight.SelectedIndex=Array.IndexOf(new[]{"Normal","Medium","SemiBold","Bold"},current.Weight);alignment.SelectedIndex=Array.IndexOf(new[]{"Left","Center","Right"},current.Alignment);
         var data=new Dictionary<string,double>{{"size",current.FontSize},{"nextScale",current.NextScale},{"nextOpacity",current.NextOpacity},{"shadowStrength",current.ShadowStrength},{"opacity",current.Opacity},{"glass",current.GlassIntensity},{"radius",current.CornerRatio!.Value},{"width",current.Width},{"padding",current.Padding},{"gap",current.LineGap},{"transition",current.TransitionMs}};
         foreach(var (id,value) in data){sliders[id].Value=value;values[id].Text=FormatValue(id,value,id is "nextScale" or "nextOpacity" or "shadowStrength" or "opacity" or "glass" or "radius");}
         colors["text"].Text=current.Color;colors["background"].Text=current.Background;colors["accent"].Text=current.Accent;
@@ -202,8 +203,8 @@ public sealed class AppearanceEditor : UserControl
     void RefreshPreview()
     {
         // Same renderer and actual type sizes as the desktop overlay; scrolling handles oversized previews.
-        var effective=hoverFont is null?current:current with{Font=hoverFont};
-        preview.Apply(effective,settings.ReduceMotion);status.Text=UiText.Status(materialStatus());subtitle.Text=hoverFont is null?UiText.F($"{UiText.T(current.Preset)}  ·  {current.FontSize:0} px  ·  可直接拖动桌面歌词调整位置"):UiText.F($"正在预览 {hoverFont}  ·  点击字体选定，移开恢复");
+        var effective=hoverAppearance??current;
+        preview.Apply(effective,settings.ReduceMotion);status.Text=UiText.Status(materialStatus());subtitle.Text=hoverAppearance is null?UiText.F($"{UiText.T(current.Preset)}  ·  {current.FontSize:0} px  ·  可直接拖动桌面歌词调整位置"):UiText.T("正在预览字体 · 点击选定，移开恢复");
         bool hasBackground=!current.Transparent;
         sliders["opacity"].IsEnabled=hasBackground;colors["background"].IsEnabled=hasBackground;checks["border"].IsEnabled=hasBackground;
         sliders["glass"].IsEnabled=hasBackground && current.Material is "liquid" or "frost" or "aurora" or "material" or "paper";
@@ -221,7 +222,7 @@ public sealed class AppearanceEditor : UserControl
         scene.SetScene(id);
     }
     internal void PreviewTheme(OverlayTheme theme)=>SelectTheme(theme);
-    internal void PreviewOptions(OverlayAppearance options){BeginEditing();font.EndPreview();edit.Update(options);previewChanged(null);Sync();}
+    internal void PreviewOptions(OverlayAppearance options){BeginEditing();languageFonts.EndPreview();edit.Update(options);previewChanged(null);Sync();}
     internal Dictionary<string,bool> VerifyControls()
     {
         var result=new Dictionary<string,bool>();var before=current;
@@ -241,7 +242,7 @@ public sealed class AppearanceEditor : UserControl
     {for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++){var child=VisualTreeHelper.GetChild(root,i);if(child is TabControl tabs)yield return tabs;foreach(var found in FindTabs(child))yield return found;}}
     public void Save()
     {
-        ValidateColors();if(!save.IsEnabled)return;BeginEditing();font.EndPreview();current.Apply(settings);previewChanged(null);
+        ValidateColors();if(!save.IsEnabled)return;BeginEditing();languageFonts.EndPreview();current.Apply(settings);previewChanged(null);
         try{edit.Save(saveSettings);committed=true;Close();}catch(Exception ex) when(ex is System.IO.IOException or UnauthorizedAccessException){validation.Text=UiText.T("保存失败：")+UiText.Status(ex.Message);}
     }
 }

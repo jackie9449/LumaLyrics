@@ -47,7 +47,11 @@ public partial class MainWindow
             Hover(row1);Hover(row2);await Settle();checks["fontPreview.movingBetweenRowsUsesLatestFont"]=overlay.LyricSurface.RenderedFont.StartsWith(second+",",StringComparison.Ordinal);
             picker.IsDropDownOpen=false;checks["fontPreview.closingClearsHoverBeforeFadeCompletes"]=picker.HoveredFont is null && overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
             await Settle();checks["fontPreview.closingListRestoresSelectedFont"]=overlay.LyricSurface.RenderedFont.StartsWith(selected+",",StringComparison.Ordinal);
-            picker.IsDropDownOpen=true;await Settle();picker.SelectedIndex=1;await Settle();checks["fontPreview.selectingCommitsChosenFont"]=settings.OverlayFont==first && picker.HoveredFont is null;
+            picker.IsDropDownOpen=true;await Settle();
+            double previewAnchor=overlay.CurrentScreenY;
+            for(int repeat=0;repeat<12;repeat++){Hover(row1);await Settle();Leave(row1);await Settle();}
+            checks["fontPreview.repeatedHoverKeepsPhysicalAnchor"]=Math.Abs(overlay.CurrentScreenY-previewAnchor)<1.1;
+            picker.SelectedIndex=1;await Settle();checks["fontPreview.selectingCommitsChosenFont"]=settings.OverlayFont==first && picker.HoveredFont is null;
             row2=(ComboBoxItem)picker.ItemContainerGenerator.ContainerFromIndex(2);Hover(row2);await Settle();editor.Save();await Settle();
             checks["fontPreview.saveIgnoresUnselectedHover"]=store.Load().OverlayFont==first && settings.OverlayFont==first;
             checks["fontPreview.themeProfileIgnoresUnselectedHover"]=store.Load().OverlayThemeProfiles.GetValueOrDefault(OverlayThemes.All[0].Name)?.Font==first;

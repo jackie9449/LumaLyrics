@@ -51,7 +51,7 @@ public sealed class OverlayThemeSession
 
     OverlayAppearance DefaultsWithTypography(OverlayTheme theme) => theme.Appearance with
     {
-        Preset = theme.Name, Font = Current.Font, FontSize = Current.FontSize, Weight = Current.Weight,
+        Preset = theme.Name, Font = Current.Font, FontLanguage = Current.FontLanguage, LanguageFonts = Current.LanguageFonts, FontSize = Current.FontSize, Weight = Current.Weight,
         Width = Current.Width, TwoLines = Current.TwoLines, Alignment = Current.Alignment,
         Animations = Current.Animations, TransitionMs = Current.TransitionMs
     };
