@@ -35,9 +35,9 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
             catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException){message="本机 Apple Music 资料库主清单暂不可读；已有核验清单可离线浏览，请在同步完成后刷新。";}
         }
         if(snapshot is null && cached.Count==0)return new([],"尚未取得可确认的音乐库清单。请打开 Apple Music 完成资料库同步，或在缓存管理中选择本机资料库后刷新。"){Unavailable=true,PlaylistsUnavailable=true};
-        var covers=ReadCovers(token);
         IReadOnlyDictionary<string,AppleArtworkSource>? albumReferences=null;
         if(snapshot is not null)try{albumReferences=new AppleMusicArtworkReader().Read(snapshot.Path);}catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or SqliteException){}
+        var covers=new MusicLibraryArtworkCatalog(root).Load(snapshot,albumReferences,token);
         var items=snapshot?.Tracks.Select(t=>new MusicLibrarySong(snapshot.Path,t.PersistentId,t.Track,AlbumArtist:t.AlbumArtist,
             AlbumPersistentId:t.AlbumPersistentId is { } id && albumReferences?.TryGetValue(id,out var reference)==true && reference.SourceKind==45?id:null)).ToArray()??cached.Values.ToArray();
         var songs=new List<MusicLibrarySong>(items.Length);
@@ -67,18 +67,6 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
         {
             token.ThrowIfCancellationRequested();string state=rows.GetString(6),kind=state=="Manual"?"Manual":state=="Cached"?rows.GetString(7):"";
             var song=new MusicLibrarySong(rows.GetString(0),rows.GetString(1),new(rows.GetString(2),rows.GetString(3),rows.GetString(4),rows.IsDBNull(5)?null:rows.GetDouble(5)),LyricsKind:kind);result[song.Key]=song;
-        }
-        return result;
-    }
-    Dictionary<string,string> ReadCovers(CancellationToken token)
-    {
-        var result=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);string path=Path.Combine(root,"artwork.db");if(!File.Exists(path))return result;
-        using var db=Open(path);using var command=db.CreateCommand();
-        command.CommandText="SELECT a.Source,a.PersistentId,a.ImageKey FROM LibraryArtwork a JOIN ArtworkImages i USING(ImageKey) WHERE a.Active=1";
-        using var rows=command.ExecuteReader();while(rows.Read())
-        {
-            token.ThrowIfCancellationRequested();string key=rows.GetString(2);if(key.Length!=64 || key.Any(c=>!Uri.IsHexDigit(c)))continue;
-            result[rows.GetString(0)+"\0"+rows.GetString(1)]=Path.Combine(root,"cache","artwork",key+".img");
         }
         return result;
     }
