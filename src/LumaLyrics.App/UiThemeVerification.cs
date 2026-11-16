@@ -10,12 +10,18 @@ namespace LumaLyrics.App;
 
 public partial class MainWindow
 {
-    // Explicit --verify-ui mode uses an isolated data directory and never starts media/network services.
+    // Isolated --verify-ui never starts media/network services, except the explicit read-only --verify-live-clock probe.
     async Task VerifyUiThemesAsync(string directory)
     {
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-playback-clock") || Environment.GetCommandLineArgs().Contains("--verify-live-clock"))
+        {
+            if(Environment.GetCommandLineArgs().Contains("--verify-live-clock"))await VerifyLiveClockAsync(directory,checks);
+            else await VerifyPlaybackClockAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-control-rendering"))
         {
             await VerifyControlRenderingAsync(directory,checks);File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;

@@ -44,7 +44,9 @@ public partial class MainWindow : Window
         RefreshMainTranslationToggle();
         SelectUiTheme(settings.UiTheme,false);
         coordinator.Updated+=Update; coordinator.ArtworkChanged+=SetArtwork;
-        timer=new DispatcherTimer(TimeSpan.FromMilliseconds(33),DispatcherPriority.Background,(_,_)=>Tick(),Dispatcher);
+        // Timeline text/position must be ready for rendering, rather than waiting
+        // behind ordinary input work at Background priority.
+        timer=new DispatcherTimer(TimeSpan.FromMilliseconds(33),DispatcherPriority.Render,(_,_)=>Tick(),Dispatcher);
         Loaded+=OnLoaded; Closing+=OnClosing; SizeChanged+=OnSize;
         SystemEvents.PowerModeChanged+=PowerModeChanged; SystemEvents.DisplaySettingsChanged+=DisplayChanged;
         LocationChanged+=(_,_)=> { if(IsLoaded && WindowState==WindowState.Normal) { var p=NativeWindow.Location(this); settings.MainLeft=p.Left; settings.MainTop=p.Top; } };

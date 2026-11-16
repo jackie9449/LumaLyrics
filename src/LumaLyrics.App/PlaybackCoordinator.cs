@@ -43,7 +43,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         translations=new(store.Root);TranslationProgress=translations.Progress();StartTranslationInbox();
         LibraryStatus=repository.GetLibraryProgress(settings.AutoPrefetchLibrary?"准备继续后台预缓存":"后台预缓存已关闭");
         using(var artwork=new ArtworkCache(store.Root))ArtworkStatus=artwork.GetProgress();
-        Source.Changed += s => dispatcher.BeginInvoke(() => Receive(s));
+        Source.Changed += QueueSnapshot;
         Source.Error += e => dispatcher.BeginInvoke(() => { store.Log(e); LyricsStatus = e; Updated?.Invoke(); });
     }
     public async Task StartAsync()
@@ -120,6 +120,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     }
     public double? Position => clock.PositionMs;
     public PositionQuality Quality => clock.Quality;
+    void QueueSnapshot(PlaybackSnapshot? snapshot)=>dispatcher.BeginInvoke(()=>Receive(snapshot));
     void Receive(PlaybackSnapshot? s)
     {
         if (disposed) return;

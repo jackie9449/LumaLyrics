@@ -12,7 +12,8 @@ internal static class TimingProbe
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(output))!);
         await using var source=new GsmtcPlaybackSource();
         var clock=new PlaybackClock();
-        source.Changed+=snapshot=>{lock(clock)clock.Update(snapshot);};
+        PlaybackSnapshot? observed=null;
+        source.Changed+=snapshot=>{lock(clock){clock.Update(snapshot);observed=snapshot;}};
         await source.StartAsync();
         var original=source.Latest;
         string database=Path.Combine(LumaLyrics.Infrastructure.DataDirectoryConfiguration.Resolve(),"lyrics.db");
@@ -28,14 +29,23 @@ internal static class TimingProbe
         {
             if(play && original?.Status==PlayState.Paused)started=await source.ControlAsync("play");
             using var writer=new StreamWriter(output);
+            PlaybackSnapshot? previous=null;
             for(int i=0;i<100;i++)
             {
                 await Task.Delay(200);
-                var snapshot=source.Latest;
-                double? position;lock(clock)position=clock.PositionMs;
+                PlaybackSnapshot? snapshot;double? position,projected;double snapshotAge;bool fresh;
+                lock(clock)
+                {
+                    snapshot=observed;position=clock.PositionMs;
+                    snapshotAge=snapshot is null?0:Stopwatch.GetElapsedTime(snapshot.MonotonicTicks).TotalMilliseconds;
+                    projected=snapshot?.PositionMs;
+                    if(snapshot is {Status:PlayState.Playing,TimelineUtc:not null})projected+=(Math.Max(0,(snapshot.CapturedUtc-snapshot.TimelineUtc.Value).TotalMilliseconds)+snapshotAge)*(snapshot.Rate is >0 and <=4?snapshot.Rate.Value:1);
+                    fresh=snapshot is not null && previous is not null && snapshot.Generation==previous.Generation && snapshot.Revision==previous.Revision && snapshot.PositionMs!=previous.PositionMs;
+                }
                 writer.WriteLine(JsonSerializer.Serialize(new{utc=DateTimeOffset.UtcNow,status=snapshot?.Status.ToString(),rawMs=snapshot?.PositionMs,
                     timelineUtc=snapshot?.TimelineUtc,capturedUtc=snapshot?.CapturedUtc,clockMs=position,
-                    snapshotAgeMs=snapshot is null?0:Stopwatch.GetElapsedTime(snapshot.MonotonicTicks).TotalMilliseconds}));
+                    snapshotAgeMs=snapshotAge,sourceProjectedMs=projected,clockMinusSourceMs=position-projected,freshPosition=fresh}));
+                previous=snapshot;
             }
         }
         finally
