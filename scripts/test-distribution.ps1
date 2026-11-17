@@ -16,6 +16,7 @@ try {
     $cases+=@('cnn6.pth','weights.pt','private.safetensors','embedding.pb')
     $cases+=@('matpac-gate.npz','instrument-features.npy')
     $cases+=@('offline-translation-queue.json','offline-translation.lock','own.argosmodel','own.whl')
+    $cases+=@('source-models/metadata.json')
     foreach($name in $cases){
         $fixtureFile=Join-Path $fixtureRoot $name
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($fixtureFile)) | Out-Null

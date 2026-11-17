@@ -38,7 +38,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         LibraryWorkspaceUi.Button(actions,UiText.T("直接生成本地任务"),()=>_=Prepare(false,false,false));
         var more=LibraryWorkspaceUi.Button(actions,UiText.T("更多操作…"),()=>{menu.IsOpen=true;});more.ContextMenu=menu;menu.PlacementTarget=more;
         Action(UiText.T("仅查现有中文"),()=>_=Prepare(false,true,false,false));
-        Action(UiText.T("生成英译中基础机翻"),()=>{try{coordinator.TranslateSelectedOffline(SelectedSongs);SetStatus(UiText.T("已启动离线机翻，可在总览查看进度或暂停。"));}catch(Exception e){SetStatus(UiText.Status(e.Message));}});
+        Action(UiText.T("生成基础中文机翻"),()=>{try{coordinator.TranslateSelectedOffline(SelectedSongs);SetStatus(UiText.T("已启动离线机翻，可在总览查看进度或暂停。"));}catch(Exception e){SetStatus(UiText.Status(e.Message));}});
         Action(UiText.T("重新生成翻译任务…"),()=>_=Prepare(true,false,false));
         Action(UiText.T("暂停准备"),coordinator.PauseWorkspace);
         Action(UiText.T("打开批量入口 MD"),()=>Open(entry));

@@ -13,8 +13,8 @@ public sealed class OfflineTranslationTests:IDisposable
     public OfflineTranslationTests(){Directory.CreateDirectory(root);using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));lyrics.SyncLibrary(new("own",1,[new("1",Song)],"own"));lyrics.Save(Song,Raw,"Own source",true);using var translations=new TranslationRepository(root);}
     sealed class Engine(Func<IReadOnlyList<string>,CancellationToken,Task<IReadOnlyList<string>>>? run=null):IOfflineTranslationEngine
     {
-        public int Calls;public IReadOnlyList<string>? Input;
-        public Task<IReadOnlyList<string>> TranslateAsync(IReadOnlyList<string> texts,CancellationToken token){Calls++;Input=texts;return run?.Invoke(texts,token)??Task.FromResult<IReadOnlyList<string>>(texts.Select(_=>"我们驶向家乡").ToArray());}
+        public int Calls;public IReadOnlyList<string>? Input;public string? Language;
+        public Task<IReadOnlyList<string>> TranslateAsync(IReadOnlyList<string> texts,string sourceLanguage,CancellationToken token){Calls++;Input=texts;Language=sourceLanguage;return run?.Invoke(texts,token)??Task.FromResult<IReadOnlyList<string>>(texts.Select(_=>"我们驶向家乡").ToArray());}
         public ValueTask DisposeAsync()=>ValueTask.CompletedTask;
     }
     ChineseTranslation? Read(){using var repo=new TranslationRepository(root,true);return repo.Find(Song,new LrcParser().Parse(Raw));}
@@ -53,16 +53,63 @@ public sealed class OfflineTranslationTests:IDisposable
         await using var engine=new Engine((texts,_)=>{current=false;return Task.FromResult<IReadOnlyList<string>>(texts.Select(_=>"迟到机翻").ToArray());});
         await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>flow.RunAsync(engine,null,default));Assert.Equal("Pending",Assert.Single(flow.ReadQueue()).State);Assert.Null(Read());
     }
-    [Theory][InlineData("ja")][InlineData("fr")][InlineData("de")][InlineData("es")]
-    public async Task DetectedNonEnglishIsRejectedBeforeInference(string language)
+    [Theory][InlineData("it")][InlineData("ru")][InlineData("ar")][InlineData("pt")]
+    public async Task DetectedUnsupportedLanguageIsRejectedBeforeInference(string language)
     {
         var flow=new OfflineTranslationWorkflow(root,_=>language);await using var engine=new Engine();await Assert.ThrowsAsync<InvalidDataException>(()=>flow.TranslateAsync(flow.Capture(Song),engine,default));Assert.Equal(0,engine.Calls);
     }
-    [Theory][InlineData("風が吹く")][InlineData("안녕하세요")][InlineData("Une étoile")]
-    public async Task NonEnglishScriptsAreRejectedWithoutDetector(string text)
+    [Theory][InlineData("Ветер дует")][InlineData("الرياح تهب")][InlineData("Une étoile")]
+    public async Task UnknownLanguageIsRejectedWithoutDetector(string text)
     {
         using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,"[00:01]"+text,"Own",true);
         await using var engine=new Engine();await Assert.ThrowsAsync<InvalidDataException>(()=>Flow.TranslateAsync(Flow.Capture(Song),engine,default));Assert.Equal(0,engine.Calls);
+    }
+    [Theory]
+    [InlineData("fr","Le vent traverse la vallée")][InlineData("de","Der Wind zieht durch das Tal")][InlineData("es","El viento cruza el valle")]
+    [InlineData("ja","風が谷を渡る")][InlineData("ko","바람이 계곡을 건넌다")]
+    public async Task NewSourcesPreserveGroupsAndCanUpgradeToAgent(string language,string text)
+    {
+        string raw="[00:01]"+text+"\n[00:03]\n[00:04]"+text;
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,raw,"Own multilingual fixture",true);
+        var flow=new OfflineTranslationWorkflow(root,_=>language);var item=flow.Capture(Song);await using var engine=new Engine();
+        Assert.True(await flow.TranslateAsync(item,engine,default));Assert.Equal(language,engine.Language);
+        using var repo=new TranslationRepository(root);var doc=new LrcParser().Parse(raw);var translated=repo.Find(Song,doc)!;
+        Assert.Equal(new[]{0,2},translated.Lines.Select(l=>l.GroupIndex));Assert.Equal(ArgosLanguages.SourceUrl(language),translated.SourceUrl);Assert.Contains("经英语中转",translated.Review);
+        Assert.True(repo.SaveMissing(Song,translated with{Source="Own provider",SourceUrl="own-provider",Draft=false}));Assert.Single(repo.ReadHistory(Song,item.SourceHash));
+        // A separate exact original allows testing the agent upgrade independently.
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,raw+"\n[00:08]"+text,"Own",true);
+        var second=flow.Capture(Song);Assert.True(await flow.TranslateAsync(second,engine,default));
+        var job=TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing);Assert.Equal(TranslationJobMode.ReplaceExpected,job.Request.Mode);
+        Assert.Equal(TranslationJobState.Applied,(await TranslationJobExchange.ImportAsync(root,Complete(job))).State);
+    }
+    [Fact]public async Task JapaneseKanjiGroupsUseTheJapaneseRouteAndBlankIsPreserved()
+    {
+        const string raw="[00:01]風が谷を渡る\n[00:03]\n[00:04]光の道\n[00:08]夢";
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,raw,"Own",true);
+        await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song),engine,default);Assert.Equal("ja",engine.Language);Assert.Equal(new[]{"風が谷を渡る","光の道","夢"},engine.Input);
+    }
+    [Fact]public async Task JapaneseIterationMarksDoNotDropTheOtherKanjiGroups()
+    {
+        const string raw="[00:01]日々\n[00:03]\n[00:04]希望";
+        using(var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db")))lyrics.Save(Song,raw,"Own",true);
+        await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song),engine,default);Assert.Equal("ja",engine.Language);Assert.Equal(new[]{"日々","希望"},engine.Input);
+    }
+    [Fact]public void QueueLanguageSurvivesLegacyJsonBackupAndExplicitReselection()
+    {
+        var item=Flow.Capture(Song);Flow.Enqueue([item]);string file=Path.Combine(root,"offline-translation-queue.json");
+        var json=System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(file))!;json[0]!.AsObject().Remove("SourceLanguage");File.WriteAllText(file,json.ToJsonString());Assert.Equal("auto",Assert.Single(Flow.ReadQueue()).SourceLanguage);
+        Flow.Enqueue([item with{SourceLanguage="fr"}]);Assert.Equal("fr",Assert.Single(Flow.ReadQueue()).SourceLanguage);
+        Flow.Enqueue([item with{SourceLanguage="de"}]);Assert.Equal("de",Assert.Single(Flow.ReadQueue()).SourceLanguage);
+        Assert.Throws<InvalidDataException>(()=>Flow.Enqueue([item with{SourceLanguage="xx"}]));
+        string collection=root+"-collection",restored=root+"-restored";
+        try{PersonalLibraryArchive.Export(root,collection);PersonalLibraryArchive.Restore(collection,restored);Assert.Equal("de",Assert.Single(new OfflineTranslationWorkflow(restored).ReadQueue()).SourceLanguage);}
+        finally{SqliteConnection.ClearAllPools();if(Directory.Exists(collection))Directory.Delete(collection,true);if(Directory.Exists(restored))Directory.Delete(restored,true);}
+    }
+    [Theory][InlineData("auto")][InlineData("en")][InlineData("fr")][InlineData("de")][InlineData("es")][InlineData("ja")][InlineData("ko")]
+    public void SourceChoicePersistsIndependentlyOfInterfaceLanguage(string language)
+    {
+        var store=new SettingsStore(root);var settings=store.Load();settings.UiLanguage="ja";settings.OfflineTranslationLanguage=language;store.Save(settings);Assert.Equal(language,store.Load().OfflineTranslationLanguage);Assert.Equal("ja",store.Load().UiLanguage);
+        settings.OfflineTranslationLanguage="unknown";store.Save(settings);Assert.Equal("auto",store.Load().OfflineTranslationLanguage);
     }
     [Theory][InlineData(0)][InlineData(1)][InlineData(4)]public async Task InvalidGroupCountsCannotBeSaved(int count)
     {
@@ -95,15 +142,15 @@ public sealed class OfflineTranslationTests:IDisposable
     {
         var result=new TranslationJobResult("LumaLyrics.TranslationJobResult",1,job.Request.JobId,job.RequestSha256,job.Request.Target.SourceHash,"Own AI",job.Request.Target.Groups.Select(g=>new TranslationJobResultLine(g.GroupIndex,g.Original,g.NeedsTranslation&&!(partial&&g.GroupIndex==2)?"更好的译文":"",partial&&g.GroupIndex==2?"Own incomplete":null)).ToArray());File.WriteAllText(job.ResultPath,JsonSerializer.Serialize(result));return job.ResultPath;
     }
-    [Theory][InlineData(false)][InlineData(true)]public async Task AgentCanUpgradeMachineRegardlessOfCreationOrder(bool createBeforeMachine)
+    [Theory][InlineData(false,"en")][InlineData(true,"en")][InlineData(false,"fr")][InlineData(true,"fr")][InlineData(false,"de")][InlineData(true,"de")][InlineData(false,"es")][InlineData(true,"es")][InlineData(false,"ja")][InlineData(true,"ja")][InlineData(false,"ko")][InlineData(true,"ko")]public async Task AgentCanUpgradeMachineRegardlessOfCreationOrder(bool createBeforeMachine,string language)
     {
-        TranslationJobTicket? job=createBeforeMachine?TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing):null;await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song),engine,default);
+        TranslationJobTicket? job=createBeforeMachine?TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing):null;await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song) with{SourceLanguage=language},engine,default);
         job??=TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing);Assert.Equal(createBeforeMachine?TranslationJobMode.FillMissing:TranslationJobMode.ReplaceExpected,job.Request.Mode);
         Assert.Equal(TranslationJobState.Applied,(await TranslationJobExchange.ImportAsync(root,Complete(job))).State);Assert.Equal("更好的译文",Read()!.TextAt(0));using var repo=new TranslationRepository(root,true);Assert.Single(repo.ReadHistory(Song,TranslationAlignment.Hash(Raw)));
     }
-    [Theory][InlineData(false)][InlineData(true)]public async Task PartialAgentUpgradeRequiresExplicitAdoption(bool createBeforeMachine)
+    [Theory][InlineData(false,"en")][InlineData(true,"en")][InlineData(false,"fr")][InlineData(true,"fr")][InlineData(false,"de")][InlineData(true,"de")][InlineData(false,"es")][InlineData(true,"es")][InlineData(false,"ja")][InlineData(true,"ja")][InlineData(false,"ko")][InlineData(true,"ko")]public async Task PartialAgentUpgradeRequiresExplicitAdoption(bool createBeforeMachine,string language)
     {
-        TranslationJobTicket? job=createBeforeMachine?TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing):null;await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song),engine,default);job??=TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing);
+        TranslationJobTicket? job=createBeforeMachine?TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing):null;await using var engine=new Engine();await Flow.TranslateAsync(Flow.Capture(Song) with{SourceLanguage=language},engine,default);job??=TranslationJobExchange.Create(root,Song,TranslationJobMode.FillMissing);
         Assert.Equal(TranslationJobState.PartialReady,(await TranslationJobExchange.ImportAsync(root,Complete(job,true))).State);Assert.True(OfflineTranslationWorkflow.IsMachine(Read()!));
     }
     [Fact]public async Task PersonalBackupRoundTripIncludesReadableQueueAndTranslations()

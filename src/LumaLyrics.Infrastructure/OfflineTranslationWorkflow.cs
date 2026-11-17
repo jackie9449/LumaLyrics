@@ -3,14 +3,14 @@ using LumaLyrics.Core;
 using static LumaLyrics.Infrastructure.TranslationJobRepository;
 namespace LumaLyrics.Infrastructure;
 
-public sealed record OfflineTranslationItem(Track Track,string BindingId,string SourceHash,LibraryPreparationTarget? Member,string State="Pending",string? Detail=null);
+public sealed record OfflineTranslationItem(Track Track,string BindingId,string SourceHash,LibraryPreparationTarget? Member,string State="Pending",string? Detail=null,string SourceLanguage="auto");
 public sealed record OfflineTranslationProgress(int Total,int Completed,int Skipped,int Failed,int Pending,bool Running)
 {public IReadOnlyList<OfflineTranslationItem> Failures {get;init;}=[];}
 public sealed class OfflineTranslationWorkflow(string root,Func<string,string?>? languageDetector=null,Func<bool>? selectionCurrent=null)
 {
     static readonly JsonSerializerOptions json=new(){WriteIndented=true};
     string QueuePath=>Path.Combine(root,"offline-translation-queue.json");
-    public static bool IsMachine(ChineseTranslation translation)=>translation.SourceUrl=="local:argos/en-zh";
+    public static bool IsMachine(ChineseTranslation translation)=>ArgosLanguages.IsMachineUrl(translation.SourceUrl);
     public IReadOnlyList<OfflineTranslationItem> ReadQueue()
     {
         if(!File.Exists(QueuePath))return [];
@@ -21,7 +21,7 @@ public sealed class OfflineTranslationWorkflow(string root,Func<string,string?>?
     {
         if(new FileInfo(path).Length>8*1024*1024)throw new InvalidDataException("Offline queue exceeds limit");
         var items=JsonSerializer.Deserialize<OfflineTranslationItem[]>(File.ReadAllText(path),json)??throw new InvalidDataException("Empty queue");
-        if(items.Length>5000 || items.Any(i=>i is null||i.Track is null||i.Track.Title is null||i.Track.Artist is null||i.Track.Album is null||string.IsNullOrWhiteSpace(i.BindingId)||i.BindingId.Length>500||!PersonalLibraryArchive.IsHash(i.SourceHash)||i.Detail?.Length>1000||i.State is not ("Pending" or "Completed" or "Skipped" or "Failed")))throw new InvalidDataException("Invalid offline queue");return items;
+        if(items.Length>5000 || items.Any(i=>i is null||i.Track is null||i.Track.Title is null||i.Track.Artist is null||i.Track.Album is null||!ArgosLanguages.IsSelection(i.SourceLanguage)||string.IsNullOrWhiteSpace(i.BindingId)||i.BindingId.Length>500||!PersonalLibraryArchive.IsHash(i.SourceHash)||i.Detail?.Length>1000||i.State is not ("Pending" or "Completed" or "Skipped" or "Failed")))throw new InvalidDataException("Invalid offline queue");return items;
     }
     void Save(IReadOnlyList<OfflineTranslationItem> items)
     {
@@ -41,10 +41,10 @@ public sealed class OfflineTranslationWorkflow(string root,Func<string,string?>?
     {
         PersonalLibraryArchive.EnsureOutsideSoftware(root);
         using var lease=new FileStream(Path.Combine(root,"offline-translation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
-        if(selected.Count>5000||selected.Any(i=>string.IsNullOrWhiteSpace(i.BindingId)||!PersonalLibraryArchive.IsHash(i.SourceHash)))throw new InvalidDataException("Invalid song selection");
+        if(selected.Count>5000||selected.Any(i=>!ArgosLanguages.IsSelection(i.SourceLanguage)||string.IsNullOrWhiteSpace(i.BindingId)||!PersonalLibraryArchive.IsHash(i.SourceHash)))throw new InvalidDataException("Invalid song selection");
         if(selected.Count==0)return;
         var previous=ReadQueue().Where(i=>i.State=="Pending").ToList();
-        foreach(var item in selected)if(!previous.Any(i=>i.Track==item.Track&&i.SourceHash==item.SourceHash))previous.Add(item with{State="Pending",Detail=null});
+        foreach(var item in selected){previous.RemoveAll(i=>i.Track==item.Track&&i.SourceHash==item.SourceHash);previous.Add(item with{State="Pending",Detail=null});}
         if(previous.Count>5000)throw new InvalidDataException("Too many pending songs");Save(previous);
     }
     public static bool EnglishCompatible(string text)
@@ -64,10 +64,10 @@ public sealed class OfflineTranslationWorkflow(string root,Func<string,string?>?
             for(int i=0;i<items.Length;i++)
             {
                 token.ThrowIfCancellationRequested();if(items[i].State!="Pending")continue;
-                try{bool saved=await TranslateAsync(items[i],engine,token);items[i]=items[i] with{State=saved?"Completed":"Skipped",Detail=saved?"Argos en-zh":"Existing translation"};}
+                try{bool saved=await TranslateAsync(items[i],engine,token);items[i]=items[i] with{State=saved?"Completed":"Skipped",Detail=saved?"Argos Translate":"Existing translation"};}
                 catch(OperationCanceledException){throw;}
                 catch(Exception e) when(e is IOException or InvalidDataException or System.Text.Json.JsonException or Microsoft.Data.Sqlite.SqliteException)
-                {items[i]=items[i] with{State="Failed",Detail=e.Message.Contains("English",StringComparison.Ordinal)?"当前仅支持英文原词。":e.Message.Contains("Original",StringComparison.Ordinal)?"原词已变化，请重新选择。":"机翻失败或歌词组过长，请重试。"};}
+                {items[i]=items[i] with{State="Failed",Detail=e.Message.Contains("Missing source language model",StringComparison.Ordinal)?"离线语言模型未准备，请先准备所需语言组件。":e.Message.Contains("source language",StringComparison.Ordinal)?"无法确定或暂不支持原词语言，请指定语言后重试。":e.Message.Contains("Original",StringComparison.Ordinal)?"原词已变化，请重新选择。":"机翻失败或歌词组过长，请重试。"};}
                 Save(items);Report(true);
             }
         }
@@ -80,14 +80,17 @@ public sealed class OfflineTranslationWorkflow(string root,Func<string,string?>?
         if(binding.Id!=item.BindingId||binding.Plain||binding.Instrumental||!binding.Manual&&!LibraryPrefetcher.QualityOf(binding,item.Track)||TranslationAlignment.Hash(binding.Raw)!=item.SourceHash)throw new InvalidDataException("Original changed");
         var doc=new LrcParser().Parse(binding.Raw);using(var translations=new TranslationRepository(root))if(translations.FindActive(item.Track,doc) is not null)return false;
         if(item.Member is not null)LibrarySongActions.Check(root,item.Member);
-        var groups=doc.Groups.Select((g,i)=>(Index:i,Text:g.Text)).Where(g=>TranslationAlignment.NeedsChineseTranslation(doc,g.Text)).ToArray();
+        bool japaneseOrKorean=item.SourceLanguage is "ja" or "ko"||doc.Groups.Any(g=>g.Text.Any(c=>c is >= '\u3040' and <= '\u30ff' or >= '\uac00' and <= '\ud7af'));
+        var groups=doc.Groups.Select((g,i)=>(Index:i,Text:g.Text)).Where(g=>TranslationAlignment.NeedsChineseTranslation(g.Text,japaneseOrKorean)).ToArray();
         if(groups.Length==0)return false;
-        if(groups.Length>2000||groups.Any(g=>!EnglishCompatible(g.Text)))throw new InvalidDataException("English to Chinese only");
-        string? language=languageDetector?.Invoke(string.Join("\n",groups.Select(g=>g.Text)));
-        if(language is not (null or "en"))throw new InvalidDataException("English to Chinese only");
-        var translated=await engine.TranslateAsync(groups.Select(g=>g.Text).ToArray(),token);token.ThrowIfCancellationRequested();if(selectionCurrent?.Invoke()==false)throw new OperationCanceledException("Selection changed");
+        if(groups.Length>2000)throw new InvalidDataException("Too many original groups");
+        string language=ArgosLanguages.Resolve(string.Join("\n",groups.Select(g=>g.Text)),item.SourceLanguage,languageDetector);
+        if(language is "ja" or "ko" && !japaneseOrKorean)groups=doc.Groups.Select((g,i)=>(Index:i,Text:g.Text)).Where(g=>TranslationAlignment.NeedsChineseTranslation(g.Text,true)).ToArray();
+        if(groups.Length>2000)throw new InvalidDataException("Too many original groups");
+        var translated=await engine.TranslateAsync(groups.Select(g=>g.Text).ToArray(),language,token);token.ThrowIfCancellationRequested();if(selectionCurrent?.Invoke()==false)throw new OperationCanceledException("Selection changed");
         if(translated.Count!=groups.Length||translated.Any(s=>string.IsNullOrWhiteSpace(s)||s.Length>4000||!TranslationAlignment.ContainsHan(s)))throw new InvalidDataException("Invalid Chinese output");
-        var result=new ChineseTranslation(item.SourceHash,groups.Select((g,i)=>new TranslationLine(g.Index,translated[i])).ToArray(),"Argos Translate · 基础机翻","local:argos/en-zh","离线基础机翻 · 仅检查原词哈希与逐组对应 · 未人工校对",DateTimeOffset.UtcNow,true);
+        string review=language=="en"?"离线基础机翻 · 仅检查原词哈希与逐组对应 · 未人工校对":"离线基础机翻 · 经英语中转 · 仅检查原词哈希与逐组对应 · 未人工校对";
+        var result=new ChineseTranslation(item.SourceHash,groups.Select((g,i)=>new TranslationLine(g.Index,translated[i])).ToArray(),"Argos Translate · 基础机翻",ArgosLanguages.SourceUrl(language),review,DateTimeOffset.UtcNow,true);
         TranslationRepository.Validate(result);
         using var db=Open(root);Execute(db,"ATTACH DATABASE $p AS originals",("$p",Path.Combine(root,"lyrics.db")));using var tx=db.BeginTransaction(deferred:false);
         token.ThrowIfCancellationRequested();

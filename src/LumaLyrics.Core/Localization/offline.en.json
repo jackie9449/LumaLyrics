@@ -26,5 +26,21 @@
   "请先播放或选择歌曲。": "Play or select a song first.",
   "Argos Translate · 基础机翻": "Argos Translate · basic machine translation",
   "离线基础机翻 · 仅检查原词哈希与逐组对应 · 未人工校对": "Offline machine translation · original hash and group mapping checked · not human-reviewed",
-  "已启动离线机翻，可在总览查看进度或暂停。": "Offline translation started. View progress or pause in Overview."
+  "已启动离线机翻，可在总览查看进度或暂停。": "Offline translation started. View progress or pause in Overview.",
+  "原词语言": "Original language",
+  "离线翻译原词语言": "Offline translation source language",
+  "自动识别": "Detect automatically",
+  "英文": "English",
+  "法文": "French",
+  "德文": "German",
+  "西班牙文": "Spanish",
+  "日文": "Japanese",
+  "韩文": "Korean",
+  "支持英、法、德、西、日、韩语译中；法德西日韩经英语中转。所选语言组件共约 {0:N0} MB，已有下载会复用。准备后本机翻译，不上传歌词。": "Translate English, French, German, Spanish, Japanese and Korean to Chinese. The five new languages use English as an intermediate step. Selected components: about {0:N0} MB; existing downloads are reused. Translation is local; lyrics are not uploaded.",
+  "混合语种批量请选择自动识别；短句识别不准时可指定原词语言。继续任务沿用入队时的语言。": "Use automatic detection for batches containing songs in different languages. Specify the source language if short lyrics are misidentified. Resumed tasks keep their queued language choice.",
+  "所选离线语言已就绪。": "The selected offline language components are ready.",
+  "生成基础中文机翻": "Generate basic Chinese translation",
+  "离线语言模型未准备，请先准备所需语言组件。": "A required language model is missing. Set up the corresponding language components first.",
+  "无法确定或暂不支持原词语言，请指定语言后重试。": "The source language is uncertain or unsupported. Specify a language and retry.",
+  "离线基础机翻 · 经英语中转 · 仅检查原词哈希与逐组对应 · 未人工校对": "Offline machine translation · via English · original hash and group mapping checked · not human-reviewed"
 }

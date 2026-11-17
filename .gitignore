@@ -39,6 +39,7 @@ translation-*.json
 offline-translation*.json
 offline-translation*.lock
 *.argosmodel
+**/source-models/
 *.whl
 native-ttml*.json
 native-read-safety*.json

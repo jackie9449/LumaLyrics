@@ -99,7 +99,7 @@ public static class TranslationJobExchange
         if(partialRevision is not null && (state!="PartialReady" || Scalar(db,"SELECT ResultHash FROM TranslationJobs WHERE Id=$id",("$id",request.JobId))!=validation.ResultSha256))throw new InvalidDataException("部分结果已变化，请重新生成任务。");
         if(request.Target.LibrarySource is { } library && Scalar(db,"SELECT PersistentId FROM originals.LibraryMembership WHERE Source=$s AND PersistentId=$p",("$s",library),("$p",request.Target.PersistentId)) is null)raw=null;
         string? revision=Scalar(db,"SELECT Revision FROM Translations WHERE Fingerprint=$f AND SourceHash=$h",("$f",request.Target.Track.Fingerprint),("$h",request.Target.SourceHash));
-        bool machineOnly=Scalar(db,"SELECT '1' FROM Translations WHERE Fingerprint=$f AND SourceHash=$h AND Manual=0 AND json_extract(Content,'$.SourceUrl')='local:argos/en-zh'",("$f",request.Target.Track.Fingerprint),("$h",request.Target.SourceHash))=="1";
+        bool machineOnly=Scalar(db,$"SELECT '1' FROM Translations WHERE Fingerprint=$f AND SourceHash=$h AND Manual=0 AND json_extract(Content,'$.SourceUrl') IN {ArgosLanguages.MachineUrlsSql}",("$f",request.Target.Track.Fingerprint),("$h",request.Target.SourceHash))=="1";
         TranslationJobState next;string message;string? applied=null;
         if(raw is null||TranslationAlignment.Hash(raw)!=request.Target.SourceHash){next=TranslationJobState.Stale;message="原词或录音已变化，原译文保留。";}
         else if(request.Mode==TranslationJobMode.FillMissing?revision is not null&&!machineOnly:revision!=(partialRevision??request.ExpectedRevision)){next=TranslationJobState.Conflict;message="当前译文已变化，未覆盖。";}

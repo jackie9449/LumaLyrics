@@ -49,6 +49,8 @@ foreach($agentDocKind in @('specs','plans')){
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/superpowers/$agentDocKind/2026-11-03-library-lyrics-workspace.md") -Destination $agentDocTarget -Force
 }
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-17-argos-offline-translation.md -Destination (Join-Path $guide 'superpowers/plans') -Force
+Copy-Item -LiteralPath docs/superpowers/plans/2026-11-17-argos-multilingual.md -Destination (Join-Path $guide 'superpowers/plans') -Force
+Copy-Item -LiteralPath docs/superpowers/specs/2026-11-17-argos-multilingual.md -Destination (Join-Path $guide 'superpowers/specs') -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-sync-responsiveness.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-workspace-design.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-tab-clipping.md -Destination (Join-Path $guide "superpowers/plans") -Force

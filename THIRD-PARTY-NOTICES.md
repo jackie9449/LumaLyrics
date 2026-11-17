@@ -40,3 +40,7 @@
 用户主动准备时从上游下载，软件 ZIP 不携带 Python、wheel 或模型。Argos Translate 1.11.0（MIT / CC0，采用 MIT）、CTranslate2 4.6.0（MIT）、SentencePiece 0.2.1（Apache-2.0）、Python 3.12.10 embedded（PSF）及辅助依赖均保留原始许可和 notices。固定来源、SHA-256、依赖版本与安装目录见 [离线翻译指南](docs/offline-translation.md)。
 
 英→中 1.9 Argos 模型包原始 OPUS 模型为 CC BY 4.0，署名 Jörg Tiedemann 和 Santhosh Thottingal，*OPUS-MT — Building open translation services for the World*，EAMT 2020，Lisbon, Portugal。使用原始包进行 CPU int8 推理，不重新训练或分发修改权重；输出为机器翻译。模型 README 随安装保留，软件指南同时提供署名与许可链接。
+
+## 多语言 Argos 机翻扩展（2026-11-17）
+
+新增官方法→英 1.9、德→英 1.3、西→英 1.9、日→英 1.1、韩→英 1.1 模型，使用现有英→中完成中转；模型仅由用户主动准备，不随软件分发。每包 README/credits 原样保留。法/西模型的 OPUS-MT 原始模型声明 CC BY 4.0，作者为 Jörg Tiedemann、Santhosh Thottingal（EAMT 2020）；日/韩包的不同训练来源与 credits 不概括为同一许可，德文包亦不推断未声明的许可。具体来源、路径、版本及保留说明见 [离线翻译指南](docs/offline-translation.md) 与公开 `argos-model-lock.json`。

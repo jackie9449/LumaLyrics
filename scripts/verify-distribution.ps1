@@ -13,7 +13,7 @@ if($links.Count -gt 0){throw '软件输出中存在链接或重定向文件，�
 $privateFiles=@(Get-ChildItem -LiteralPath $distributionRoot -Recurse -Force -File | Where-Object {
     $relative=(Get-DistributionRelative $_.FullName).Replace('\','/')
     $segments=$relative.Split('/')
-    $privateDirectory=@($segments | Where-Object {$_ -in @('cache','logs','personal-library','profiles','translations','translation-jobs','translation-batches','translation-state','originals','models','lyrics-review','ocr-models','instruments','instrument-models','个人资料')}).Count -gt 0
+    $privateDirectory=@($segments | Where-Object {$_ -in @('cache','logs','personal-library','profiles','translations','translation-jobs','translation-batches','translation-state','originals','models','source-models','lyrics-review','ocr-models','instruments','instrument-models','个人资料')}).Count -gt 0
     $privateName=$_.Name -match '^(settings|data-location|personal-library)\.json$|^(library|artwork)-(prefetch|import).*\.(json|lock|pause)$|^translation-preparation.*\.(json|lock|pause)$|^translations?([-.].*)?\.json$|^(model\.bin|sentencepiece\.bpe\.model|shared_vocabulary\.(json|txt))$'
     $privateName=$privateName -or $_.Name -match '^(task|batch-task)\.md$|^(batch|request|receipt|agent-progress|translation-result|TranslationJobs|TranslationBatches|TranslationHistory)\.json$'
     $privateQueue=$_.Name -match '^(playback[-_.]?queue|current[-_.]?queue|queue)([-_.].*)?\.json$|^native-(playback|queue|read-safety|memory-safety|hang).*\.(json|jsonl)$'
