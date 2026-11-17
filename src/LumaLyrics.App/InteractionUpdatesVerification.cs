@@ -44,6 +44,11 @@ public partial class MainWindow
         coordinator.SetTranslationVisibility(false,true);await Settle();checks["script.floatingTranslationShowsSelector"]=ChineseScriptHost.IsVisible;
         coordinator.SetTranslationVisibility(false,false);Load("[00:00]風の歌を聞く\n[00:12]音樂");await Settle();checks["script.japaneseHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
         Load(chinese);await Settle();checks["script.chineseVisible"]=ChineseScriptHost.IsVisible;
+        coordinator.SetChineseScript("traditional");
+        Load(english);await Settle();checks["script.hiddenPreservesChoice"]=ChineseScriptHost.Visibility==Visibility.Collapsed && settings.ChineseScript=="traditional";
+        coordinator.Import(track,"風中的音樂照亮遠方","Original static fixture",true);await Settle();checks["script.staticChineseVisible"]=ChineseScriptHost.IsVisible;
+        coordinator.Import(track,"[ar:中文名字]\nA quiet night","Original static fixture",true);await Settle();checks["script.staticForeignMetadataHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
+        Load(chinese);await Settle();
         foreach(var theme in AppThemes.All)
         {
             SelectUiTheme(theme.Id,false);

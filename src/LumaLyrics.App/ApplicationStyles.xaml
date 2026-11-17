@@ -41,6 +41,26 @@
    <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/></Border>
   </Grid></ControlTemplate></Setter.Value></Setter>
  </Style>
+ <!-- Explicit application scope: the language menu never inherits floating preview resources. -->
+ <Style x:Key="LanguageFontMenu" TargetType="ContextMenu" BasedOn="{StaticResource LibraryActionMenu}">
+  <Setter Property="MinWidth" Value="280"/><Setter Property="MaxWidth" Value="360"/><Setter Property="MaxHeight" Value="360"/>
+  <Setter Property="Placement" Value="Bottom"/><Setter Property="VerticalOffset" Value="6"/><Setter Property="HasDropShadow" Value="False"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu">
+   <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="{DynamicResource CardRadius}" Padding="6" SnapsToDevicePixels="True">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle"/></ScrollViewer>
+   </Border>
+  </ControlTemplate></Setter.Value></Setter>
+ </Style>
+ <Style x:Key="LanguageFontMenuItem" TargetType="MenuItem" BasedOn="{StaticResource LibraryActionMenuItem}">
+  <Setter Property="Padding" Value="12,10"/><Setter Property="MinHeight" Value="42"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Grid Background="Transparent">
+   <Border x:Name="Highlight" Background="{DynamicResource AccentSoftBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="0"/>
+   <Border Background="{DynamicResource HoverBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Hover),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Background="{DynamicResource PressedBrush}" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Pressed),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2" CornerRadius="{DynamicResource ControlRadius}" Opacity="{Binding Path=(local:AppMotion.Focus),RelativeSource={RelativeSource TemplatedParent}}"/>
+   <Border Padding="{TemplateBinding Padding}"><ContentPresenter ContentSource="Header" RecognizesAccessKey="True" HorizontalAlignment="Stretch"/></Border>
+  </Grid><ControlTemplate.Triggers><Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Highlight" Property="Opacity" Value="1"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+ </Style>
  <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
   <Setter Property="Background" Value="{DynamicResource AccentBrush}"/><Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="local:AppMotion.FeedbackBrush" Value="{DynamicResource PrimaryFeedbackBrush}"/>
  </Style>

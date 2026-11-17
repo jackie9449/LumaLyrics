@@ -13,4 +13,11 @@ public sealed class ChineseScriptVisibilityTests
     [InlineData("[00:00]A quiet night",false,true,true)]
     public void VisibilityUsesLyricLanguageOrEitherTranslationSwitch(string raw,bool main,bool floating,bool visible)=>Assert.Equal(visible,ChineseScriptVisibility.ShouldShow(new LrcParser().Parse(raw),main,floating));
     [Fact] public void EmptyPlaybackRemainsHiddenUnlessTranslationsAreEnabled(){Assert.False(ChineseScriptVisibility.ShouldShow(null,false,false));Assert.True(ChineseScriptVisibility.ShouldShow(null,true,false));}
+    [Theory]
+    [InlineData("風中的音樂",true)]
+    [InlineData("A quiet night",false)]
+    [InlineData("[ar:中文歌手]\n作词：中文名字\nA quiet night",false)]
+    [InlineData("風の歌を聞く\n音樂",false)]
+    public void StaticLyricsFollowTheSameVisibilityRule(string raw,bool expected)=>Assert.Equal(expected,ChineseScriptVisibility.ShouldShow(new LrcParser().Parse(raw,true),false,false));
+    [Fact] public void CreditsDoNotHideRealLyricsAtTheSameTimestamp()=>Assert.True(ChineseScriptVisibility.ShouldShow(new LrcParser().Parse("[00:00]作词：名字\n[00:00]让光照亮远方"),false,false));
 }

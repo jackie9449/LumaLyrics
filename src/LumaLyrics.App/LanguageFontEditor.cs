@@ -94,10 +94,17 @@ internal sealed class LanguageFontEditor : StackPanel
     internal void OpenLanguages()
     {
         var menu=new ContextMenu{PlacementTarget=add,MaxHeight=360};
+        menu.SetResourceReference(StyleProperty,"LanguageFontMenu");
         ScrollViewer.SetVerticalScrollBarVisibility(menu,ScrollBarVisibility.Auto);
         foreach(var language in LyricFontLanguages.All.Where(l=>!pickers.ContainsKey(l.Tag)))
         {
-            var item=new MenuItem{Header=UiText.T(language.Name),Tag=language.Tag};
+            var header=new Grid();header.ColumnDefinitions.Add(new());header.ColumnDefinitions.Add(new(){Width=GridLength.Auto});
+            var name=new TextBlock{Text=UiText.T(language.Name),FontSize=13,FontWeight=FontWeights.Medium,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis};
+            ThemeManager.Bind(name,TextBlock.ForegroundProperty,"TextBrush");header.Children.Add(name);
+            var code=new TextBlock{Text=language.Tag,FontSize=10,Margin=new(20,0,0,0),VerticalAlignment=VerticalAlignment.Center};
+            ThemeManager.Bind(code,TextBlock.ForegroundProperty,"MutedBrush");Grid.SetColumn(code,1);header.Children.Add(code);
+            var item=new MenuItem{Header=header,Tag=language.Tag};item.SetResourceReference(StyleProperty,"LanguageFontMenuItem");
+            AutomationProperties.SetName(item,UiText.T(language.Name)+" · "+language.Tag);
             item.Click+=(_,_)=>AddLanguage(language.Tag);menu.Items.Add(item);
         }
         add.ContextMenu=menu;menu.IsOpen=true;

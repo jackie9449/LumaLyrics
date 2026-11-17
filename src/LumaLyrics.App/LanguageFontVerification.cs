@@ -67,6 +67,29 @@ public partial class MainWindow
             original.Apply(settings);
             SettingsClicked(this,new());ShowAppearance(settingsWindow);await Settle();
             var editor=appearanceWindow!;var fontEditor=editor.LanguageFonts;
+            string appTheme=settings.UiTheme;
+            foreach(var theme in AppThemes.All)
+            {
+                SelectUiTheme(theme.Id,false);fontEditor.OpenLanguages();await Settle();
+                var menu=fontEditor.AddButton.ContextMenu!;
+                checks["languageMenu."+theme.Id+".applicationStyle"]=ReferenceEquals(menu.Style,FindResource("LanguageFontMenu"));
+                checks["languageMenu."+theme.Id+".themeSurface"]=menu.Background.ToString()==Application.Current.Resources["CardBrush"].ToString();
+                checks["languageMenu."+theme.Id+".bounded"]=menu.ActualWidth>=280 && menu.ActualWidth<=360.5 && menu.ActualHeight<=360.5;
+                checks["languageMenu."+theme.Id+".styledRows"]=menu.Items.OfType<MenuItem>().All(m=>ReferenceEquals(m.Style,FindResource("LanguageFontMenuItem")) && m.Header is Grid);
+                VisualVerification.Save(menu,Path.Combine(directory,"language-menu-"+theme.Id+".png"),true);
+                if(theme==AppThemes.All.First())
+                {
+                    var choices=menu.Items.OfType<MenuItem>().ToArray();choices[0].Focus();await Settle();
+                    choices[0].RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(menu),0,Key.Down){RoutedEvent=Keyboard.KeyDownEvent});await Settle();
+                    checks["languageMenu.keyboardMovesFocus"]=choices[1].IsKeyboardFocusWithin;
+                    string tag=(string)choices[1].Tag;
+                    choices[1].RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice,PresentationSource.FromVisual(menu),0,Key.Enter){RoutedEvent=Keyboard.KeyDownEvent});await Settle();
+                    checks["languageMenu.keyboardAddsLanguage"]=fontEditor.Pickers.ContainsKey(tag);
+                    fontEditor.RemoveLanguage(tag);await Settle();
+                }
+                menu.IsOpen=false;
+            }
+            SelectUiTheme(appTheme,false);await Settle();
             fontEditor.OpenLanguages();await Settle();
             checks["addMenuOpens"]=fontEditor.AddButton.ContextMenu is {IsOpen:true};
             checks["addMenuHasUniqueRemainingLanguages"]=fontEditor.AddButton.ContextMenu!.Items.Count==LyricFontLanguages.All.Count-fontEditor.Pickers.Count;
