@@ -1,5 +1,6 @@
 using System.Windows.Threading;
 using System.IO;
+using System.Net.Http;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 using LumaLyrics.Windows;
@@ -224,10 +225,10 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
                 File.WriteAllText(Path.Combine(dir,(best.ProviderName=="NetEase"?"netease-":"lrclib-")+best.Id+".json"),best.RawJson);
                 Apply(repository.Save(s.Track,best.Content,best.SourceLabel+" · 自动检查",false,best.Instrumental,providerJson:best.RawJson));
             }
-            else { bool partial=results is LyricsLookupResult{UnavailableSources.Count:>0};LyricsStatus = partial?"部分歌词来源暂不可用，已查询可用来源，稍后自动重试":results.Count > 0 ? "候选未通过版本或完整性检查，稍后自动重试" : "暂未找到可靠歌词，稍后自动重试";if(!partial)repository.RememberFailure(s.Track);Updated?.Invoke(); }
+            else {bool partial=LyricsLookupDiagnosis.Unavailable(results);LyricsStatus=LyricsLookupDiagnosis.Describe(s.Track,results);repository.RecordLookupFailure(s.Track,LyricsStatus,partial,results.Count==0,!partial);Updated?.Invoke();}
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (Current()) { LyricsStatus = e is LyricsProviderException ? e.Message : "歌词加载失败，可重试或导入"; store.Log("Lookup: " + e.GetType().Name+" "+e.Message); Updated?.Invoke(); } }
+        catch (Exception e) { if (Current()) { LyricsStatus = e is LyricsProviderException ? e.Message : "歌词加载失败，可重试或导入"; if(e is LyricsProviderException or HttpRequestException)repository.RecordLookupFailure(s.Track,LyricsStatus,true,false);store.Log("Lookup: " + e.GetType().Name+" "+e.Message); Updated?.Invoke(); } }
         finally{if(requests.IsCurrent(serial))foregroundLookupActive=false;}
     }
     void Apply(LyricsBinding binding)

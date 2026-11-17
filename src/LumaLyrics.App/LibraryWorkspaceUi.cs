@@ -36,7 +36,7 @@ internal static class LibraryWorkspaceUi
     }
     internal static DataTemplate SongTemplate()
     {
-        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Track.Title"]);title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Track.Artist","Track.Album"],"{0} · {1}"));row.AppendChild(Line(10.5,true,["Status.OriginalLabel","Status.ChineseLabel","Status.CoverLabel"],"{0}   ·   {1}   ·   {2}",true));return new(){VisualTree=row};
+        var row=new FrameworkElementFactory(typeof(StackPanel));var title=Line(13,false,["Track.Title"]);title.SetValue(TextBlock.FontWeightProperty,FontWeights.SemiBold);row.AppendChild(title);row.AppendChild(Line(11,true,["Track.Artist","Track.Album"],"{0} · {1}"));row.AppendChild(Line(10.5,true,["Status.OriginalLabel","Status.ChineseLabel","Status.CoverLabel"],"{0}   ·   {1}   ·   {2}",true));var reason=Line(10.5,true,["Status.Reason"],localize:true);reason.SetValue(FrameworkElement.MaxHeightProperty,32d);reason.SetBinding(FrameworkElement.ToolTipProperty,new Binding("Status.Reason"){Converter=LibraryStatusConverter.Instance});reason.SetBinding(UIElement.VisibilityProperty,new Binding("Status.Reason"){Converter=LyricReasonVisibility.Instance});row.AppendChild(reason);return new(){VisualTree=row};
     }
     internal static DataTemplate BatchTemplate(bool batch=false)
     {
@@ -55,5 +55,12 @@ internal sealed class LibraryBatchTitleConverter : IValueConverter
     internal static readonly LibraryBatchTitleConverter Instance=new();
     internal static string Title(LumaLyrics.Infrastructure.LibraryTaskBatch task)=>task.Id.StartsWith("job:",StringComparison.Ordinal)?task.Jobs.FirstOrDefault()?.Ticket.Request.Target.Track.Title??UiText.T("历史任务"):UiText.Status(task.Title);
     public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>value is LumaLyrics.Infrastructure.LibraryTaskBatch task?Title(task):"";
+    public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>Binding.DoNothing;
+}
+
+internal sealed class LyricReasonVisibility:IValueConverter
+{
+    internal static readonly LyricReasonVisibility Instance=new();
+    public object Convert(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>value is string text&&!string.IsNullOrWhiteSpace(text)?Visibility.Visible:Visibility.Collapsed;
     public object ConvertBack(object value,Type targetType,object parameter,System.Globalization.CultureInfo culture)=>Binding.DoNothing;
 }

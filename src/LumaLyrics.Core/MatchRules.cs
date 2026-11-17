@@ -17,7 +17,7 @@ public static partial class MatchRules
         double? delta = track.DurationMs.HasValue && c.Track.DurationMs.HasValue ? Math.Abs(track.DurationMs.Value - c.Track.DurationMs.Value) : null;
         double score = (title ? .4 : 0) + (artist ? .3 : 0) + (delta <= 2000 ? .2 : delta <= 5000 ? .1 : 0) + (Normalize(track.Album) == Normalize(c.Track.Album) && track.Album.Length > 0 ? .1 : 0);
         bool eligible = title && artist && !version && delta <= 5000;
-        return new(c, score, eligible, version ? "录音版本不同" : delta is null ? "时长未知，请确认" : delta > 5000 ? "时长差超过 5 秒" : $"时长差 {delta / 1000:0.0} 秒");
+        return new(c, score, eligible, !title ? "歌名不匹配" : !artist ? "歌手信息不匹配" : version ? "录音版本不同" : delta is null ? "时长未知，请确认" : delta > 5000 ? "时长差超过 5 秒" : $"时长差 {delta / 1000:0.0} 秒");
     }
     public static LyricsCandidate? AutoSelect(Track track, IReadOnlyList<LyricsCandidate> candidates)
     {

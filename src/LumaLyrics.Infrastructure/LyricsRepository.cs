@@ -7,10 +7,14 @@ namespace LumaLyrics.Infrastructure;
 public sealed class LyricsRepository : ILyricsRepository, IDisposable
 {
     readonly SqliteConnection db;
+    readonly bool failurePoliciesAvailable;
+    public const string PolicyRetryReason="匹配规则已更新，等待重新评估原词。";
+    public int RequeuedForPolicy {get;private set;}
+    LyricsBinding ILyricsRepository.Save(Track track,string raw,string source,bool manual,bool instrumental,bool plain,string? providerJson)=>Save(track,raw,source,manual,instrumental,plain,providerJson);
     public LyricsRepository(string path,bool readOnly=false)
     {
         db = new(new SqliteConnectionStringBuilder{DataSource=path,Mode=readOnly?SqliteOpenMode.ReadOnly:SqliteOpenMode.ReadWriteCreate}.ToString()); db.Open();
-        if(readOnly){using var check=db.CreateCommand();check.CommandText="PRAGMA user_version";if(Convert.ToInt32(check.ExecuteScalar())!=5)throw new InvalidDataException("原词库版本不兼容。");return;}
+        if(readOnly){using var check=db.CreateCommand();check.CommandText="PRAGMA user_version";if(Convert.ToInt32(check.ExecuteScalar())!=5)throw new InvalidDataException("原词库版本不兼容。");using var tables=db.CreateCommand();tables.CommandText="SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='LookupFailurePolicy'";failurePoliciesAvailable=Convert.ToInt32(tables.ExecuteScalar())==1;return;}
         using(var version=db.CreateCommand())
         {
             version.CommandText="PRAGMA user_version";var old=Convert.ToInt32(version.ExecuteScalar());
@@ -30,6 +34,8 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
             CREATE TABLE IF NOT EXISTS TrackLyricsBindings(Id TEXT PRIMARY KEY, TrackId TEXT REFERENCES Tracks(Id), DocumentId TEXT REFERENCES LyricsDocuments(Id), Manual INTEGER, UNIQUE(TrackId));
             CREATE TABLE IF NOT EXISTS SyncOffsets(BindingId TEXT PRIMARY KEY REFERENCES TrackLyricsBindings(Id) ON DELETE CASCADE, Offset REAL DEFAULT 0);
             CREATE TABLE IF NOT EXISTS LookupFailures(Fingerprint TEXT PRIMARY KEY, ExpiresUtc TEXT);
+            CREATE TABLE IF NOT EXISTS LookupFailurePolicy(Fingerprint TEXT PRIMARY KEY,ExpiresUtc TEXT,PolicyVersion INTEGER);
+            CREATE TABLE IF NOT EXISTS LyricsPolicyState(Id INTEGER PRIMARY KEY,PolicyVersion INTEGER);
             CREATE TABLE IF NOT EXISTS LibraryTracks(Source TEXT, PersistentId TEXT, Title TEXT, Artist TEXT, Album TEXT, Duration REAL, Fingerprint TEXT, State TEXT DEFAULT 'Pending', Detail TEXT, RetryUtc TEXT, Active INTEGER DEFAULT 1, LyricsKind TEXT DEFAULT '', PRIMARY KEY(Source,PersistentId));
             CREATE INDEX IF NOT EXISTS IX_LibraryTracks_State ON LibraryTracks(Active,State);
             CREATE TABLE IF NOT EXISTS LibraryMembership(Source TEXT NOT NULL, PersistentId TEXT NOT NULL, PRIMARY KEY(Source,PersistentId));
@@ -43,6 +49,22 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
             if(!libraryColumns.Contains("LyricsKind"))Execute("ALTER TABLE LibraryTracks ADD COLUMN LyricsKind TEXT DEFAULT ''");
             if(schemaVersion<5)Execute("UPDATE LibraryTracks SET State='Pending',RetryUtc=NULL,LyricsKind='' WHERE State='Cached'");
             Execute("PRAGMA user_version=5");migration.Commit();
+        }
+        failurePoliciesAvailable=true;
+        using(var policy=db.BeginTransaction(deferred:false))
+        {
+            using var current=Command("SELECT PolicyVersion FROM LyricsPolicyState WHERE Id=1");int version=Convert.ToInt32(current.ExecuteScalar());
+            if(version<AutomaticLyricsMatcher.PolicyVersion)
+            {
+                using var reset=Command("""
+                    UPDATE LibraryTracks SET State='Pending',RetryUtc=NULL,Detail=$reason WHERE Active=1 AND State NOT IN ('Cached','Manual')
+                    AND (Fingerprint IN (SELECT Fingerprint FROM LookupFailures) OR Fingerprint IN (SELECT Fingerprint FROM LibraryTracks WHERE State='Incomplete'))
+                    AND NOT EXISTS(SELECT 1 FROM Tracks t JOIN TrackLyricsBindings b ON b.TrackId=t.Id WHERE t.Fingerprint=LibraryTracks.Fingerprint AND b.Manual=1)
+                    """,("$reason",PolicyRetryReason));RequeuedForPolicy=reset.ExecuteNonQuery();
+                Execute("DELETE FROM LookupFailures");Execute("DELETE FROM LookupFailurePolicy");
+                Execute("INSERT INTO LyricsPolicyState VALUES(1,$v) ON CONFLICT(Id) DO UPDATE SET PolicyVersion=excluded.PolicyVersion",("$v",AutomaticLyricsMatcher.PolicyVersion));
+            }
+            policy.Commit();
         }
     }
     SqliteCommand Command(string sql, params (string, object?)[] parameters)
@@ -73,13 +95,19 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         using var r = c.ExecuteReader();
         return r.Read() ? new(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetBoolean(4), r.GetDouble(5), r.GetBoolean(6), r.GetBoolean(7),r.IsDBNull(8)?null:r.GetString(8)) : null;
     }
-    public LyricsBinding Save(Track track, string raw, string source, bool manual, bool instrumental = false, bool plain = false, string? providerJson = null)
+    public LyricsBinding Save(Track track, string raw, string source, bool manual, bool instrumental = false, bool plain = false, string? providerJson = null,LibraryQueueItem? expectedLibrary=null,bool onlyIfMissing=false)
     {
         track=TrackMetadata.FromAppleSession(track);
-        var current = Find(track); if (current?.Manual == true && !manual) return current;
+        using var tx = db.BeginTransaction(deferred:false);
+        if(expectedLibrary is {} member)
+        {
+            using var check=Command("SELECT COUNT(*) FROM LibraryTracks l JOIN LibraryMembership m ON m.Source=l.Source AND m.PersistentId=l.PersistentId WHERE l.Active=1 AND l.Source=$s AND l.PersistentId=$p AND l.Fingerprint=$f AND ($d IS NULL OR l.Duration IS NULL OR ABS(l.Duration-$d)<=5000)",("$s",member.Source),("$p",member.PersistentId),("$f",track.Fingerprint),("$d",track.DurationMs));
+            if(member.Track!=track||Convert.ToInt32(check.ExecuteScalar())!=1)throw new InvalidDataException("写入前资料库成员已变化，未保存自动歌词。");
+        }
+        var current = FindReadOnly(track); if (current?.Manual == true && !manual){tx.Commit();return current;}
+        if(!manual&&onlyIfMissing&&current is not null){tx.Commit();return current;}
         if(!manual && current is not null && current.Source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal)
-            && !source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal) && LibraryPrefetcher.QualityOf(current,track))return current;
-        using var tx = db.BeginTransaction();
+            && !source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal) && LibraryPrefetcher.QualityOf(current,track)){tx.Commit();return current;}
         string trackId = FindTrack(track) ?? Guid.NewGuid().ToString("N");
         Execute("INSERT INTO Tracks VALUES($id,$f,$t,$a,$al,$d) ON CONFLICT(Id) DO UPDATE SET Duration=COALESCE(excluded.Duration,Tracks.Duration)", ("$id", trackId), ("$f", track.Fingerprint), ("$t", track.Title), ("$a", track.Artist), ("$al", track.Album), ("$d", track.DurationMs));
         string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw))); string docId = Guid.NewGuid().ToString("N");
@@ -89,7 +117,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         string bindingId = Guid.NewGuid().ToString("N");
         Execute("INSERT INTO TrackLyricsBindings VALUES($id,$t,$d,$m)", ("$id", bindingId), ("$t", trackId), ("$d", docId), ("$m", manual));
         bool automaticReady=LibraryPrefetcher.QualityOf(new(bindingId,trackId,raw,source,manual,0,instrumental,plain,providerJson),track);
-        Execute("UPDATE LibraryTracks SET State=$state,LyricsKind=$kind,RetryUtc=NULL WHERE Fingerprint=$f AND ($d IS NULL OR Duration IS NULL OR ABS(Duration-$d)<=5000)",("$state",manual?"Manual":automaticReady?"Cached":"Incomplete"),("$kind",automaticReady?instrumental?"Instrumental":"Synced":""),("$f",track.Fingerprint),("$d",track.DurationMs));
+        Execute("UPDATE LibraryTracks SET State=$state,LyricsKind=$kind,RetryUtc=NULL,Detail=NULL WHERE Fingerprint=$f AND ($d IS NULL OR Duration IS NULL OR ABS(Duration-$d)<=5000)",("$state",manual?"Manual":automaticReady?"Cached":"Incomplete"),("$kind",automaticReady?instrumental?"Instrumental":"Synced":""),("$f",track.Fingerprint),("$d",track.DurationMs));
         tx.Commit(); ClearFailure(track);
         return new(bindingId, trackId, raw, source, manual, 0, instrumental, plain,providerJson);
     }
@@ -97,15 +125,32 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     public void RestoreAutomatic(Track track) { track=TrackMetadata.FromAppleSession(track);var id = FindTrack(track); Execute("DELETE FROM TrackLyricsBindings WHERE TrackId=$id", ("$id", id));Execute("UPDATE LibraryTracks SET State='Pending',LyricsKind='',RetryUtc=NULL WHERE Fingerprint=$f",("$f",track.Fingerprint));ClearFailure(track); }
     public bool HasFailure(Track track)
     {
-        using var c = Command("SELECT ExpiresUtc FROM LookupFailures WHERE Fingerprint=$f", ("$f", track.Fingerprint));
+        track=TrackMetadata.FromAppleSession(track);
+        if(!failurePoliciesAvailable)return false;
+        using var c = Command("SELECT f.ExpiresUtc FROM LookupFailures f JOIN LookupFailurePolicy p ON p.Fingerprint=f.Fingerprint AND p.ExpiresUtc=f.ExpiresUtc WHERE f.Fingerprint=$f AND p.PolicyVersion=$v", ("$f", track.Fingerprint),("$v",AutomaticLyricsMatcher.PolicyVersion));
         return c.ExecuteScalar() is string s && DateTimeOffset.TryParse(s, out var t) && t > DateTimeOffset.UtcNow;
     }
-    public void RememberFailure(Track track) => Execute("INSERT INTO LookupFailures VALUES($f,$e) ON CONFLICT(Fingerprint) DO UPDATE SET ExpiresUtc=excluded.ExpiresUtc", ("$f", track.Fingerprint), ("$e", DateTimeOffset.UtcNow.AddHours(6).ToString("O")));
-    public void ClearFailure(Track track) => Execute("DELETE FROM LookupFailures WHERE Fingerprint=$f", ("$f", track.Fingerprint));
+    public void RememberFailure(Track track)
+    {
+        track=TrackMetadata.FromAppleSession(track);
+        string expires=DateTimeOffset.UtcNow.AddHours(6).ToString("O");
+        Execute("INSERT INTO LookupFailures VALUES($f,$e) ON CONFLICT(Fingerprint) DO UPDATE SET ExpiresUtc=excluded.ExpiresUtc",("$f",track.Fingerprint),("$e",expires));
+        Execute("INSERT INTO LookupFailurePolicy VALUES($f,$e,$v) ON CONFLICT(Fingerprint) DO UPDATE SET ExpiresUtc=excluded.ExpiresUtc,PolicyVersion=excluded.PolicyVersion",("$f",track.Fingerprint),("$e",expires),("$v",AutomaticLyricsMatcher.PolicyVersion));
+    }
+    public void ClearFailure(Track track){track=TrackMetadata.FromAppleSession(track);Execute("DELETE FROM LookupFailures WHERE Fingerprint=$f",("$f",track.Fingerprint));Execute("DELETE FROM LookupFailurePolicy WHERE Fingerprint=$f",("$f",track.Fingerprint));}
+    public void RecordLookupFailure(Track track,string reason,bool unavailable,bool noCandidates,bool suppress=false,LibraryQueueItem? expectedLibrary=null)
+    {
+        track=TrackMetadata.FromAppleSession(track);using var tx=db.BeginTransaction(deferred:false);
+        var current=FindReadOnly(track);if(current is not null&&(current.Manual||LibraryPrefetcher.QualityOf(current,track))){tx.Commit();return;}
+        string state=unavailable?"Error":noCandidates?"Missing":"Incomplete";
+        string retry=DateTimeOffset.UtcNow.Add(unavailable?TimeSpan.FromMinutes(15):TimeSpan.FromDays(1)).ToString("O");
+        Execute("UPDATE LibraryTracks SET State=$state,Detail=$detail,RetryUtc=$retry,LyricsKind='' WHERE Active=1 AND Fingerprint=$f AND ($d IS NULL OR Duration IS NULL OR ABS(Duration-$d)<=5000) AND ($s IS NULL OR (Source=$s AND PersistentId=$p))",("$state",state),("$detail",reason),("$retry",retry),("$f",track.Fingerprint),("$d",track.DurationMs),("$s",expectedLibrary?.Source),("$p",expectedLibrary?.PersistentId));
+        if(suppress&&!unavailable)RememberFailure(track);else ClearFailure(track);tx.Commit();
+    }
     public void ClearNetworkCache()
     {
         // Imported lyrics and their calibration are personal data, including automatic imports.
-        Execute("DELETE FROM LookupFailures");
+        Execute("DELETE FROM LookupFailures");Execute("DELETE FROM LookupFailurePolicy");
     }
     public void SyncLibrary(LibrarySnapshot snapshot,CancellationToken token=default,Func<bool>? stillCurrent=null)
     {
@@ -131,7 +176,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     }
     public IReadOnlyList<LibraryQueueItem> GetLibraryQueue(bool includeDeferred=false,bool cachedOnly=false)
     {
-        using var c=Command("SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId) AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now) ORDER BY CASE State WHEN 'Pending' THEN 0 WHEN 'Error' THEN 2 ELSE 1 END,Source,PersistentId",("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")));
+        using var c=Command("SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId) AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now) ORDER BY CASE WHEN Detail='匹配规则已更新，等待重新评估原词。' THEN -1 WHEN State='Pending' THEN 0 WHEN State='Error' THEN 2 ELSE 1 END,Source,PersistentId",("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")));
         using var r=c.ExecuteReader();var result=new List<LibraryQueueItem>();
         while(r.Read())result.Add(new(r.GetString(0),r.GetString(1),new(r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetDouble(5))));return result;
     }
@@ -143,13 +188,13 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     }
     public void SetLibraryState(LibraryQueueItem item,string state,string detail,string kind="")
     {
-        Execute("UPDATE LibraryTracks SET State=$state,Detail=$detail,LyricsKind=$kind,RetryUtc=$retry WHERE Source=$s AND PersistentId=$id",("$state",state),("$detail",detail),("$kind",kind),("$retry",state is "Cached" or "Manual" or "Pending"?null:DateTimeOffset.UtcNow.Add(state=="Error"?TimeSpan.FromMinutes(15):TimeSpan.FromDays(1)).ToString("O")),("$s",item.Source),("$id",item.PersistentId));
+        Execute("UPDATE LibraryTracks SET State=$state,Detail=$detail,LyricsKind=$kind,RetryUtc=$retry WHERE Active=1 AND Fingerprint=$f AND Source=$s AND PersistentId=$id",("$f",item.Track.Fingerprint),("$state",state),("$detail",detail),("$kind",kind),("$retry",state is "Cached" or "Manual" or "Pending"?null:DateTimeOffset.UtcNow.Add(state=="Error"?TimeSpan.FromMinutes(15):TimeSpan.FromDays(1)).ToString("O")),("$s",item.Source),("$id",item.PersistentId));
     }
     public void ResetLibraryRetries()
     {
         using var transaction=db.BeginTransaction();
         Execute("UPDATE LibraryTracks SET RetryUtc=NULL,State='Pending' WHERE Active=1 AND State NOT IN ('Cached','Manual')");
-        Execute("DELETE FROM LookupFailures WHERE Fingerprint IN (SELECT Fingerprint FROM LibraryTracks WHERE Active=1 AND State='Pending')");transaction.Commit();
+        Execute("DELETE FROM LookupFailures WHERE Fingerprint IN (SELECT Fingerprint FROM LibraryTracks WHERE Active=1 AND State='Pending')");Execute("DELETE FROM LookupFailurePolicy WHERE Fingerprint NOT IN (SELECT Fingerprint FROM LookupFailures)");transaction.Commit();
     }
     public void Dispose() => db.Dispose();
 }

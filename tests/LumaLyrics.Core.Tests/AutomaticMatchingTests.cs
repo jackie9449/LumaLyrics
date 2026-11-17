@@ -55,4 +55,28 @@ public class AutomaticMatchingTests
         Assert.Null(AutomaticLyricsMatcher.Select(track,[instrumental,partial]));
         Assert.False(AutomaticLyricsMatcher.Select(track,[instrumental,Candidate(3)])!.Candidate.Instrumental);
     }
+    static LyricsCandidate LongTail()
+    {
+        var lines=Enumerable.Range(0,8).Select(i=>$"We carry our own light along the river number {i}").ToArray();
+        return new(88,track with{DurationMs=479000},string.Join("\n",lines.Select((t,i)=>$"[{(40+i*30)/60:00}:{(40+i*30)%60:00}]{t}")),string.Join("\n",lines),false);
+    }
+    [Fact]public void MatchingFullTextWithWellSpreadCuesCanHaveALongTail()
+    {
+        var c=LongTail();var a=AutomaticLyricsMatcher.Assess(c);Assert.True(a.Accepted,a.Reason);Assert.Equal(1,a.TextCoverage);Assert.NotNull(AutomaticLyricsMatcher.Select(c.Track,[c]));
+    }
+    [Fact]public void TailStillNeedsFullOrderedTextAndSufficientTimelineEvidence()
+    {
+        var c=LongTail();Assert.False(AutomaticLyricsMatcher.Assess(c with{PlainLyrics=null}).Accepted);
+        Assert.False(AutomaticLyricsMatcher.Assess(c with{PlainLyrics=string.Join("\n",c.PlainLyrics!.Split('\n').Reverse())}).Accepted);
+        Assert.False(AutomaticLyricsMatcher.Assess(c with{PlainLyrics=c.PlainLyrics+"\nA missing final verse about the distant shore"}).Accepted);
+    }
+    [Fact]public void SectionMarkersCannotPretendThatLyricsReachTheSongEnd()
+    {
+        var c=LongTail() with{PlainLyrics=null};Assert.False(AutomaticLyricsMatcher.Assess(c with{SyncedLyrics=c.SyncedLyrics+"\n[07:58][Instrumental]"}).Accepted);
+    }
+    [Fact]public void APerfectMetadataScoreStillExplainsAContentRejection()
+    {
+        var c=LongTail() with{PlainLyrics=null};var d=AutomaticLyricsMatcher.Decide(c.Track,c,[c]);Assert.Equal(1,d.MatchScore,8);Assert.False(d.Accepted);Assert.Contains("全文",d.Reason);
+        Assert.Contains("歌手",AutomaticLyricsMatcher.Decide(c.Track,c with{Track=c.Track with{Artist="Another"}},[c]).Reason);
+    }
 }

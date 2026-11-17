@@ -64,11 +64,10 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                     if(File.Exists(PausePath(databasePath))){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
                     if(selected is not null)
                     {
-                        repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson);
-                        repository.SetLibraryState(item,"Cached",selected.Assessment.Reason,selected.Candidate.Instrumental?"Instrumental":"Synced");Cached?.Invoke(item.Track);
+                        repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson,expectedLibrary:item);
+                        repository.SetLibraryState(item,repository.FindReadOnly(item.Track)?.Manual==true?"Manual":"Cached",selected.Assessment.Reason,selected.Candidate.Instrumental?"Instrumental":"Synced");Cached?.Invoke(item.Track);
                     }
-                    else if(candidates is LyricsLookupResult{UnavailableSources.Count:>0} partial)repository.SetLibraryState(item,"Error","部分来源暂不可用："+string.Join("、",partial.UnavailableSources)+"；可用来源没有提供通过检查的动态歌词。");
-                    else repository.SetLibraryState(item,candidates.Count==0?"Missing":"Incomplete",candidates.Count==0?"来源无结果":"没有同时通过录音版本、动态时间轴及全文检查的候选");
+                    else repository.RecordLookupFailure(item.Track,LyricsLookupDiagnosis.Describe(item.Track,candidates),LyricsLookupDiagnosis.Unavailable(candidates),candidates.Count==0,expectedLibrary:item);
                 }
                 catch(OperationCanceledException){throw;}
                 catch(Exception e) when(e is LyricsProviderException or HttpRequestException){repository.SetLibraryState(item,"Error",e.Message);consecutiveErrors++;}

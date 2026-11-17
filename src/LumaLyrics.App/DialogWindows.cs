@@ -128,7 +128,7 @@ public sealed class CandidateWindow : Window
         list.SelectionChanged+=(_,_)=>
         {
             choose.IsEnabled=!searching && list.SelectedItem is LyricsCandidate;
-            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);preview.Text=UiText.F($"{UiText.Status(score?.Reason)} · 置信度 {score?.Score:P0}\n\n")+string.Join("\n",c.Content.Split('\n').Take(10));}
+            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);var decision=target is null?null:AutomaticLyricsMatcher.Decide(target,c,coordinator.Candidates);preview.Text=UiText.F($"歌曲信息匹配度 {score?.Score:P0} · {UiText.Status(score?.Reason)}\n")+(decision is null?"":decision.Accepted?UiText.F($"自动检查通过：{UiText.Status(decision.Reason)}\n\n"):UiText.F($"自动未采用：{UiText.Status(decision.Reason)}\n\n"))+string.Join("\n",c.Content.Split('\n').Take(10));}
             else preview.Clear();
         };
         Closed+=(_,_)=>{closed=true;searchVersion++;searchLifetime.Cancel();searchLifetime.Dispose();};

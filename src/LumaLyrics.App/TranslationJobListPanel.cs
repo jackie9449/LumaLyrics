@@ -76,13 +76,13 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,5=>r.Status.Chinese is LibraryChineseState.Complete or LibraryChineseState.Partial,_=>true})).ToArray();
         loading=true;try{if(!songs.Items.Cast<LibraryManagedSong>().SequenceEqual(shown,ReferenceEqualityComparer.Instance))songs.ItemsSource=shown;var picked=shown.Where(r=>selection.Contains(Key(r))).ToArray();if(songs.SelectedItems.Count!=picked.Length||songs.SelectedItems.Cast<LibraryManagedSong>().Any(r=>!selection.Contains(Key(r))))songs.ApplySelection(picked);}finally{loading=false;}UpdateDetail();
     }
-    void UpdateDetail(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();detail.Text=UiText.F($"已选 {picked.Length} 首 · 当前可见 {songs.Items.Count} 首 · 共 {rows.Length} 首")+(picked.Length==1?$"\n{picked[0].Track.Title} · {UiText.Status(picked[0].Status.OriginalLabel)} · {UiText.Status(picked[0].Status.ChineseLabel)}":"");}
+    void UpdateDetail(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();detail.Text=UiText.F($"已选 {picked.Length} 首 · 当前可见 {songs.Items.Count} 首 · 共 {rows.Length} 首")+(picked.Length==1?$"\n{picked[0].Track.Title} · {UiText.Status(picked[0].Status.OriginalLabel)} · {UiText.Status(picked[0].Status.ChineseLabel)}"+(string.IsNullOrWhiteSpace(picked[0].Status.Reason)?"":"\n"+UiText.Status(picked[0].Status.Reason)):"");}
     internal void SelectKeys(IEnumerable<LibrarySongKey> keys){selection.Clear();foreach(var key in keys)selection.Add(key);ApplyFilter();}
     async Task Prepare(bool replace,bool lookup,bool originals=true,bool export=true)
     {
         var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();if(picked.Length==0){status.Text=UiText.T("请先选择歌曲。");return;}
         if(replace&&!ConfirmRegeneration(picked.Length))return;
-        try{await coordinator.PrepareWorkspaceAsync(picked,replace,lookup&&prefer.IsChecked==true,originals,export,originals&&artwork.IsChecked==true);if(!disposed)await Reload();}catch(Exception e){status.Text=UiText.Status(e.Message);}
+        try{await coordinator.PrepareWorkspaceAsync(picked,replace,lookup&&prefer.IsChecked==true,originals,export,originals&&artwork.IsChecked==true);if(!disposed)await Reload(true);}catch(Exception e){status.Text=UiText.Status(e.Message);}
     }
     async Task RefreshLibrary()
     {
