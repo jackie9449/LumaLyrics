@@ -15,6 +15,7 @@ try {
     $cases+=@('instrument-audio-probe.json','instrument-corpus.json','instrument-review-dataset.json','instrument-stage.log','instrument-model-export.json','yamnet.h5','parity-inputs.f32','capture.pcm','private.wav','private.flac','private.m4a','private.mp3','instruments/timeline.json','instrument-models/profile.json')
     $cases+=@('cnn6.pth','weights.pt','private.safetensors','embedding.pb')
     $cases+=@('matpac-gate.npz','instrument-features.npy')
+    $cases+=@('offline-translation-queue.json','offline-translation.lock','own.argosmodel','own.whl')
     foreach($name in $cases){
         $fixtureFile=Join-Path $fixtureRoot $name
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($fixtureFile)) | Out-Null

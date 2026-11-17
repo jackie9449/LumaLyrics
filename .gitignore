@@ -36,6 +36,10 @@ data-location.json
 **/lyrics-review/
 **/ocr-models/
 translation-*.json
+offline-translation*.json
+offline-translation*.lock
+*.argosmodel
+*.whl
 native-ttml*.json
 native-read-safety*.json
 native-memory-safety*.json

@@ -37,6 +37,6 @@ public static class LibraryWorkspaceProjection
         var needed=original==LibraryOriginalState.Ready&&!TranslationAlignment.IsChinese(string.Join("\n",doc!.Groups.Select(g=>g.Text)))?doc!.Groups.Select((g,i)=>(g,i)).Where(x=>TranslationAlignment.NeedsChineseTranslation(x.g.Text,containsJapaneseOrKorean)).Select(x=>x.i).ToArray():[];
         bool current=translation?.SourceHash==hash&&translation is not null;var translated=current?translation!.Lines.Where(l=>!string.IsNullOrWhiteSpace(l.Text)).Select(l=>l.GroupIndex).ToHashSet():[];int count=needed.Count(translated.Contains);
         var chinese=original==LibraryOriginalState.Instrumental?LibraryChineseState.NotRequired:original!=LibraryOriginalState.Ready?LibraryChineseState.BlockedOriginal:needed.Length==0?LibraryChineseState.NotRequired:!current?input.HasOlderTranslation||translation is not null?LibraryChineseState.Outdated:LibraryChineseState.Missing:count==needed.Length?LibraryChineseState.Complete:count>0?LibraryChineseState.Partial:LibraryChineseState.Missing;
-        return new(original,chinese,needed.Length,count,input.ManualTranslation,translation?.Draft==true,input.Cover,hash,input.Revision,null);
+        return new(original,chinese,needed.Length,count,input.ManualTranslation,translation?.Draft==true&&!OfflineTranslationWorkflow.IsMachine(translation),input.Cover,hash,input.Revision,null);
     }
 }

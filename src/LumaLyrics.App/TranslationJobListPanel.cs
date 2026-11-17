@@ -38,6 +38,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         LibraryWorkspaceUi.Button(actions,UiText.T("直接生成本地任务"),()=>_=Prepare(false,false,false));
         var more=LibraryWorkspaceUi.Button(actions,UiText.T("更多操作…"),()=>{menu.IsOpen=true;});more.ContextMenu=menu;menu.PlacementTarget=more;
         Action(UiText.T("仅查现有中文"),()=>_=Prepare(false,true,false,false));
+        Action(UiText.T("生成英译中基础机翻"),()=>{try{coordinator.TranslateSelectedOffline(SelectedSongs);SetStatus(UiText.T("已启动离线机翻，可在总览查看进度或暂停。"));}catch(Exception e){SetStatus(UiText.Status(e.Message));}});
         Action(UiText.T("重新生成翻译任务…"),()=>_=Prepare(true,false,false));
         Action(UiText.T("暂停准备"),coordinator.PauseWorkspace);
         Action(UiText.T("打开批量入口 MD"),()=>Open(entry));
@@ -61,7 +62,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Updated;_=Reload(true);};Unloaded+=(_,_)=>{coordinator.Updated-=Updated;searchDelay.Stop();if(!disposed)reading?.Cancel();};
     }
     static void Open(string? path){if(path is not null&&File.Exists(path))Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
-    void Updated(){SetStatus(coordinator.WorkspaceMessage);string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceMessage+coordinator.LibraryStatus+coordinator.ArtworkStatus+coordinator.Settings.LibraryPath;if(lastBusy!=coordinator.WorkspaceBusy||lastRevision!=stamp){lastBusy=coordinator.WorkspaceBusy;lastRevision=stamp;if(!lastBusy)_=Reload();}}
+    void Updated(){SetStatus(coordinator.WorkspaceMessage);string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceMessage+coordinator.OfflineMessage+coordinator.LibraryStatus+coordinator.ArtworkStatus+coordinator.Settings.LibraryPath;if(lastBusy!=coordinator.WorkspaceBusy||lastRevision!=stamp){lastBusy=coordinator.WorkspaceBusy;lastRevision=stamp;if(!lastBusy)_=Reload();}}
     internal async Task Reload(bool refresh=false)
     {
         if(disposed)return;reading?.Cancel();reading?.Dispose();reading=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);var token=reading.Token;long request=++version;string? source=coordinator.Settings.LibraryPath;

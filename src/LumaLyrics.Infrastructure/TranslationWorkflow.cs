@@ -9,7 +9,7 @@ public sealed class TranslationWorkflow(string root,ITranslationProvider provide
     {
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"),true);using var translations=new TranslationRepository(root);
         var binding=lyrics.FindReadOnly(track);if(binding is null||binding.Plain||binding.Instrumental||!binding.Manual&&!LibraryPrefetcher.QualityOf(binding,track))return new(new(track,TranslationLookupState.MissingOriginal,"没有可靠动态原词。"),null);
-        var doc=new LrcParser().Parse(binding.Raw);if(translations.Find(track,doc) is not null)return new(new(track,TranslationLookupState.Found,"沿用已有译文。"),null);
+        var doc=new LrcParser().Parse(binding.Raw);if(translations.FindActive(track,doc) is { } existing && (existing.Record.Manual||!OfflineTranslationWorkflow.IsMachine(existing.Record.Translation)))return new(new(track,TranslationLookupState.Found,"沿用已有译文。"),null);
         if(!doc.Groups.Any(g=>TranslationAlignment.NeedsChineseTranslation(doc,g.Text))||TranslationAlignment.IsChinese(string.Join("\n",doc.Groups.Select(g=>g.Text))))return new(new(track,TranslationLookupState.NotRequired,"无需翻译。"),null);
         var state=onlineLookup?TranslationLookupState.NotFound:TranslationLookupState.Offline;string message=onlineLookup?"来源暂无可用译文。":"离线制作任务。";
         if(onlineLookup)

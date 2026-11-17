@@ -8,7 +8,7 @@ namespace LumaLyrics.Infrastructure;
 public static class PersonalLibraryArchive
 {
     static readonly JsonSerializerOptions Json=new(){WriteIndented=true,PropertyNamingPolicy=JsonNamingPolicy.CamelCase};
-    static readonly HashSet<string> StateFiles=["state/lyrics.db","state/artwork.db","state/translations.db","state/settings.json","state/apple-reference-audit.json"];
+    static readonly HashSet<string> StateFiles=["state/lyrics.db","state/artwork.db","state/translations.db","state/settings.json","state/apple-reference-audit.json","state/offline-translation-queue.json"];
     internal static bool IsHash(string? value)=>value is {Length:64} && value.All(Uri.IsHexDigit);
     static string Hash(string path){using var stream=File.OpenRead(path);return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();}
     internal static void AddFile(string root,string relative,string kind,PersonalLibraryManifest manifest)
@@ -141,6 +141,7 @@ public static class PersonalLibraryArchive
             if(review.Id!=Path.GetFileName(group.Key) || group.Count()!=(review.ImageSha256 is null?1:2))throw new InvalidDataException("校对记录文件对应不一致。");
         }
         if(files.ContainsKey("state/settings.json")){using var settings=File.OpenRead(AssetPath(root,"state/settings.json"));if(JsonSerializer.Deserialize<AppSettings>(settings) is null)throw new InvalidDataException("个人设置为空。");}
+        if(files.ContainsKey("state/offline-translation-queue.json"))OfflineTranslationWorkflow.ReadQueueFile(AssetPath(root,"state/offline-translation-queue.json"));
         var keys=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach(var image in manifest.Images)
         {

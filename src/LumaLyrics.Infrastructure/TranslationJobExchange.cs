@@ -17,6 +17,7 @@ public static class TranslationJobExchange
         var groups=doc.Groups.Select((g,i)=>new TranslationJobGroup(i,g.Text,TranslationAlignment.NeedsChineseTranslation(doc,g.Text))).ToArray();
         if(!groups.Any(g=>g.NeedsTranslation)||TranslationAlignment.IsChinese(string.Join("\n",groups.Select(g=>g.Original))))throw new InvalidDataException("原词不需要中文翻译。");
         var active=translations.FindActive(track,doc);
+        if(mode==TranslationJobMode.FillMissing && active is {Record.Manual:false} && OfflineTranslationWorkflow.IsMachine(active.Record.Translation))mode=TranslationJobMode.ReplaceExpected;
         if(mode==TranslationJobMode.FillMissing&&active is not null)throw new InvalidDataException("已有译文，请明确选择重新制作。");
         if(mode==TranslationJobMode.ReplaceExpected&&active is null)throw new InvalidDataException("没有可替换的当前译文。");
         using var db=Open(root);
@@ -98,10 +99,11 @@ public static class TranslationJobExchange
         if(partialRevision is not null && (state!="PartialReady" || Scalar(db,"SELECT ResultHash FROM TranslationJobs WHERE Id=$id",("$id",request.JobId))!=validation.ResultSha256))throw new InvalidDataException("部分结果已变化，请重新生成任务。");
         if(request.Target.LibrarySource is { } library && Scalar(db,"SELECT PersistentId FROM originals.LibraryMembership WHERE Source=$s AND PersistentId=$p",("$s",library),("$p",request.Target.PersistentId)) is null)raw=null;
         string? revision=Scalar(db,"SELECT Revision FROM Translations WHERE Fingerprint=$f AND SourceHash=$h",("$f",request.Target.Track.Fingerprint),("$h",request.Target.SourceHash));
+        bool machineOnly=Scalar(db,"SELECT '1' FROM Translations WHERE Fingerprint=$f AND SourceHash=$h AND Manual=0 AND json_extract(Content,'$.SourceUrl')='local:argos/en-zh'",("$f",request.Target.Track.Fingerprint),("$h",request.Target.SourceHash))=="1";
         TranslationJobState next;string message;string? applied=null;
         if(raw is null||TranslationAlignment.Hash(raw)!=request.Target.SourceHash){next=TranslationJobState.Stale;message="原词或录音已变化，原译文保留。";}
-        else if(request.Mode==TranslationJobMode.FillMissing?revision is not null:revision!=(partialRevision??request.ExpectedRevision)){next=TranslationJobState.Conflict;message="当前译文已变化，未覆盖。";}
-        else if(request.Mode==TranslationJobMode.ReplaceExpected&&validation.TranslatedCount<validation.RequiredCount&&partialRevision is null){next=TranslationJobState.PartialReady;message="有未译行，原译文已保留；可明确采用部分稿。";}
+        else if(request.Mode==TranslationJobMode.FillMissing?revision is not null&&!machineOnly:revision!=(partialRevision??request.ExpectedRevision)){next=TranslationJobState.Conflict;message="当前译文已变化，未覆盖。";}
+        else if((request.Mode==TranslationJobMode.ReplaceExpected||machineOnly)&&validation.TranslatedCount<validation.RequiredCount&&partialRevision is null){next=TranslationJobState.PartialReady;message="有未译行，原译文已保留；可明确采用部分稿。";}
         else
         {
             applied=Guid.NewGuid().ToString("N");var t=request.Target.Track;

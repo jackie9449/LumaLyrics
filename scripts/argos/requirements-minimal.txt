@@ -1,0 +1,16 @@
+# Windows CPython 3.12 x64; intentionally installed with --no-deps.
+# Timed lyric groups bypass Argos high-level automatic sentence splitting.
+argostranslate==1.11.0
+ctranslate2==4.6.0
+sentencepiece==0.2.1
+setuptools==80.9.0
+packaging==25.0
+numpy==2.5.5
+PyYAML==6.0.3
+sacremoses==0.1.1
+regex==2026.11.15
+click==8.5.1
+joblib==1.6.0
+tqdm==4.70.1
+cloudpickle==3.1.2
+colorama==0.4.6

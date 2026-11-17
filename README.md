@@ -102,3 +102,5 @@ UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动
 ## 换机开发入口
 
 当前全部更新与恢复步骤见 [接手说明](CODEX_HANDOFF.md)、[2026-11-11 更新索引](docs/updates-2026-11-11.md)和[本地开发记录](docs/development-log.md)。开发迁移包包含完整 Git 历史、SDK 与离线依赖，使用包内 Restore-Workspace.ps1 在新目录恢复；个人资料另行备份。
+
+支持 Argos 英文→中文离线基础机翻：设置 → 资料库与歌词 → 总览准备组件，歌曲页可批量生成。首次约 118 MB，此后本机推理，现有译文优先，来源/agent 可升级机翻。详见 [离线翻译指南](docs/offline-translation.md)。

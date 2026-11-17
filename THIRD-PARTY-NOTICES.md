@@ -34,3 +34,9 @@
 资料库只读解析器由本项目实现，格式兼容性参考 Gary Vollink 和 rinsuki 发布的字段研究：[musicdb 格式](https://home.vollink.com/gary/playlister/musicdb.html)、[musicdb2sqlite](https://github.com/rinsuki/musicdb2sqlite)。使用 .NET 自带 AES/zlib 处理本地曲目元数据。
 
 原生 Apple Music 的无障碍播放命令研究参考 [windows-apple-music-remote](https://github.com/ahmetberber/windows-apple-music-remote) 的公开说明。浮光独立实现本地歌曲列表适配与录音核对，不启动远程服务或网络监听。
+
+## 可选 Argos 离线翻译组件（2026-11-17）
+
+用户主动准备时从上游下载，软件 ZIP 不携带 Python、wheel 或模型。Argos Translate 1.11.0（MIT / CC0，采用 MIT）、CTranslate2 4.6.0（MIT）、SentencePiece 0.2.1（Apache-2.0）、Python 3.12.10 embedded（PSF）及辅助依赖均保留原始许可和 notices。固定来源、SHA-256、依赖版本与安装目录见 [离线翻译指南](docs/offline-translation.md)。
+
+英→中 1.9 Argos 模型包原始 OPUS 模型为 CC BY 4.0，署名 Jörg Tiedemann 和 Santhosh Thottingal，*OPUS-MT — Building open translation services for the World*，EAMT 2020，Lisbon, Portugal。使用原始包进行 CPU int8 推理，不重新训练或分发修改权重；输出为机器翻译。模型 README 随安装保留，软件指南同时提供署名与许可链接。

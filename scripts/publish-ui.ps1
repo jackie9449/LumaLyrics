@@ -41,12 +41,14 @@ Copy-Item -LiteralPath docs/keyboard-shortcuts.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/language-fonts.md,docs/interface-languages.md,docs/updates-2026-11-11.md,docs/development-log.md -Destination $guide -Force
 Copy-Item -LiteralPath docs/verification-seek-motion -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/chinese-translations.md -Destination $guide -Force
+Copy-Item -LiteralPath docs/offline-translation.md -Destination $guide -Force
 foreach($agentDocKind in @('specs','plans')){
     $agentDocTarget=Join-Path $guide "superpowers/$agentDocKind"
     New-Item -ItemType Directory -Force -Path $agentDocTarget | Out-Null
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/superpowers/$agentDocKind/2026-11-03-local-agent-chinese-translations.md") -Destination $agentDocTarget -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot "docs/superpowers/$agentDocKind/2026-11-03-library-lyrics-workspace.md") -Destination $agentDocTarget -Force
 }
+Copy-Item -LiteralPath docs/superpowers/plans/2026-11-17-argos-offline-translation.md -Destination (Join-Path $guide 'superpowers/plans') -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-sync-responsiveness.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-workspace-design.md -Destination (Join-Path $guide "superpowers/plans") -Force
 Copy-Item -LiteralPath docs/superpowers/plans/2026-11-07-library-tab-clipping.md -Destination (Join-Path $guide "superpowers/plans") -Force

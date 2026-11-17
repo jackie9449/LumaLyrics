@@ -1,0 +1,117 @@
+{
+  "Version": "argos-1.11.0-ct2-4.6.0-py312-win64-v2",
+  "Components": [
+    {
+      "Name": "argostranslate-1.11.0-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/85/16/aa4ddcbc3a3fe352ca3046ef90e612147e0604cbc84a2a70e48df4021bb9/argostranslate-1.11.0-py3-none-any.whl",
+      "Sha256": "a89b42d82f40843900338f9ac60d4c82fda590b6898247f5d0c15d46731ca7df",
+      "Size": 41551,
+      "Target": "site"
+    },
+    {
+      "Name": "click-8.5.1-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/31/7d/164b7ffc8624fe9efb4221bf9af485d5c1e41b9ae118045d2b6dc5457d8b/click-8.5.1-py3-none-any.whl",
+      "Sha256": "8bb5376d2006950386f8c6427613334a2acadc5f559cb80e638d00b4df957e37",
+      "Size": 126163,
+      "Target": "site"
+    },
+    {
+      "Name": "cloudpickle-3.1.2-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/88/39/799be3f2f0f38cc727ee3b4f1445fe6d5e4133064ec2e4115069418a5bb6/cloudpickle-3.1.2-py3-none-any.whl",
+      "Sha256": "9acb47f6afd73f60dc1df93bb801b472f05ff42fa6c84167d25cb206be1fbf4a",
+      "Size": 22228,
+      "Target": "site"
+    },
+    {
+      "Name": "colorama-0.4.6-py2.py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl",
+      "Sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6",
+      "Size": 25335,
+      "Target": "site"
+    },
+    {
+      "Name": "ctranslate2-4.6.0-cp312-cp312-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/ec/4c/0ecd260233290bee4b2facec4d8e755e57d8781d68f276e1248433993c9f/ctranslate2-4.6.0-cp312-cp312-win_amd64.whl",
+      "Sha256": "511cdf810a5bf6a2cec735799e5cd47966e63f8f7688fdee1b97fed621abda00",
+      "Size": 19470040,
+      "Target": "site"
+    },
+    {
+      "Name": "joblib-1.6.0-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/18/53/84099323c2ec4be98d935f63c033ac4151ee83836ca1050ede3b3aadf155/joblib-1.6.0-py3-none-any.whl",
+      "Sha256": "3dbbf9f6e4b592a2357b854608e980fe6390d131d7a82f011a377ef2ebef7aba",
+      "Size": 306115,
+      "Target": "site"
+    },
+    {
+      "Name": "numpy-2.5.5-cp312-cp312-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/d1/71/b1ce51834c21020d189332979d38ba7350eb6cd7ca8c8ec424a663b0ca6f/numpy-2.5.5-cp312-cp312-win_amd64.whl",
+      "Sha256": "919eb420662b0b4ba34889df503f3d5329775b0c1d5f7e5f5af4fba8315b1e30",
+      "Size": 12580189,
+      "Target": "site"
+    },
+    {
+      "Name": "packaging-25.0-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/20/12/38679034af332785aac8774540895e234f4d07f7545804097de4b666afd8/packaging-25.0-py3-none-any.whl",
+      "Sha256": "29572ef2b1f17581046b3a2227d5c611fb25ec70ca1ba8554b24b0e69331a484",
+      "Size": 66469,
+      "Target": "site"
+    },
+    {
+      "Name": "pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/86/bf/899e81e4cce32febab4fb42bb97dcdf66bc135272882d1987881a4b519e9/pyyaml-6.0.3-cp312-cp312-win_amd64.whl",
+      "Sha256": "5fcd34e47f6e0b794d17de1b4ff496c00986e1c83f7ab2fb8fcfe9616ff7477b",
+      "Size": 154003,
+      "Target": "site"
+    },
+    {
+      "Name": "regex-2026.11.15-cp312-cp312-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/04/46/1b55fb0c0b004a9ea84374e902d6ed093a7d09fec6000df1f8dad2814786/regex-2026.11.15-cp312-cp312-win_amd64.whl",
+      "Sha256": "3b896ba13443de0048e7adc18632ea04a163641a77e977a010cc178f45b2352c",
+      "Size": 281144,
+      "Target": "site"
+    },
+    {
+      "Name": "sacremoses-0.1.1-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/0b/f0/89ee2bc9da434bd78464f288fdb346bc2932f2ee80a90b2a4bbbac262c74/sacremoses-0.1.1-py3-none-any.whl",
+      "Sha256": "31e04c98b169bfd902144824d191825cd69220cdb4ae4bcf1ec58a7db5587b1a",
+      "Size": 897476,
+      "Target": "site"
+    },
+    {
+      "Name": "sentencepiece-0.2.1-cp312-cp312-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/2d/81/92df5673c067148c2545b1bfe49adfd775bcc3a169a047f5a0e6575ddaca/sentencepiece-0.2.1-cp312-cp312-win_amd64.whl",
+      "Sha256": "4cdc7c36234fda305e85c32949c5211faaf8dd886096c7cea289ddc12a2d02de",
+      "Size": 1054671,
+      "Target": "site"
+    },
+    {
+      "Name": "setuptools-80.9.0-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl",
+      "Sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922",
+      "Size": 1201486,
+      "Target": "site"
+    },
+    {
+      "Name": "tqdm-4.70.1-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl",
+      "Sha256": "c293e525e6fef9c20e8728fd4612df02a0aa31bb5fe91ecd93e123b1b7bffa73",
+      "Size": 80199,
+      "Target": "site"
+    },
+    {
+      "Name": "python-3.12.10-embed-amd64.zip",
+      "Url": "https://www.python.org/ftp/python/3.12.10/python-3.12.10-embed-amd64.zip",
+      "Sha256": "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3",
+      "Size": 11133606,
+      "Target": "runtime"
+    },
+    {
+      "Name": "translate-en_zh-1_9.argosmodel",
+      "Url": "https://argos-net.com/v1/translate-en_zh-1_9.argosmodel",
+      "Sha256": "433e7c4f034d87fbe2353161e05f18646d7999452f801a4e1f0378522b9850ab",
+      "Size": 70743021,
+      "Target": "model"
+    }
+  ]
+}

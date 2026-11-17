@@ -115,6 +115,7 @@ internal static class PersonalLibrarySnapshot
             if(++count%200==0)progress?.Report($"已整理 {count}/{rows.Count} 首曲目");
         }
         var settings=Path.Combine(dataRoot,"settings.json");if(File.Exists(settings)){File.Copy(settings,Path.Combine(state,"settings.json"));PersonalLibraryArchive.AddFile(staging,"state/settings.json","state",manifest);}
+        var offline=Path.Combine(dataRoot,"offline-translation-queue.json");if(File.Exists(offline)){string target=Path.Combine(state,"offline-translation-queue.json");File.Copy(offline,target);OfflineTranslationWorkflow.ReadQueueFile(target);PersonalLibraryArchive.AddFile(staging,"state/offline-translation-queue.json","state",manifest);}
         var audit=Path.Combine(dataRoot,"cache","apple-reference-audit.json");if(File.Exists(audit)){File.Copy(audit,Path.Combine(state,"apple-reference-audit.json"));PersonalLibraryArchive.AddFile(staging,"state/apple-reference-audit.json","state",manifest);}
         PersonalLibraryArchive.AddFile(staging,"state/lyrics.db","state",manifest);
         if(File.Exists(artDb))PersonalLibraryArchive.AddFile(staging,"state/artwork.db","state",manifest);

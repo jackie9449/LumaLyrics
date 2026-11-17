@@ -301,7 +301,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     public void Resume() => _ = ReconnectAsync();
     public async ValueTask DisposeAsync()
     {
-        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();translationCancellation?.Cancel();lifetime.Cancel();await Source.DisposeAsync();
+        disposed=true;lookup?.Cancel();PauseLibraryPrefetch();translationCancellation?.Cancel();lifetime.Cancel();await StopOfflineAsync();await Source.DisposeAsync();
         if(libraryTask is not null){try{await libraryTask;}catch(OperationCanceledException){}}
         if(artworkTask is not null){try{await artworkTask;}catch(OperationCanceledException){}}
         if(libraryMonitor is not null){try{await libraryMonitor;}catch(OperationCanceledException){}}
