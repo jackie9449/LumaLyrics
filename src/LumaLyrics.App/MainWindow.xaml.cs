@@ -237,6 +237,9 @@ public partial class MainWindow : Window
         var duration=TimeSpan.FromMilliseconds(Math.Min(260,OverlayAppearance.From(settings).TransitionMs));
         for(int i=0;i<lyricBlocks.Count;i++)
         {
+            // A normal line transition changes just two rows. Theme/layout/initial
+            // calls use oldIndex=-1 and deliberately restyle the entire document.
+            if(oldIndex>=0 && newIndex>=0 && i!=oldIndex && i!=newIndex)continue;
             var line=lyricBlocks[i];bool active=i==newIndex;
             if(i<translationBlocks.Count){translationBlocks[i].FontSize=(active?19:16)*playbackTextScale;translationBlocks[i].LineHeight=translationBlocks[i].FontSize*1.5;translationBlocks[i].Opacity=active?.95:.72;}
             double oldSize=line.FontSize*(line.RenderTransform is ScaleTransform prior?prior.ScaleX:1),oldOpacity=line.Opacity;
@@ -248,10 +251,16 @@ public partial class MainWindow : Window
             var brush=new SolidColorBrush(color);line.Foreground=brush;
             if(!motion || i!=oldIndex && i!=newIndex)continue;
             var ease=new CubicEase{EasingMode=EasingMode.EaseOut};var scale=new ScaleTransform(1,1);line.RenderTransformOrigin=new(0,.5);line.RenderTransform=scale;
-            scale.BeginAnimation(ScaleTransform.ScaleXProperty,new DoubleAnimation(oldSize/line.FontSize,1,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop});
-            scale.BeginAnimation(ScaleTransform.ScaleYProperty,new DoubleAnimation(oldSize/line.FontSize,1,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop});
-            line.BeginAnimation(OpacityProperty,new DoubleAnimation(oldOpacity,line.Opacity,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop});
-            brush.BeginAnimation(SolidColorBrush.ColorProperty,new ColorAnimation(priorColor,color,duration){FillBehavior=FillBehavior.Stop});
+            var x=new DoubleAnimation(oldSize/line.FontSize,1,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop};
+            var y=new DoubleAnimation(oldSize/line.FontSize,1,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop};
+            var opacity=new DoubleAnimation(oldOpacity,line.Opacity,duration){EasingFunction=ease,FillBehavior=FillBehavior.Stop};
+            var tint=new ColorAnimation(priorColor,color,duration){FillBehavior=FillBehavior.Stop};
+            x.Completed+=(_,_)=>scale.BeginAnimation(ScaleTransform.ScaleXProperty,null);
+            y.Completed+=(_,_)=>scale.BeginAnimation(ScaleTransform.ScaleYProperty,null);
+            opacity.Completed+=(_,_)=>{if(ReferenceEquals(line.Foreground,brush))line.BeginAnimation(OpacityProperty,null);};
+            tint.Completed+=(_,_)=>brush.BeginAnimation(SolidColorBrush.ColorProperty,null);
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty,x);scale.BeginAnimation(ScaleTransform.ScaleYProperty,y);
+            line.BeginAnimation(OpacityProperty,opacity);brush.BeginAnimation(SolidColorBrush.ColorProperty,tint);
         }
     }
     void CenterLine(bool jump)
@@ -273,7 +282,12 @@ public partial class MainWindow : Window
             try
             {
                 using var stream=new MemoryStream(bytes);
-                var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.StreamSource=stream;image.EndInit();image.Freeze();
+                var frame=BitmapFrame.Create(stream,BitmapCreateOptions.DelayCreation,BitmapCacheOption.None);
+                int width=frame.PixelWidth,height=frame.PixelHeight;
+                stream.Position=0;
+                var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;
+                image.DecodePixelWidth=Math.Max(1,(int)Math.Round(width*Math.Min(1,1024d/Math.Max(width,height))));
+                image.StreamSource=stream;image.EndInit();image.Freeze();
                 Artwork.Source=image;CoverPlaceholder.Visibility=Visibility.Collapsed;
                 try{artworkPalette=ArtworkPaletteSampler.Extract(image);}
                 catch(Exception ex){store.Log("Artwork palette: "+ex.GetType().Name);}

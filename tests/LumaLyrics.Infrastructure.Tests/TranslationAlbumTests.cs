@@ -65,4 +65,26 @@ public sealed class TranslationAlbumTests:IDisposable
         var json=JsonSerializer.SerializeToNode(job.Request)!;json.AsObject().Remove("AlbumContext");
         var legacy=json.Deserialize<TranslationJobRequest>();Assert.NotNull(legacy);Assert.Null(legacy.AlbumContext);Assert.Equal(job.Request.JobId,legacy.JobId);
     }
+    [Fact] public void TaskListProjectionOmitsAlbumGraphButPreservesRegisteredIdentityAndStoredRequest()
+    {
+        var a=Song("First");Seed(a,Song("Second"));var job=TranslationJobExchange.Create(root,a,TranslationJobMode.FillMissing);
+        var before=File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(job.TaskPath)!,"request.json"));
+        var slim=Assert.Single(TranslationJobExchange.ReadJobs(root,includeAlbumContext:false));
+        Assert.Null(slim.Ticket.Request.AlbumContext);Assert.Equal(job.RequestSha256,slim.Ticket.RequestSha256);
+        Assert.Equal(job.Request.Target,slim.Ticket.Request.Target with{Groups=job.Request.Target.Groups});
+        Assert.Null(Assert.Single(Assert.Single(LibraryTaskCatalog.Read(root)).Jobs).Ticket.Request.AlbumContext);
+        Assert.NotNull(Assert.Single(TranslationJobExchange.ReadJobs(root)).Ticket.Request.AlbumContext);
+        Assert.Equal(before,File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(job.TaskPath)!,"request.json")));
+    }
+    [Fact] public void LightweightListingDoesNotChangeFullResultValidationOrReuse()
+    {
+        var a=Song("First");Seed(a,Song("Second"));var job=TranslationJobExchange.Create(root,a,TranslationJobMode.FillMissing);
+        LibraryTaskCatalog.Read(root);
+        Assert.Equal(job.Request.JobId,TranslationJobExchange.Create(root,a,TranslationJobMode.FillMissing).Request.JobId);
+        var result=new TranslationJobResult("LumaLyrics.TranslationJobResult",1,job.Request.JobId,job.RequestSha256,job.Request.Target.SourceHash,"Own fixture",job.Request.Target.Groups.Select(g=>new TranslationJobResultLine(g.GroupIndex,g.Original,"我们留着灯火",null)).ToArray());
+        File.WriteAllText(job.ResultPath,JsonSerializer.Serialize(result));
+        Assert.Equal(2,TranslationJobExchange.Validate(root,job.ResultPath).TranslatedCount);
+        TranslationJobExchange.Cancel(root,job.Request.JobId);
+        Assert.NotEqual(job.Request.JobId,TranslationJobExchange.Create(root,a,TranslationJobMode.FillMissing).Request.JobId);
+    }
 }

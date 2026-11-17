@@ -26,7 +26,7 @@ public static class TranslationJobExchange
         if(mode==TranslationJobMode.ReplaceExpected&&members.Length>1)throw new InvalidDataException("多条原生记录共享译文，需要先确认关联影响，未替换。");
         var albumContext=(albumBuilder??new TranslationAlbumContextBuilder(root,lyrics,translations)).Get(track,member?.Source,member?.PersistentId);
         string contextJson=JsonSerializer.Serialize(albumContext,TranslationJobFiles.Json);
-        foreach(var old in ReadJobs(root).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
+        foreach(var old in ReadPendingJobs(root,binding.Id,includeAlbumContext:true).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
             if(old.Ticket.Request.Target.BindingId==binding.Id&&old.Ticket.Request.Mode==mode&&old.Ticket.Request.ExpectedRevision==active?.Revision&&old.Ticket.Request.UserInstructions==userInstructions && JsonSerializer.Serialize(old.Ticket.Request.AlbumContext,TranslationJobFiles.Json)==contextJson && (expected is null || old.Ticket.Request.Target.LibrarySource==expected.Key.Source && old.Ticket.Request.Target.PersistentId==expected.Key.PersistentId))return old.Ticket;
         string id=Guid.NewGuid().ToString("N");
         var request=new TranslationJobRequest(1,id,mode,root,new(track,binding.Id,TranslationAlignment.Hash(doc.Raw),doc.Raw,member?.Source,member?.PersistentId,groups),active?.Revision,DateTimeOffset.UtcNow,binding.Source,userInstructions,includeExistingTranslation?active?.Record.Translation.Lines:null){AlbumContext=albumContext};
@@ -54,9 +54,16 @@ public static class TranslationJobExchange
         while(r.Read()){total++;string state=r.GetString(1);if(state is "Applied" or "AppliedPartial")applied++;else if(state=="AwaitingResult"){if(File.Exists(TranslationJobFiles.PathFor(root,r.GetString(0),"translation-result.json")))submitted++;else pending++;}else if(state is "Conflict" or "Stale" or "Rejected" or "PartialReady")attention++;}
         return $"任务 {total} · 已接收 {applied} · 待制作 {pending} · 已提交待接收 {submitted} · 需处理 {attention}";
     }
-    public static IReadOnlyList<TranslationJobSnapshot> ReadJobs(string root,CancellationToken token=default)
+    public static IReadOnlyList<TranslationJobSnapshot> ReadJobs(string root,CancellationToken token=default,bool includeAlbumContext=true)
+        =>ReadJobsCore(root,token,includeAlbumContext,false,null);
+    internal static IReadOnlyList<TranslationJobSnapshot> ReadPendingJobs(string root,string? bindingId=null,bool includeAlbumContext=false,CancellationToken token=default)
+        =>ReadJobsCore(root,token,includeAlbumContext,true,bindingId);
+    static IReadOnlyList<TranslationJobSnapshot> ReadJobsCore(string root,CancellationToken token,bool includeAlbumContext,bool pendingOnly,string? bindingId)
     {
-        using var db=Open(root,true);using var c=Command(db,"SELECT Request,RequestHash,State,Receipt FROM TranslationJobs ORDER BY rowid DESC");using var r=c.ExecuteReader();var rows=new List<TranslationJobSnapshot>();
+        // List views and inbox scans do not need the large, immutable album reference.
+        // Project it in SQLite so it never becomes a managed string/object graph.
+        token.ThrowIfCancellationRequested();
+        using var db=Open(root,true);using var c=Command(db,$"SELECT {(includeAlbumContext?"Request":"json_remove(Request,'$.AlbumContext')")},RequestHash,State,Receipt FROM TranslationJobs WHERE ($pending=0 OR State='AwaitingResult') AND ($binding IS NULL OR json_extract(Request,'$.Target.BindingId')=$binding) ORDER BY rowid DESC",("$pending",pendingOnly),("$binding",bindingId));using var r=c.ExecuteReader();var rows=new List<TranslationJobSnapshot>();
         while(r.Read())
         {
             token.ThrowIfCancellationRequested();var request=JsonSerializer.Deserialize<TranslationJobRequest>(r.GetString(0),TranslationJobFiles.Json)!;

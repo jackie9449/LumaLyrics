@@ -178,13 +178,17 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         readonly int decodeWidth;
         internal ThumbnailCache(int decodeWidth=96)=>this.decodeWidth=decodeWidth;
         readonly Dictionary<string,BitmapImage?> images=new(StringComparer.OrdinalIgnoreCase);readonly Queue<string> order=[];
+        const long MaximumPixels=4*1024*1024;long pixels;
         internal int Count=>images.Count;
         internal ImageSource? Get(string? path)
         {
             if(path is null)return null;if(images.TryGetValue(path,out var cached))return cached;
             BitmapImage? image=null;try{if(File.Exists(path)){image=new();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;image.CreateOptions=BitmapCreateOptions.IgnoreImageCache;image.DecodePixelWidth=decodeWidth;image.UriSource=new Uri(path);image.EndInit();image.Freeze();}}catch(Exception ex) when(ex is IOException or FormatException or UnauthorizedAccessException or NotSupportedException or ArgumentException){image=null;}
-            while(order.Count>=128)images.Remove(order.Dequeue());images[path]=image;order.Enqueue(path);return image;
+            long size=image is null?0:(long)image.PixelWidth*image.PixelHeight;
+            while(order.Count>0 && (order.Count>=128 || pixels+size>MaximumPixels))
+                if(images.Remove(order.Dequeue(),out var removed) && removed is not null)pixels-=(long)removed.PixelWidth*removed.PixelHeight;
+            if(size<=MaximumPixels){images[path]=image;order.Enqueue(path);pixels+=size;}return image;
         }
-        internal void Clear(){images.Clear();order.Clear();}
+        internal void Clear(){images.Clear();order.Clear();pixels=0;}
     }
 }

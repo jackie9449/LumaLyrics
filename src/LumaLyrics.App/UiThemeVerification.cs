@@ -16,6 +16,11 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         void CaptureMain(string file)=>VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,file),true);
         var checks=new Dictionary<string,object?>();
+        if(Environment.GetCommandLineArgs().Contains("--verify-runtime-performance"))
+        {
+            await VerifyRuntimePerformanceAsync(directory,checks);
+            File.WriteAllText(Path.Combine(directory,"ui-check.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));return;
+        }
         if(Environment.GetCommandLineArgs().Contains("--verify-playback-clock") || Environment.GetCommandLineArgs().Contains("--verify-live-clock"))
         {
             if(Environment.GetCommandLineArgs().Contains("--verify-live-clock"))await VerifyLiveClockAsync(directory,checks);
@@ -204,7 +209,7 @@ public partial class MainWindow
             cache.Sync(new("ui-fixture",1,[new("UI",track)],"original-artwork"),new Dictionary<string,AppleArtworkSource>{{"UI",new("UI","original-artwork",null,sourcePath)}});
             cache.Save(cache.GetQueue().Single(),artworkBytes.ToArray());var cached=cache.Find(track)!;await coordinator.RefreshArtworkAsync();
             checks["artwork.highResolutionCache"]=cached.HighResolution && cache.GetProgress().HighResolution==1;
-            checks["artwork.wpfDecodesCachedCover"]=Artwork.Source is BitmapImage image && image.PixelWidth==1200 && image.IsFrozen && CoverPlaceholder.Visibility==Visibility.Collapsed;
+            checks["artwork.wpfDecodesCachedCover"]=Artwork.Source is BitmapImage image && image.PixelWidth==1024 && image.PixelHeight==1024 && image.IsFrozen && CoverPlaceholder.Visibility==Visibility.Collapsed;
         }
         vm.Title="微光之间";vm.Artist="浮光  /  自写文字 · 界面预览";vm.Time="00:24 / 01:36";
         vm.Status="本地歌词 · 静态浏览";vm.Quality="界面预览 · 示例文字";vm.Duration=96000;vm.Position=24000;

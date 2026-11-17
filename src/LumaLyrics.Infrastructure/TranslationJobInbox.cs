@@ -15,7 +15,7 @@ public sealed class TranslationJobInbox(string root):IAsyncDisposable
         watch.Created+=(_,_)=>RequestScan();watch.Changed+=(_,_)=>RequestScan();watch.Renamed+=(_,_)=>RequestScan();watch.Error+=(_,_)=>RequestScan();watch.EnableRaisingEvents=true;RequestScan();
         try{await foreach(var _ in requests.Reader.ReadAllAsync(token))
         {
-            foreach(var job in TranslationJobExchange.ReadJobs(root).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
+            foreach(var job in TranslationJobExchange.ReadPendingJobs(root,token:token).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
             {
                 token.ThrowIfCancellationRequested();if(!File.Exists(job.Ticket.ResultPath))continue;
                 for(int attempt=0;attempt<5;attempt++)

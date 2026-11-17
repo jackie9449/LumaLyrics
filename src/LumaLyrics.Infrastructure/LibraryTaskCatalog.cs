@@ -15,7 +15,7 @@ public static class LibraryTaskCatalog
 {
     public static IReadOnlyList<LibraryTaskBatch> Read(string root,CancellationToken token=default)
     {
-        var jobs=TranslationJobExchange.ReadJobs(root,token).ToDictionary(j=>j.Ticket.Request.JobId);var rows=new List<LibraryTaskBatch>();var batched=new HashSet<string>();
+        var jobs=TranslationJobExchange.ReadJobs(root,token,includeAlbumContext:false).ToDictionary(j=>j.Ticket.Request.JobId);var rows=new List<LibraryTaskBatch>();var batched=new HashSet<string>();
         using var db=TranslationJobRepository.Open(root,true);using var c=TranslationJobRepository.Command(db,"SELECT Manifest FROM TranslationBatches ORDER BY rowid DESC");using var r=c.ExecuteReader();
         while(r.Read())
         {
