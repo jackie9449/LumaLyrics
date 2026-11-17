@@ -72,7 +72,7 @@ internal sealed partial class MusicLibraryView:UserControl,IDisposable
         Command("‹",UiText.T("上一首"),"CanPrevious",previous);toggleButton=Command("▷",UiText.T("播放或暂停"),"CanPlay",toggle);Command("›",UiText.T("下一首"),"CanNext",next);
         var back=new Button{Content=UiText.T("回到歌词"),Padding=new(12,7,12,7),Margin=new(12,0,0,0)};back.Click+=(_,_)=>returnLyrics();controls.Children.Add(back);
         var text=new StackPanel{VerticalAlignment=VerticalAlignment.Center,Margin=new(0,0,12,0)};var title=new TextBlock{FontSize=12,FontWeight=FontWeights.SemiBold,TextTrimming=TextTrimming.CharacterEllipsis};title.SetBinding(TextBlock.TextProperty,new Binding("Title"){Source=player});text.Children.Add(title);var artist=new TextBlock{FontSize=10,Margin=new(0,4,0,0),TextTrimming=TextTrimming.CharacterEllipsis};artist.SetBinding(TextBlock.TextProperty,new Binding("Artist"){Source=player});ThemeManager.Bind(artist,TextBlock.ForegroundProperty,"MutedBrush");text.Children.Add(artist);playback.Children.Add(text);
-        search.TextChanged+=(_,_)=>{hint.Visibility=search.Text.Length==0?Visibility.Visible:Visibility.Collapsed;debounce.Stop();debounce.Start();};debounce.Tick+=(_,_)=>{debounce.Stop();Filter();};sort.SelectionChanged+=(_,_)=>Filter();
+        SearchHint.Attach(search,hint);search.TextChanged+=(_,_)=>{debounce.Stop();debounce.Start();};debounce.Tick+=(_,_)=>{debounce.Stop();Filter();};sort.SelectionChanged+=(_,_)=>Filter();
         SetupArtworkRefresh();
     }
     DataTemplate RowTemplate()
