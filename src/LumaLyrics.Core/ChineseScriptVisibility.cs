@@ -2,9 +2,9 @@ namespace LumaLyrics.Core;
 
 public static class ChineseScriptVisibility
 {
-    public static bool ShouldShow(LyricsDocument? document,bool mainTranslation,bool floatingTranslation)
+    public static bool ShouldShow(LyricsDocument? document,bool mainTranslation)
     {
-        if(mainTranslation || floatingTranslation)return true;
+        if(mainTranslation)return true;
         if(document is null || document.Instrumental)return false;
         // Static imports have no timed groups. Inspect actual lyric lines in both
         // forms, excluding metadata/credits independently within multiline groups.

@@ -150,7 +150,7 @@ public partial class MainWindow : Window
         vm.LyricStatus=DisplayLyricsStatus();vm.Duration=s?.Track.DurationMs is >0 and var duration && double.IsFinite(duration)?duration:1;
         overlay.RefreshTranslationToggle();
         RefreshMainTranslationToggle();
-        ChineseScriptHost.Visibility=ChineseScriptVisibility.ShouldShow(coordinator.Document,settings.ShowChineseTranslation,settings.OverlayShowChineseTranslation)?Visibility.Visible:Visibility.Collapsed;
+        ChineseScriptHost.Visibility=ChineseScriptVisibility.ShouldShow(coordinator.Document,settings.ShowChineseTranslation)?Visibility.Visible:Visibility.Collapsed;
         ApplyFooterLayout();
         vm.Library=UiText.Status(coordinator.LibraryStatus.ToString())+"\n"+UiText.Status(coordinator.ArtworkStatus.ToString());
         musicLibrary?.SetNowPlaying(coordinator.ActiveTrack,s?.Status==PlayState.Playing);
