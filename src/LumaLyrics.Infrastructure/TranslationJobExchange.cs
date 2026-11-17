@@ -6,6 +6,8 @@ namespace LumaLyrics.Infrastructure;
 public static class TranslationJobExchange
 {
     public static TranslationJobTicket Create(string root,Track track,TranslationJobMode mode,string? userInstructions=null,bool includeExistingTranslation=false,LibraryPreparationTarget? expected=null)
+        =>CreateCore(root,track,mode,userInstructions,includeExistingTranslation,expected,null);
+    internal static TranslationJobTicket CreateCore(string root,Track track,TranslationJobMode mode,string? userInstructions,bool includeExistingTranslation,LibraryPreparationTarget? expected,TranslationAlbumContextBuilder? albumBuilder)
     {
         root=Path.GetFullPath(root);if(!File.Exists(Path.Combine(root,"lyrics.db")))throw new DirectoryNotFoundException("个人资料不可用。");
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"),true);using var translations=new TranslationRepository(root);
@@ -22,12 +24,17 @@ public static class TranslationJobExchange
         var member=expected is null?(members.Length<=1?members.FirstOrDefault():throw new InvalidDataException("有重复录音记录，请从资料库明确选择。")):members.SingleOrDefault(x=>x.Source.Equals(expected.Key.Source,StringComparison.OrdinalIgnoreCase)&&x.PersistentId==expected.Key.PersistentId)??throw new InvalidDataException("目标已不属于当前资料库。");
         if(expected is not null&&(expected.BindingId!=binding.Id||expected.SourceHash!=TranslationAlignment.Hash(doc.Raw)||expected.ExpectedTranslationRevision!=active?.Revision))throw new InvalidDataException("所选原词或译文已更新，请刷新后重试。");
         if(mode==TranslationJobMode.ReplaceExpected&&members.Length>1)throw new InvalidDataException("多条原生记录共享译文，需要先确认关联影响，未替换。");
+        var albumContext=(albumBuilder??new TranslationAlbumContextBuilder(root,lyrics,translations)).Get(track,member?.Source,member?.PersistentId);
+        string contextJson=JsonSerializer.Serialize(albumContext,TranslationJobFiles.Json);
         foreach(var old in ReadJobs(root).Where(j=>j.Receipt.State==TranslationJobState.AwaitingResult))
-            if(old.Ticket.Request.Target.BindingId==binding.Id&&old.Ticket.Request.Mode==mode&&old.Ticket.Request.ExpectedRevision==active?.Revision&&old.Ticket.Request.UserInstructions==userInstructions && (expected is null || old.Ticket.Request.Target.LibrarySource==expected.Key.Source && old.Ticket.Request.Target.PersistentId==expected.Key.PersistentId))return old.Ticket;
+            if(old.Ticket.Request.Target.BindingId==binding.Id&&old.Ticket.Request.Mode==mode&&old.Ticket.Request.ExpectedRevision==active?.Revision&&old.Ticket.Request.UserInstructions==userInstructions && JsonSerializer.Serialize(old.Ticket.Request.AlbumContext,TranslationJobFiles.Json)==contextJson && (expected is null || old.Ticket.Request.Target.LibrarySource==expected.Key.Source && old.Ticket.Request.Target.PersistentId==expected.Key.PersistentId))return old.Ticket;
         string id=Guid.NewGuid().ToString("N");
-        var request=new TranslationJobRequest(1,id,mode,root,new(track,binding.Id,TranslationAlignment.Hash(doc.Raw),doc.Raw,member?.Source,member?.PersistentId,groups),active?.Revision,DateTimeOffset.UtcNow,binding.Source,userInstructions,includeExistingTranslation?active?.Record.Translation.Lines:null);
+        var request=new TranslationJobRequest(1,id,mode,root,new(track,binding.Id,TranslationAlignment.Hash(doc.Raw),doc.Raw,member?.Source,member?.PersistentId,groups),active?.Revision,DateTimeOffset.UtcNow,binding.Source,userInstructions,includeExistingTranslation?active?.Record.Translation.Lines:null){AlbumContext=albumContext};
         string json=JsonSerializer.Serialize(request,TranslationJobFiles.Json),hash=TranslationAlignment.Hash(json);
         string task=TranslationJobFiles.PathFor(root,id,"task.md"),result=TranslationJobFiles.PathFor(root,id,"translation-result.json");
+        string markdown=TranslationJobMarkdown.Render(request,hash,result+".tmp",result,null);
+        if(System.Text.Encoding.UTF8.GetByteCount(json)>TranslationJobFiles.MaximumBytes || System.Text.Encoding.UTF8.GetByteCount(markdown)>TranslationJobFiles.MaximumBytes)
+            throw new InvalidDataException("专辑参考超过单文件 8 MiB 安全上限；未截断专辑语境或登记任务，请缩小资料范围后重新准备。");
         Execute(db,"ATTACH DATABASE $path AS originals",("$path",Path.Combine(root,"lyrics.db")));
         using(var tx=db.BeginTransaction(deferred:false)){
         var fresh=Scalar(db,"SELECT d.Raw FROM originals.TrackLyricsBindings b JOIN originals.LyricsDocuments d ON d.Id=b.DocumentId WHERE b.Id=$id",("$id",binding.Id));
@@ -37,7 +44,7 @@ public static class TranslationJobExchange
         Execute(db,"INSERT INTO TranslationJobs(Id,Request,RequestHash,State,Receipt) VALUES($id,$r,$h,'Exporting',NULL)",("$id",id),("$r",json),("$h",hash));tx.Commit();}
         Directory.CreateDirectory(Path.GetDirectoryName(task)!);
         TranslationJobFiles.Write(TranslationJobFiles.PathFor(root,id,"request.json"),json);
-        TranslationJobFiles.Write(task,TranslationJobMarkdown.Render(request,hash,result+".tmp",result,null));
+        TranslationJobFiles.Write(task,markdown);
         Execute(db,"UPDATE TranslationJobs SET State='AwaitingResult' WHERE Id=$id",("$id",id));return new(request,hash,task,result);
     }
     public static TranslationJobBatchResult CreateMissingBatch(string root,IReadOnlyList<Track> selectedTracks)=>TranslationBatchExchange.Create(root,selectedTracks.Select(t=>new TranslationBatchSelection(t,TranslationJobMode.FillMissing)).ToArray());

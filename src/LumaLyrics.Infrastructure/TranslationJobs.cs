@@ -13,7 +13,10 @@ public sealed record TranslationJobTarget(Track Track, string BindingId,
 public sealed record TranslationJobRequest(int SchemaVersion, string JobId,
     TranslationJobMode Mode, string ProfileRoot, TranslationJobTarget Target,
     string? ExpectedRevision, DateTimeOffset CreatedUtc, string OriginalSource,
-    string? UserInstructions, IReadOnlyList<TranslationLine>? ExistingTranslation);
+    string? UserInstructions, IReadOnlyList<TranslationLine>? ExistingTranslation)
+{
+    public TranslationAlbumContext? AlbumContext {get;init;}
+}
 public sealed record TranslationJobResultLine(int GroupIndex, string Original,
     string? Chinese, string? UntranslatedReason);
 public sealed record TranslationJobResult(string Format, int SchemaVersion,
