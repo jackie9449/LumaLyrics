@@ -120,7 +120,7 @@ public partial class OverlayWindow : Window
     internal void RefreshTranslationToggle()
     {
         syncingTranslationToggle=true;
-        try{ChineseTranslationToggle.IsChecked=settings.OverlayShowChineseTranslation;}
+        try{ChineseTranslationToggle.IsChecked=settings.ShowChineseTranslation;}
         finally{syncingTranslationToggle=false;}
     }
     void TranslationToggled(object sender,RoutedEventArgs e)

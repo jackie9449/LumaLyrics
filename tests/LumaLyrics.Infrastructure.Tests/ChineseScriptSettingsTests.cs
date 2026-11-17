@@ -16,8 +16,8 @@ public sealed class ChineseScriptSettingsTests : IDisposable
     }
 
     [Theory]
-    [InlineData("simplified", true, false)]
-    [InlineData("traditional", false, true)]
+    [InlineData("simplified", true, true)]
+    [InlineData("traditional", false, false)]
     [InlineData("original", true, true)]
     public void ScriptChoiceSurvivesRestartWithoutChangingVisibilityOrPlaybackSettings(string script, bool main, bool floating)
     {
@@ -61,7 +61,7 @@ public sealed class ChineseScriptSettingsTests : IDisposable
         var settings = store.Load();
         Assert.Equal("original", settings.ChineseScript);
         Assert.True(settings.ShowChineseTranslation);
-        Assert.False(settings.OverlayShowChineseTranslation);
+        Assert.True(settings.OverlayShowChineseTranslation);
         Assert.Equal("frost", settings.UiTheme);
         Assert.Equal(450, settings.GlobalOffsetMs);
         Assert.Equal(38, settings.OverlayFontSize);
@@ -71,7 +71,7 @@ public sealed class ChineseScriptSettingsTests : IDisposable
         var reloaded = new SettingsStore(directory).Load();
         Assert.Equal("original", reloaded.ChineseScript);
         Assert.True(reloaded.ShowChineseTranslation);
-        Assert.False(reloaded.OverlayShowChineseTranslation);
+        Assert.True(reloaded.OverlayShowChineseTranslation);
         Assert.Equal(450, reloaded.GlobalOffsetMs);
     }
 

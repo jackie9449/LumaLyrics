@@ -39,13 +39,13 @@ public partial class MainWindow
         void Load(string text){coordinator.Import(track,text,"Original interaction fixture",false);coordinator.SetTranslationVerificationSnapshot(track,1000);}
         async Task Settle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(60);UpdateLayout();}
         Rect Bounds(FrameworkElement element)=>element.TransformToAncestor(PlaybackFooter).TransformBounds(new Rect(element.RenderSize));
-        coordinator.SetTranslationVisibility(false,false);Load(english);await Settle();checks["script.foreignHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
-        coordinator.SetTranslationVisibility(true,false);await Settle();checks["script.mainTranslationShowsSelector"]=ChineseScriptHost.IsVisible;
-        coordinator.SetTranslationVisibility(false,true);await Settle();checks["script.floatingOnlyKeepsMainSelectorHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed && settings.OverlayShowChineseTranslation;
-        coordinator.SetTranslationVisibility(true,true);await Settle();
+        coordinator.SetTranslationVisibility(false);Load(english);await Settle();checks["script.foreignHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
+        coordinator.SetTranslationVisibility(true);await Settle();checks["script.mainTranslationShowsSelector"]=ChineseScriptHost.IsVisible;
+        coordinator.SetTranslationVisibility(false);await Settle();checks["script.sharedOffKeepsSelectorHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed && !settings.ShowChineseTranslation;
+        coordinator.SetTranslationVisibility(true);await Settle();
         MainChineseTranslationToggle.IsChecked=false;await Settle();
-        checks["script.mainToggleOffHidesSelectorWithFloatingOn"]=ChineseScriptHost.Visibility==Visibility.Collapsed && !settings.ShowChineseTranslation && settings.OverlayShowChineseTranslation;
-        coordinator.SetTranslationVisibility(false,false);Load("[00:00]風の歌を聞く\n[00:12]音樂");await Settle();checks["script.japaneseHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
+        checks["script.mainToggleOffHidesSelectorAndFloating"]=ChineseScriptHost.Visibility==Visibility.Collapsed && !settings.ShowChineseTranslation && overlay.ChineseTranslationToggle.IsChecked==false;
+        coordinator.SetTranslationVisibility(false);Load("[00:00]風の歌を聞く\n[00:12]音樂");await Settle();checks["script.japaneseHidden"]=ChineseScriptHost.Visibility==Visibility.Collapsed;
         Load(chinese);await Settle();checks["script.chineseVisible"]=ChineseScriptHost.IsVisible;
         coordinator.SetChineseScript("traditional");
         Load(english);await Settle();checks["script.hiddenPreservesChoice"]=ChineseScriptHost.Visibility==Visibility.Collapsed && settings.ChineseScript=="traditional";

@@ -28,7 +28,7 @@ public partial class MainWindow
             settings.OnlineLookup=false;settings.AutoPrefetchLibrary=false;
             Width=1220;Height=820;WindowState=WindowState.Normal;
             coordinator.Import(track,lyrics,"Original localization verification",false);coordinator.SetTranslationVerificationSnapshot(track,1000);
-            coordinator.SetChineseScript("original");coordinator.SetTranslationVisibility(false,false);
+            coordinator.SetChineseScript("original");coordinator.SetTranslationVisibility(false);
             checks["locale.loadedFromSettings"]=language==UiText.Normalize(store.Load().UiLanguage);
             checks["locale.mainPageDecorationRemoved"]=FindName("PlaybackHeadline") is null && FindName("PlaybackEyebrow") is null;
             checks["locale.originalMetadataPreserved"]=vm.Title=="设置" && vm.Artist.Contains("播放") && vm.Artist.Contains("Original locale fixture");

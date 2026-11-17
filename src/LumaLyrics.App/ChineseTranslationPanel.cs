@@ -9,7 +9,7 @@ namespace LumaLyrics.App;
 
 public sealed class ChineseTranslationPanel : StackPanel,IDisposable
 {
-    readonly PlaybackCoordinator coordinator;readonly CheckBox main,floating;readonly TextBlock progress=new(),source=new();
+    readonly PlaybackCoordinator coordinator;readonly CheckBox main;readonly TextBlock progress=new(),source=new();
     readonly Button? prepare,pause,retry,import;
     bool syncing,disposed; readonly TranslationJobListPanel? jobs;
     TextBlock? scriptPreview;
@@ -18,25 +18,24 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         this.coordinator=coordinator;
         if(!includeJobs)
         {
-            Children.Add(LibraryWorkspaceUi.Heading(UiText.T("中文译文"),UiText.T("译文开关独立记忆，简繁显示同步；修改后立即保存。")));
-            var switches=new System.Windows.Controls.Primitives.UniformGrid{Columns=2,Margin=new(0,0,-10,0)};
-            var mainPanel=new StackPanel();mainPanel.Children.Add(LibraryWorkspaceUi.Text(UiText.T("主窗口"),15,false));var mainHint=LibraryWorkspaceUi.Text(UiText.T("在原词下方显示中文。"),11);mainHint.Margin=new(0,5,0,12);mainPanel.Children.Add(mainHint);main=DialogUi.Check(mainPanel,UiText.T("主窗口显示中文译文"),coordinator.Settings.ShowChineseTranslation);var mainCard=LibraryWorkspaceUi.Card(mainPanel);mainCard.Margin=new(0,0,10,12);switches.Children.Add(mainCard);
-            var floatingPanel=new StackPanel();floatingPanel.Children.Add(LibraryWorkspaceUi.Text(UiText.T("桌面歌词"),15,false));var floatingHint=LibraryWorkspaceUi.Text(UiText.T("与悬浮工具栏开关同步。"),11);floatingHint.Margin=new(0,5,0,12);floatingPanel.Children.Add(floatingHint);floating=DialogUi.Check(floatingPanel,UiText.T("悬浮歌词显示中文译文"),coordinator.Settings.OverlayShowChineseTranslation);var floatingCard=LibraryWorkspaceUi.Card(floatingPanel);floatingCard.Margin=new(0,0,10,12);switches.Children.Add(floatingCard);Children.Add(switches);switches.SizeChanged+=(_,_)=>switches.Columns=switches.ActualWidth>=560?2:1;
+            Children.Add(LibraryWorkspaceUi.Heading(UiText.T("中文译文"),UiText.T("主窗口与悬浮歌词共用译文开关，修改后立即同步并保存。")));
+            var visibilityPanel=new StackPanel();
+            main=DialogUi.Check(visibilityPanel,UiText.T("显示中文译文"),coordinator.Settings.ShowChineseTranslation);
+            Children.Add(LibraryWorkspaceUi.Card(visibilityPanel));
             AddScriptChoice();
             var preview=new StackPanel();preview.Children.Add(LibraryWorkspaceUi.Text(UiText.T("双语预览"),11));var original=LibraryWorkspaceUi.Text("The stars will guide us home",20,false);original.Margin=new(0,16,0,4);preview.Children.Add(original);var translated=LibraryWorkspaceUi.Text("星光会指引我们归家",14);preview.Children.Add(translated);var note=LibraryWorkspaceUi.Text(UiText.T("原文保持主位，中文补充其下。间奏和纯音乐保持留白。"),11);note.Margin=new(0,16,0,0);preview.Children.Add(note);Children.Add(LibraryWorkspaceUi.Card(preview,20));
             scriptPreview=translated;
             var attribution=new StackPanel();attribution.Children.Add(LibraryWorkspaceUi.Text(UiText.T("当前译文来源"),14,false));source.TextWrapping=TextWrapping.Wrap;source.FontSize=12;source.LineHeight=20;source.Margin=new(0,8,0,0);ThemeManager.Bind(source,TextBlock.ForegroundProperty,"MutedBrush");attribution.Children.Add(source);
             var reviewCurrent=DialogUi.Button(attribution,UiText.T("以 Apple Music 原词校对…"),OpenReview);AutomationProperties.SetName(reviewCurrent,UiText.T("打开 Apple Music 原词校对"));Children.Add(LibraryWorkspaceUi.Card(attribution));
-            AutomationProperties.SetName(main,UiText.T("主窗口中文译文开关"));AutomationProperties.SetName(floating,UiText.T("悬浮歌词中文译文开关"));main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
+            AutomationProperties.SetName(main,UiText.T("中文译文开关"));main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;
             Attach();return;
         }
         var title=new TextBlock{Text=UiText.T("中文译文"),FontSize=20,Margin=new(0,0,0,12)};ThemeManager.BindDisplay(title);Children.Add(title);
         AddText(UiText.T("中文译文跟随原词逐行显示。找不到可靠对应时，译文留空。"),12);
-        main=DialogUi.Check(this,UiText.T("主窗口显示中文译文"),coordinator.Settings.ShowChineseTranslation);
-        floating=DialogUi.Check(this,UiText.T("悬浮歌词显示中文译文"),coordinator.Settings.OverlayShowChineseTranslation);
-        main.Margin=new(0,8,0,4);floating.Margin=new(0,4,0,14);
-        AutomationProperties.SetName(main,UiText.T("主窗口中文译文开关"));AutomationProperties.SetName(floating,UiText.T("悬浮歌词中文译文开关"));
-        main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;floating.Checked+=VisibilityChanged;floating.Unchecked+=VisibilityChanged;
+        main=DialogUi.Check(this,UiText.T("显示中文译文"),coordinator.Settings.ShowChineseTranslation);
+        main.Margin=new(0,8,0,14);
+        AutomationProperties.SetName(main,UiText.T("中文译文开关"));
+        main.Checked+=VisibilityChanged;main.Unchecked+=VisibilityChanged;
         AddScriptChoice();
         var sample=new StackPanel{Margin=new(18,14,18,14)};
         sample.Children.Add(new TextBlock{Text="The stars will guide us home",FontSize=19,TextWrapping=TextWrapping.Wrap});
@@ -69,11 +68,11 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
     void Attach(){Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Refresh;Refresh();};Unloaded+=(_,_)=>coordinator.Updated-=Refresh;Refresh();}
     void AddText(string text,double size)
     {var label=new TextBlock{Text=text,FontSize=size,TextWrapping=TextWrapping.Wrap,Margin=new(0,0,0,size>=15?9:7)};if(size<15)ThemeManager.Bind(label,TextBlock.ForegroundProperty,"MutedBrush");Children.Add(label);}
-    void VisibilityChanged(object s,RoutedEventArgs e){if(!syncing)coordinator.SetTranslationVisibility(main.IsChecked==true,floating.IsChecked==true);}
+    void VisibilityChanged(object s,RoutedEventArgs e){if(!syncing)coordinator.SetTranslationVisibility(main.IsChecked==true);}
     void Refresh()
     {
         syncing=true;
-        try{main.IsChecked=coordinator.Settings.ShowChineseTranslation;floating.IsChecked=coordinator.Settings.OverlayShowChineseTranslation;}
+        try{main.IsChecked=coordinator.Settings.ShowChineseTranslation;}
         finally{syncing=false;}
         if(scriptPreview is not null)
         {
@@ -96,6 +95,6 @@ public sealed class ChineseTranslationPanel : StackPanel,IDisposable
         }
         catch(Exception e) when(e is IOException or InvalidDataException or DecoderFallbackException){MessageBox.Show(Window.GetWindow(this),UiText.Status(e.Message),UiText.T("中文译文导入"));}
     }
-    internal void SetVisibility(bool showMain,bool showFloating){main.IsChecked=showMain;floating.IsChecked=showFloating;}
+    internal void SetVisibility(bool enabled){main.IsChecked=enabled;}
     public void Dispose(){disposed=true;coordinator.Updated-=Refresh;jobs?.Dispose();}
 }

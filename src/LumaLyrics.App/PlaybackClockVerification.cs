@@ -16,7 +16,7 @@ public partial class MainWindow
         const string raw="[00:00]We start beside the water\n[00:10]The morning opens slowly\n[00:12]We cross the quiet bridge\n[00:30]The evening brings us home";
         coordinator.Import(track,raw,"Original clock fixture",false);
         coordinator.ImportChineseTranslation("[00:00]我们从水边出发\n[00:10]清晨缓缓展开\n[00:12]我们走过安静的桥\n[00:30]暮色带我们回家");
-        coordinator.SetTranslationVisibility(true,true);overlay.ApplyStyle();overlay.Show();
+        coordinator.SetTranslationVisibility(true);overlay.ApplyStyle();overlay.Show();
         PlaybackSnapshot Capture(double position,PlayState state,DateTimeOffset? stamp=null)=>new("clock-fixture",1,1,track,state,1,position,stamp??DateTimeOffset.UtcNow,DateTimeOffset.UtcNow,Stopwatch.GetTimestamp(),PositionQuality.Estimated);
         async Task Deliver(PlaybackSnapshot snapshot,int delay=0)
         {

@@ -14,38 +14,38 @@ public partial class MainWindow
         const string chinese="[00:00]我们沿着河流走向清晨\n[00:12]城市在银色天空下醒来\n[00:24]星光会指引我们归家\n[00:48]我们携着微光渡过水面\n[01:00]歌声让远岸始终在望\n[01:12]微风轻轻翻过这一页\n[01:24]在夜色身旁留下一抹柔光";
         var track=new Track("归途的星光","浮光","原创双语测试文字",96000);
         var previousTrack=coordinator.ActiveTrack;var previousBinding=coordinator.Binding;var previousSnapshot=coordinator.Snapshot;
-        bool main=settings.ShowChineseTranslation,floating=settings.OverlayShowChineseTranslation;string theme=settings.UiTheme;
+        bool main=settings.ShowChineseTranslation;string theme=settings.UiTheme;
         var appearance=OverlayAppearance.From(settings);bool visible=overlay.IsVisible;SettingsWindow? preferences=null;
         try
         {
             coordinator.Import(track,original,"Original bilingual verification fixture",false);coordinator.ImportChineseTranslation(chinese);
             coordinator.SetTranslationVerificationSnapshot(track,48000);Tick();
             checks["translation.loadedExactOriginal"]=coordinator.Translation?.Lines.Count==7;
-            coordinator.SetTranslationVisibility(false,false);await Task.Delay(40);
+            coordinator.SetTranslationVisibility(false);await Task.Delay(40);
             checks["translation.disabledKeepsOriginalLayout"]=lyricBlocks.Count==8 && LyricLines.Children.OfType<TextBlock>().Count()==8 && translationBlocks.All(b=>b.Visibility==Visibility.Collapsed);
             checks["translation.disabledClearsFloating"]=vm.CurrentTranslation.Length==0 && vm.NextTranslation.Length==0;
             preferences=new(coordinator,id=>SelectUiTheme(id)){Owner=this};preferences.Show();preferences.SelectTranslationTab();await Task.Delay(70);
-            preferences.ChineseTranslations.SetVisibility(true,false);await Task.Delay(40);
+            preferences.ChineseTranslations.SetVisibility(true);await Task.Delay(40);
             checks["translation.settingsTabAvailable"]=Descendants<TabItem>(preferences).Any(t=>t.Header?.ToString()=="资料库与歌词");
-            checks["translation.mainToggleIndependent"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks.Count(b=>b.Visibility==Visibility.Visible)==7 && vm.CurrentTranslation.Length==0;
-            checks["translation.savedImmediately"]=store.Load().ShowChineseTranslation && !store.Load().OverlayShowChineseTranslation;
-            checks["translation.mainFooterReflectsSettings"]=MainChineseTranslationToggle.IsChecked==true && System.Windows.Automation.AutomationProperties.GetName(MainChineseTranslationToggle)=="主窗口中文译文开关";
+            checks["translation.settingsEnablesBoth"]=settings.ShowChineseTranslation && overlay.ChineseTranslationToggle.IsChecked==true && translationBlocks.Count(b=>b.Visibility==Visibility.Visible)==7 && vm.CurrentTranslation.Length>0;
+            checks["translation.savedImmediately"]=store.Load().ShowChineseTranslation;
+            checks["translation.mainFooterReflectsSettings"]=MainChineseTranslationToggle.IsChecked==true && System.Windows.Automation.AutomationProperties.GetName(MainChineseTranslationToggle)=="中文译文开关";
             var mainPeer=new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(MainChineseTranslationToggle);
             var mainToggle=(System.Windows.Automation.Provider.IToggleProvider)mainPeer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle);
             mainToggle.Toggle();await Task.Delay(40);
             checks["translation.mainFooterHidesAndPersists"]=!settings.ShowChineseTranslation && !store.Load().ShowChineseTranslation && translationBlocks.All(b=>b.Visibility==Visibility.Collapsed);
-            var mainSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="主窗口中文译文开关");
+            var mainSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="中文译文开关");
             checks["translation.mainFooterReflectsInOpenSettings"]=mainSetting.IsChecked==false;
             mainToggle.Toggle();await Task.Delay(40);
-            checks["translation.mainFooterRestoresOnlyMain"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks.Count(b=>b.IsVisible)==7 && vm.CurrentTranslation.Length==0 && store.Load().ShowChineseTranslation;
-            var keepBrowsing=DateTime.UtcNow.AddMinutes(1);manualUntil=keepBrowsing;preferences.ChineseTranslations.SetVisibility(false,false);preferences.ChineseTranslations.SetVisibility(true,false);
+            checks["translation.mainFooterRestoresBoth"]=settings.ShowChineseTranslation && overlay.ChineseTranslationToggle.IsChecked==true && translationBlocks.Count(b=>b.IsVisible)==7 && vm.CurrentTranslation.Length>0 && store.Load().ShowChineseTranslation;
+            var keepBrowsing=DateTime.UtcNow.AddMinutes(1);manualUntil=keepBrowsing;preferences.ChineseTranslations.SetVisibility(false);preferences.ChineseTranslations.SetVisibility(true);
             checks["translation.togglePreservesManualBrowsing"]=manualUntil==keepBrowsing;manualUntil=DateTime.MinValue;
             checks["translation.originalRowsAndBlankIntervalPreserved"]=lyricBlocks.Count==8 && translationBlocks[3].Visibility==Visibility.Collapsed && lyricBlocks[3].Text==" ";
             checks["translation.sourceAndReviewVisible"]=Descendants<TextBlock>(preferences.ChineseTranslations).Any(b=>b.Text.Contains("个人导入")&&b.Text.Contains("逐行对应"));
-            VisualVerification.Save(preferences,Path.Combine(directory,"settings-translations.png"));preferences.ChineseTranslations.SetVisibility(false,true);await Task.Delay(40);
-            checks["translation.floatingToggleIndependent"]=!settings.ShowChineseTranslation && translationBlocks.All(b=>b.Visibility==Visibility.Collapsed) && vm.CurrentTranslation=="我们携着微光渡过水面";
-            checks["translation.nextRemainsNextOriginal"]=vm.Next=="A song can keep the distant shore in sight" && vm.NextTranslation=="歌声让远岸始终在望";
-            preferences.ChineseTranslations.SetVisibility(true,true);preferences.Close();preferences=null;
+            VisualVerification.Save(preferences,Path.Combine(directory,"settings-translations.png"));preferences.ChineseTranslations.SetVisibility(false);await Task.Delay(40);
+            checks["translation.settingsDisablesBoth"]=!settings.ShowChineseTranslation && translationBlocks.All(b=>b.Visibility==Visibility.Collapsed) && vm.CurrentTranslation.Length==0 && overlay.ChineseTranslationToggle.IsChecked==false;
+            checks["translation.nextRemainsNextOriginal"]=vm.Next=="A song can keep the distant shore in sight" && vm.NextTranslation.Length==0;
+            preferences.ChineseTranslations.SetVisibility(true);preferences.Close();preferences=null;
             overlay.Show();(appearance with{Animations=false,TwoLines=true,Width=820}).Apply(settings);overlay.ApplyStyle();
             await Task.Delay(70);
             checks["translation.floatingBothLinesRender"]=overlay.LyricSurface.CurrentChinese.IsVisible && overlay.LyricSurface.NextChinese.IsVisible && overlay.LyricSurface.NextLine.Text==vm.Next;
@@ -84,7 +84,7 @@ public partial class MainWindow
             {
                 var cached=coordinator.Translation!;translations.Save(track,cached with{Draft=true,Source="AI verification fixture",Review="AI 译稿 · 待校对",PreparedUtc=DateTimeOffset.UtcNow},true);
             }
-            coordinator.RefreshTranslation();coordinator.SetTranslationVisibility(true,true);coordinator.SetTranslationVerificationSnapshot(track,48000);Tick();await Task.Delay(40);
+            coordinator.RefreshTranslation();coordinator.SetTranslationVisibility(true);coordinator.SetTranslationVerificationSnapshot(track,48000);Tick();await Task.Delay(40);
             checks["translation.aiMainHasNoReviewBadge"]=!vm.LyricStatus.Contains("待校对") && translationBlocks[4].IsVisible;
             checks["translation.aiFloatingHasNoReviewBadge"]=!Descendants<TextBlock>(overlay.LyricSurface).Any(b=>b.IsVisible && b.Text.Contains("待校对")) && overlay.LyricSurface.CurrentChinese.IsVisible;
             checks["translation.privateProvenanceRetained"]=coordinator.Translation is{Draft:true,Review:"AI 译稿 · 待校对"};
@@ -96,28 +96,28 @@ public partial class MainWindow
             var peer=new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(overlay.ChineseTranslationToggle);
             var toggle=(System.Windows.Automation.Provider.IToggleProvider)peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle);
             toggle.Toggle();await Task.Delay(40);
-            checks["translation.toolbarToggleOnlyChangesFloating"]=settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && translationBlocks[4].IsVisible && vm.CurrentTranslation.Length==0;
-            checks["translation.toolbarTogglePersists"]=store.Load().ShowChineseTranslation && !store.Load().OverlayShowChineseTranslation;
-            var floatingSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="悬浮歌词中文译文开关");
+            checks["translation.toolbarToggleDisablesBoth"]=!settings.ShowChineseTranslation && MainChineseTranslationToggle.IsChecked==false && !translationBlocks[4].IsVisible && vm.CurrentTranslation.Length==0;
+            checks["translation.toolbarTogglePersists"]=!store.Load().ShowChineseTranslation;
+            var floatingSetting=Descendants<CheckBox>(preferences.ChineseTranslations).Single(c=>System.Windows.Automation.AutomationProperties.GetName(c)=="中文译文开关");
             checks["translation.toolbarToggleReflectsInOpenSettings"]=floatingSetting.IsChecked==false;
-            preferences.ChineseTranslations.SetVisibility(false,true);await Task.Delay(40);
-            checks["translation.settingsReflectsInToolbar"]=overlay.ChineseTranslationToggle.IsChecked==true && vm.CurrentTranslation.Length>0 && !settings.ShowChineseTranslation;
-            checks["translation.settingsReflectsInMainFooter"]=MainChineseTranslationToggle.IsChecked==false;
+            preferences.ChineseTranslations.SetVisibility(true);await Task.Delay(40);
+            checks["translation.settingsReflectsInToolbar"]=overlay.ChineseTranslationToggle.IsChecked==true && vm.CurrentTranslation.Length>0 && settings.ShowChineseTranslation;
+            checks["translation.settingsReflectsInMainFooter"]=MainChineseTranslationToggle.IsChecked==true;
             mainToggle.Toggle();await Task.Delay(40);
-            checks["translation.mainFooterPreservesEnabledFloating"]=settings.ShowChineseTranslation && settings.OverlayShowChineseTranslation && vm.CurrentTranslation.Length>0 && translationBlocks[4].IsVisible;
+            checks["translation.mainFooterDisablesBoth"]=!settings.ShowChineseTranslation && overlay.ChineseTranslationToggle.IsChecked==false && vm.CurrentTranslation.Length==0 && !translationBlocks[4].IsVisible;
             mainToggle.Toggle();await Task.Delay(40);
             toggle.Toggle();await Task.Delay(40);
-            checks["translation.toolbarPreservesDisabledMainSwitch"]=!settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation;
+            checks["translation.toolbarDisablesMainSwitch"]=!settings.ShowChineseTranslation;
             checks["translation.toolbarPreservesThemes"]=settings.UiTheme==unchangedTheme && overlay.Toolbar.Background.ToString()==unchangedChrome;
             toggle.Toggle();await Task.Delay(40);
             VisualVerification.Save(overlay.Toolbar,Path.Combine(directory,"overlay-translation-toolbar.png"));
-            checks["translation.toolbarToggleRestoresTranslation"]=!settings.ShowChineseTranslation && vm.CurrentTranslation.Length>0;
+            checks["translation.toolbarToggleRestoresTranslation"]=settings.ShowChineseTranslation && vm.CurrentTranslation.Length>0;
             preferences.Close();preferences=null;overlay.ToolbarPopup.IsOpen=false;
         }
         finally
         {
             preferences?.Close();coordinator.SetTranslationVerificationSnapshot(null,0);
-            coordinator.SetTranslationVisibility(main,floating);SelectUiTheme(theme,false);appearance.Apply(settings);overlay.ApplyStyle();if(!visible)overlay.Hide();
+            coordinator.SetTranslationVisibility(main);SelectUiTheme(theme,false);appearance.Apply(settings);overlay.ApplyStyle();if(!visible)overlay.Hide();
             if(previousTrack is not null && previousBinding is not null)coordinator.Import(previousTrack,previousBinding.Raw,previousBinding.Source,previousBinding.Plain);
             if(previousSnapshot is not null)coordinator.SetTranslationVerificationSnapshot(previousSnapshot.Track,previousSnapshot.PositionMs??0);
         }

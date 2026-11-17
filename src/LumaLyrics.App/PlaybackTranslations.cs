@@ -25,8 +25,8 @@ public sealed partial class PlaybackCoordinator
         if(File.Exists(path)){var recorded=JsonSerializer.Deserialize<TranslationProgress>(File.ReadAllText(path));TranslationProgress=translations.Progress(recorded?.Message??"",TranslationPreparation.IsRunning(store.Root));}
         else TranslationProgress=translations.Progress(running:TranslationPreparation.IsRunning(store.Root));
     }
-    public void SetTranslationVisibility(bool main,bool floating)
-    {Settings.ShowChineseTranslation=main;Settings.OverlayShowChineseTranslation=floating;SaveSettings();RefreshTranslation();Updated?.Invoke();}
+    public void SetTranslationVisibility(bool enabled)
+    {Settings.ShowChineseTranslation=enabled;SaveSettings();RefreshTranslation();Updated?.Invoke();}
     public void SetChineseScript(string mode)
     {Settings.ChineseScript=ChineseScriptDisplay.Normalize(mode);SaveSettings();Updated?.Invoke();}
     public async Task StartTranslationPreparationAsync(bool retry=false)

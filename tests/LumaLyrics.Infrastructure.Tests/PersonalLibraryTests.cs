@@ -84,12 +84,12 @@ public sealed class PersonalLibraryTests : IDisposable
         using var source=Seed();var document=new LrcParser().Parse(Timed);
         var translation=new ChineseTranslation(TranslationAlignment.Hash(Timed),[new(0,"自写译文第一行"),new(1,"自写译文第二行"),new(2,"自写译文第三行"),new(3,"自写译文第四行")],"Own translation source","https://example.org/own","Own review status",DateTimeOffset.UtcNow);
         using(var translations=new TranslationRepository(PathOf("source")))translations.Save(Manual,translation,true);
-        var settings=new SettingsStore(PathOf("source"));var preferences=settings.Load();preferences.ShowChineseTranslation=true;preferences.OverlayShowChineseTranslation=false;settings.Save(preferences);
+        var settings=new SettingsStore(PathOf("source"));var preferences=settings.Load();preferences.ShowChineseTranslation=true;settings.Save(preferences);
         var manifest=PersonalLibraryArchive.Export(PathOf("source"),PathOf("translated"));Assert.Contains(manifest.Files,f=>f.Path=="state/translations.db");
         var readable=Assert.Single(manifest.Files,f=>f.Kind=="translation");Assert.Contains("sourceHash",File.ReadAllText(PathOf("translated/"+readable.Path)));
         PersonalLibraryArchive.CreateZip(PathOf("translated"),PathOf("translated.lumalibrary.zip"));PersonalLibraryArchive.Restore(PathOf("translated.lumalibrary.zip"),PathOf("restored-translated"));
         using var restored=new TranslationRepository(PathOf("restored-translated"),true);Assert.Equal(translation.SourceHash,restored.Find(Manual,document)!.SourceHash);Assert.True(Assert.Single(restored.ReadAll()).Manual);
-        var restoredSettings=new SettingsStore(PathOf("restored-translated")).Load();Assert.True(restoredSettings.ShowChineseTranslation);Assert.False(restoredSettings.OverlayShowChineseTranslation);
+        var restoredSettings=new SettingsStore(PathOf("restored-translated")).Load();Assert.True(restoredSettings.ShowChineseTranslation);Assert.True(restoredSettings.OverlayShowChineseTranslation);
     }
     [Fact] public void CorruptTranslationSnapshotCannotBeExportedAsAValidBackup()
     {

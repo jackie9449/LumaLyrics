@@ -13,7 +13,7 @@ public partial class MainWindow
     async Task VerifyResponsiveLayoutAsync(string directory,Dictionary<string,object?> checks)
     {
         double width=Width,height=Height;var state=WindowState;bool queue=settings.ShowPlaybackQueue;
-        string theme=settings.UiTheme;var browsing=manualUntil;bool chinese=settings.ShowChineseTranslation,floating=settings.OverlayShowChineseTranslation;
+        string theme=settings.UiTheme;var browsing=manualUntil;bool chinese=settings.ShowChineseTranslation;
         async Task Settle(){await Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(45);UpdateLayout();}
         Rect Bounds(FrameworkElement element)=>element.TransformToAncestor(Body).TransformBounds(new Rect(element.RenderSize));
         bool Inside(Rect rect)=>rect.Left>=-.5 && rect.Top>=-.5 && rect.Right<=Body.ActualWidth+.5 && rect.Bottom<=Body.ActualHeight+.5;
@@ -27,7 +27,7 @@ public partial class MainWindow
             WindowState=WindowState.Normal;ShowLyricsPage();SetPlaybackQueueVisible(true);
             string longLine=string.Join(" ",Enumerable.Repeat("We carry the morning light across the quiet city and leave a little warmth beside every open door.",4));
             coordinator.Import(new("微光之间","浮光工作室","原创布局样例",96000),"[00:00]The morning opens every window\n[00:12]We leave a little light beside the door\n[00:24]"+longLine+"\n[00:36]The quiet road leads us home\n[00:48]We sing beneath the waking sky", "原创布局验证",false);
-            coordinator.SetTranslationVisibility(true,floating);
+            coordinator.SetTranslationVisibility(true);
             coordinator.ImportChineseTranslation("[00:00]清晨轻轻推开每一扇窗\n[00:12]我们在门旁留下一点光\n[00:24]我们带着晨光穿过安静的城市，把温暖留在每一扇敞开的门边。我们继续前行，路边的灯火与远方的天空相接，让每一个清晨都有可以回去的方向。\n[00:36]安静的道路带我们回家\n[00:48]我们在初醒的天空下歌唱");
             currentIndex=2;
             foreach(var app in AppThemes.All)
@@ -82,7 +82,7 @@ public partial class MainWindow
             checks["responsive.maximizedKeepsBalancedBounds"]=Inside(Bounds(ArtworkBorder)) && Inside(Bounds(PlaybackControls)) && ArtworkBorder.ActualWidth>=160 && ContentUsesPanelWidth();
             VisualVerification.Save((FrameworkElement)Content,Path.Combine(directory,"responsive-maximized.png"),true);
         }
-        finally{WindowState=WindowState.Normal;Width=width;Height=height;manualUntil=browsing;coordinator.SetTranslationVisibility(chinese,floating);SetPlaybackQueueVisible(queue);SelectUiTheme(theme,false);WindowState=state;await Settle();}
+        finally{WindowState=WindowState.Normal;Width=width;Height=height;manualUntil=browsing;coordinator.SetTranslationVisibility(chinese);SetPlaybackQueueVisible(queue);SelectUiTheme(theme,false);WindowState=state;await Settle();}
     }
 
     async Task VerifyIntegratedAppearanceAsync(string directory,Dictionary<string,object?> checks)

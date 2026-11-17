@@ -8,10 +8,10 @@ public sealed class InterfaceLanguageSettingsTests : IDisposable
     [InlineData("zh-Hans")][InlineData("zh-Hant")][InlineData("en")][InlineData("ja")]
     public void InterfaceLanguageSurvivesRestartIndependentlyOfLyricsAndAppearance(string language)
     {
-        new SettingsStore(directory).Save(new(){UiLanguage=language,ChineseScript="traditional",ShowChineseTranslation=false,OverlayShowChineseTranslation=true,OverlayFontSize=39,UiTheme="paper",GlobalOffsetMs=175});
+        new SettingsStore(directory).Save(new(){UiLanguage=language,ChineseScript="traditional",ShowChineseTranslation=true,OverlayFontSize=39,UiTheme="paper",GlobalOffsetMs=175});
         var restored=new SettingsStore(directory).Load();
         Assert.Equal(language,restored.UiLanguage);Assert.Equal("traditional",restored.ChineseScript);
-        Assert.False(restored.ShowChineseTranslation);Assert.True(restored.OverlayShowChineseTranslation);
+        Assert.True(restored.ShowChineseTranslation);Assert.True(restored.OverlayShowChineseTranslation);
         Assert.Equal(39,restored.OverlayFontSize);Assert.Equal("paper",restored.UiTheme);Assert.Equal(175,restored.GlobalOffsetMs);
     }
     [Fact]

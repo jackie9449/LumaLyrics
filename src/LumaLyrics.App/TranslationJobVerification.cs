@@ -11,7 +11,7 @@ public partial class MainWindow
 {
     async Task VerifyTranslationJobsAsync(string directory,Dictionary<string,object?> checks)
     {
-        string? oldSource=settings.LibraryPath;settings.LibraryPath="own-ui";string theme=settings.UiTheme;bool main=settings.ShowChineseTranslation,floating=settings.OverlayShowChineseTranslation;SettingsWindow? preferences=null;
+        string? oldSource=settings.LibraryPath;settings.LibraryPath="own-ui";string theme=settings.UiTheme;bool main=settings.ShowChineseTranslation;SettingsWindow? preferences=null;
         const string original="[00:01]We sail home\n[00:03]\n[00:04]Across the quiet bay\n[00:08]The stars will guide us";
         var tracks=Enumerable.Range(0,6).Select(i=>new Track($"Own batch song {i}","Own artist","Own album",10000)).ToArray();
         using(var lyrics=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"))){lyrics.SyncLibrary(new("own-ui",6,tracks.Select((t,i)=>new LibraryTrack(i.ToString(),t)).ToArray(),"own"));foreach(var track in tracks)lyrics.Save(track,original,"Own UI",true);}
@@ -83,7 +83,7 @@ public partial class MainWindow
             until=DateTime.UtcNow.AddSeconds(10);while(DateTime.UtcNow<until&&TranslationJobExchange.ReadJobs(coordinator.DataRoot).First(j=>j.Ticket.Request.JobId==ticket.Request.JobId).Receipt.State==TranslationJobState.AwaitingResult)await Task.Delay(50);
             checks["jobs.autoReceived"]=TranslationJobExchange.ReadJobs(coordinator.DataRoot).First(j=>j.Ticket.Request.JobId==ticket.Request.JobId).Receipt.State==TranslationJobState.Applied;
             checks["jobs.originalPreserved"]=coordinator.Document?.Raw==original;
-            checks["jobs.visibilityPreserved"]=settings.ShowChineseTranslation==main&&settings.OverlayShowChineseTranslation==floating;
+            checks["jobs.visibilityPreserved"]=settings.ShowChineseTranslation==main;
             await VerifyExistingChineseFilterAsync(preferences,tracks,original,directory,checks);
             await VerifyWorkspacePreparationAsync(checks,tracks,original);
             await VerifyLargeWorkspaceAsync(preferences,checks);

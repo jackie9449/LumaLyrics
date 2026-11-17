@@ -10,7 +10,9 @@ public sealed class AppSettings
     public bool AppleMusicOriginalLyrics {get;set;}=true;
     public bool AutoPrefetchLibrary { get; set; } = true;
     public bool ShowChineseTranslation { get; set; }
-    public bool OverlayShowChineseTranslation { get; set; }
+    // Legacy code compatibility only; there is no second persisted or runtime state.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool OverlayShowChineseTranslation { get=>ShowChineseTranslation; set=>ShowChineseTranslation=value; }
     public string ChineseScript { get; set; } = "original";
     public string UiLanguage { get; set; } = "zh-Hans";
     public string? LibraryPath { get; set; }
@@ -65,7 +67,15 @@ public sealed class SettingsStore
     public SettingsStore(string? root = null) { Root = DataDirectoryConfiguration.Resolve(root); PersonalLibraryArchive.EnsureOutsideSoftware(Root); Directory.CreateDirectory(Root); DataDirectoryConfiguration.ProtectFromGit(Root); path = Path.Combine(Root, "settings.json"); }
     public AppSettings Load()
     {
-        try { return File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path)) ?? new() : new(); }
+        try
+        {
+            if(!File.Exists(path))return new();
+            string raw=File.ReadAllText(path);var settings=JsonSerializer.Deserialize<AppSettings>(raw)??new();
+            using var json=JsonDocument.Parse(raw);
+            if(json.RootElement.ValueKind==JsonValueKind.Object && !json.RootElement.TryGetProperty(nameof(AppSettings.ShowChineseTranslation),out _) && json.RootElement.TryGetProperty(nameof(AppSettings.OverlayShowChineseTranslation),out var legacy) && legacy.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                settings.ShowChineseTranslation=legacy.GetBoolean();
+            return settings;
+        }
         catch (Exception e) when (e is JsonException or IOException) { if (File.Exists(path)) File.Copy(path, path + $".corrupt-{DateTime.UtcNow:yyyyMMddHHmmss}", true); return new(); }
     }
     public void Save(AppSettings settings)

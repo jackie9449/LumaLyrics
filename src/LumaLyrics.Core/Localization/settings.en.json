@@ -266,5 +266,9 @@
   "纯净透明": "Clear",
   "只留下文字 · 融入桌面": "Just the words · Blends into your desktop",
   "纯音乐": "Instrumental",
-  "同步歌词": "Timed lyrics"
+  "同步歌词": "Timed lyrics",
+  "主窗口与悬浮歌词共用译文开关，修改后立即同步并保存。": "One translation switch controls the main window and floating lyrics. Changes sync and save immediately.",
+  "显示中文译文": "Show Chinese translations",
+  "隐藏中文译文": "Hide Chinese translations",
+  "中文译文开关": "Chinese translation switch"
 }

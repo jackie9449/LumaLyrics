@@ -196,7 +196,7 @@ public partial class MainWindow : Window
         if(sameDocument){manualUntil=browsingUntil;scrollProgrammatically=true;LyricsScroll.ScrollToVerticalOffset(previousScroll);scrollProgrammatically=false;}
         else{LyricsScroll.ScrollToTop();manualUntil=DateTime.MinValue;}
     }
-    internal void SetOverlayChineseTranslation(bool enabled)=>coordinator.SetTranslationVisibility(settings.ShowChineseTranslation,enabled);
+    internal void SetOverlayChineseTranslation(bool enabled)=>coordinator.SetTranslationVisibility(enabled);
     void Tick()
     {
         var s=coordinator.Snapshot; var p=coordinator.Position;
@@ -223,7 +223,7 @@ public partial class MainWindow : Window
         if(displayed?.Instrumental==true) {vm.Current="";vm.Next="";}
         else if(displayed?.IsSynced==true && p.HasValue) {vm.Current=index>=0?displayOriginalLines[index]:UiText.T("前奏");vm.Next=index+1<displayOriginalLines.Length?displayOriginalLines[index+1]:"";}
         else {vm.Current=s?.Track.Title ?? UiText.T("浮光歌词");vm.Next=displayed is null?UiText.T("等待歌词"):displayed.IsSynced?UiText.T("同步受限 · 请在主窗口浏览"):UiText.T("静态歌词 · 请在主窗口浏览");}
-        bool translate=settings.OverlayShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
+        bool translate=settings.ShowChineseTranslation && displayed?.Instrumental!=true && displayed?.IsSynced==true && p.HasValue;
         vm.CurrentTranslation=translate && index>=0?displayTranslationLines[index]:"";
         vm.NextTranslation=translate && index+1<displayTranslationLines.Length?displayTranslationLines[index+1]:"";
         if(EmptyState.Visibility==Visibility.Visible && displayed?.Instrumental!=true)EmptyHint.Text=DisplayLyricsStatus();

@@ -21,7 +21,7 @@
    <Grid Margin="10,6">
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
    <WrapPanel Orientation="Horizontal" VerticalAlignment="Center">
-    <ToggleButton x:Name="ChineseTranslationToggle" Content="{local:Loc Text='译'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词中文译文开关'}" ToolTip="{local:Loc Text='开启或关闭悬浮歌词的中文译文'}" FontSize="13" FontWeight="Medium" Width="32" Height="32" Padding="0" Margin="2" Checked="TranslationToggled" Unchecked="TranslationToggled">
+    <ToggleButton x:Name="ChineseTranslationToggle" Content="{local:Loc Text='译'}" AutomationProperties.Name="{local:Loc Text='悬浮歌词中文译文开关'}" ToolTip="{local:Loc Text='显示中文译文'}" FontSize="13" FontWeight="Medium" Width="32" Height="32" Padding="0" Margin="2" Checked="TranslationToggled" Unchecked="TranslationToggled">
      <ToggleButton.Style><Style TargetType="ToggleButton">
       <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="MinHeight" Value="32"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">

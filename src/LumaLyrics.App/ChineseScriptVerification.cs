@@ -22,7 +22,7 @@ public partial class MainWindow
         var track=new Track("微光与远方","浮光工作室","原创简繁显示样例",60000);
         var previousTrack=coordinator.ActiveTrack;var previousBinding=coordinator.Binding;var previousSnapshot=coordinator.Snapshot;
         string previousScript=settings.ChineseScript,theme=settings.UiTheme;
-        bool main=settings.ShowChineseTranslation,floating=settings.OverlayShowChineseTranslation,visible=overlay.IsVisible,queue=settings.ShowPlaybackQueue;
+        bool main=settings.ShowChineseTranslation,visible=overlay.IsVisible,queue=settings.ShowPlaybackQueue;
         double width=Width,height=Height,globalOffset=settings.GlobalOffsetMs;var state=WindowState;var browsing=manualUntil;
         var appearance=OverlayAppearance.From(settings);
         var choice=(ComboBox)ChineseScriptHost.Content;
@@ -37,7 +37,7 @@ public partial class MainWindow
         try
         {
             WindowState=WindowState.Normal;Width=1220;Height=820;ShowLyricsPage();SetPlaybackQueueVisible(true);
-            settings.GlobalOffsetMs=0;coordinator.SetTranslationVisibility(false,false);
+            settings.GlobalOffsetMs=0;coordinator.SetTranslationVisibility(false);
             (appearance with{Animations=false,TwoLines=true,Width=820}).Apply(settings);overlay.ApplyStyle();overlay.Show();
             Load(track,original);coordinator.SetOffset(275);await Settle();
             var document=coordinator.Document!;var binding=coordinator.Binding!;
@@ -47,7 +47,7 @@ public partial class MainWindow
             await Choose("simplified");
             checks["chineseScript.simplifiedOriginals"]=lyricBlocks[0].Text==firstSimplified && lyricBlocks[1].Text==nextSimplified;
             checks["chineseScript.simplifiedOverlayCurrentAndNext"]=vm.Current==firstSimplified && vm.Next==nextSimplified && overlay.LyricSurface.CurrentLine.Text==firstSimplified && overlay.LyricSurface.NextLine.Text==nextSimplified;
-            checks["chineseScript.scriptIndependentOfTranslationVisibility"]=!settings.ShowChineseTranslation && !settings.OverlayShowChineseTranslation && vm.CurrentTranslation.Length==0;
+            checks["chineseScript.scriptIndependentOfTranslationVisibility"]=!settings.ShowChineseTranslation && vm.CurrentTranslation.Length==0;
             checks["chineseScript.selectionSaved"]=store.Load().ChineseScript=="simplified";
             await Choose("traditional");
             checks["chineseScript.traditionalOriginalsAndOverlay"]=lyricBlocks[0].Text==firstTraditional && lyricBlocks[1].Text==nextTraditional && vm.Current==firstTraditional && vm.Next==nextTraditional;
@@ -96,17 +96,17 @@ public partial class MainWindow
             checks["chineseScript.mainReflectsSettingsOnReturn"]=choice.SelectedValue?.ToString()=="simplified" && lyricBlocks[0].Text==firstSimplified;
 
             var translatedTrack=new Track("河边的灯","浮光工作室","原创双语简繁样例",48000);
-            Load(translatedTrack,english);coordinator.ImportChineseTranslation(chinese);coordinator.SetTranslationVisibility(true,true);await Choose("simplified");
+            Load(translatedTrack,english);coordinator.ImportChineseTranslation(chinese);coordinator.SetTranslationVisibility(true);await Choose("simplified");
             var rawTranslation=coordinator.Translation!;
             checks["chineseScript.chineseTranslationSimplified"]=translationBlocks[0].Text=="风中的音乐照亮远方" && vm.CurrentTranslation=="风中的音乐照亮远方" && vm.NextTranslation==nextSimplified;
             await Choose("traditional");
             checks["chineseScript.chineseTranslationTraditional"]=translationBlocks[1].Text==nextTraditional && vm.CurrentTranslation=="風中的音樂照亮遠方" && vm.NextTranslation==nextTraditional;
             checks["chineseScript.foreignOriginalAndTranslationSourceUnchanged"]=lyricBlocks[0].Text=="We keep a small light by the water" && vm.Next=="The wind carries our song across the sky" && ReferenceEquals(rawTranslation,coordinator.Translation) && coordinator.Translation.TextAt(1)==nextSimplified && coordinator.Translation.SourceHash==TranslationAlignment.Hash(english);
-            coordinator.SetTranslationVisibility(false,true);await Choose("simplified");
-            checks["chineseScript.hiddenMainStillConvertsFloatingTranslation"]=translationBlocks.All(b=>b.Visibility==Visibility.Collapsed) && vm.CurrentTranslation=="风中的音乐照亮远方";
-            coordinator.SetTranslationVisibility(true,false);await Choose("traditional");
-            checks["chineseScript.hiddenFloatingStillConvertsMainTranslation"]=translationBlocks[1].IsVisible && translationBlocks[1].Text==nextTraditional && vm.CurrentTranslation.Length==0 && vm.NextTranslation.Length==0;
-            coordinator.SetTranslationVisibility(true,true);await Choose("original");
+            coordinator.SetTranslationVisibility(false);await Choose("simplified");
+            checks["chineseScript.sharedOffHidesBothTranslations"]=translationBlocks.All(b=>b.Visibility==Visibility.Collapsed) && vm.CurrentTranslation.Length==0;
+            coordinator.SetTranslationVisibility(true);await Choose("traditional");
+            checks["chineseScript.sharedOnConvertsBothTranslations"]=translationBlocks[1].IsVisible && translationBlocks[1].Text==nextTraditional && vm.CurrentTranslation=="風中的音樂照亮遠方" && vm.NextTranslation==nextTraditional;
+            coordinator.SetTranslationVisibility(true);await Choose("original");
             checks["chineseScript.originalRestoresTranslationExactly"]=translationBlocks[0].Text=="風中的音樂照亮遠方" && translationBlocks[1].Text==nextSimplified && vm.CurrentTranslation=="風中的音樂照亮遠方" && vm.NextTranslation==nextSimplified;
             coordinator.SetTranslationVerificationSnapshot(translatedTrack,25000);await Choose("traditional");
             checks["chineseScript.translatedBlankIntervalPreserved"]=vm.Current.Length==0 && vm.CurrentTranslation.Length==0 && translationBlocks[2].Visibility==Visibility.Collapsed;
@@ -135,7 +135,7 @@ public partial class MainWindow
         finally
         {
             choice.IsDropDownOpen=false;ShowLyricsPage();coordinator.SetTranslationVerificationSnapshot(null,0);
-            settings.GlobalOffsetMs=globalOffset;coordinator.SetChineseScript(previousScript);coordinator.SetTranslationVisibility(main,floating);
+            settings.GlobalOffsetMs=globalOffset;coordinator.SetChineseScript(previousScript);coordinator.SetTranslationVisibility(main);
             SelectUiTheme(theme,false);appearance.Apply(settings);overlay.ApplyStyle();if(!visible)overlay.Hide();
             SetPlaybackQueueVisible(queue);WindowState=WindowState.Normal;Width=width;Height=height;WindowState=state;
             if(previousTrack is not null && previousBinding is not null){coordinator.Import(previousTrack,previousBinding.Raw,previousBinding.Source,previousBinding.Plain);coordinator.SetOffset(previousBinding.OffsetMs);}
