@@ -11,13 +11,19 @@ public static class TrackMetadata
     }
 }
 public sealed record LyricsAssessment(bool Accepted, bool Synced, double Quality, string Reason, double? TextCoverage=null);
-public sealed record AutomaticLyricsChoice(LyricsCandidate Candidate, LyricsAssessment Assessment, double MatchScore);
+public sealed record AutomaticLyricsChoice(LyricsCandidate Candidate, LyricsAssessment Assessment, double MatchScore)
+{
+    internal bool UsesJapaneseReading {get;init;}
+}
 
-public sealed record AutomaticLyricsDecision(bool Accepted,double MatchScore,LyricsAssessment? Assessment,string Reason);
+public sealed record AutomaticLyricsDecision(bool Accepted,double MatchScore,LyricsAssessment? Assessment,string Reason)
+{
+    internal bool UsesJapaneseReading {get;init;}
+}
 
 public static partial class AutomaticLyricsMatcher
 {
-    public const int PolicyVersion=2;
+    public const int PolicyVersion=3;
     [GeneratedRegex(@"(?im)^\s*\[(?:verse|chorus|bridge|intro|outro|instrumental|refrain)[^\]]*\]\s*$")]private static partial Regex Sections();
     [GeneratedRegex(@"(?i)<html|<!doctype|暂无歌词|暫無歌詞|仅供试听|僅供試聽|lyrics not available|lyrics unavailable|sample lyrics|preview only")]private static partial Regex Placeholder();
     static string Canonical(string value)=>MatchRules.Normalize(Sections().Replace(value,""));
@@ -70,10 +76,10 @@ public static partial class AutomaticLyricsMatcher
         var score=MatchRules.Score(track,candidate);
         if(!score.Eligible)return new(false,score.Score,null,score.Reason);
         if(score.Score+1e-9<.80)return new(false,score.Score,null,"歌曲信息匹配度不足，需手动确认");
-        if(track.Album.Length>0 && candidate.Track.Album.Length>0 && MatchRules.Normalize(track.Album)!=MatchRules.Normalize(candidate.Track.Album)
+        if(track.Album.Length>0 && candidate.Track.Album.Length>0 && !MatchRules.AlbumMatches(track.Album,candidate.Track.Album)
             && Math.Abs((track.DurationMs??0)-(candidate.Track.DurationMs??0))>2000)return new(false,score.Score,null,"专辑不同且时长差超过 2 秒，需手动确认");
         if(candidate.Instrumental&&vocalEvidence)return new(false,score.Score,null,"纯音乐标记与同录音的人声歌词冲突，需手动确认");
-        var quality=Assess(candidate);return new(quality.Accepted,score.Score,quality,quality.Reason);
+        var quality=Assess(candidate);return new(quality.Accepted,score.Score,quality,quality.Reason){UsesJapaneseReading=score.UsesJapaneseReading};
     }
     public static string RejectionReason(Track input,IReadOnlyList<LyricsCandidate> candidates)
     {
@@ -84,9 +90,9 @@ public static partial class AutomaticLyricsMatcher
     public static AutomaticLyricsChoice? Select(Track input,IReadOnlyList<LyricsCandidate> candidates)
     {
         var track=TrackMetadata.FromAppleSession(input);bool vocals=HasVocalEvidence(track,candidates);var ranked=new List<AutomaticLyricsChoice>();
-        foreach(var candidate in candidates){var decision=DecideCore(track,candidate,vocals);if(decision.Accepted)ranked.Add(new(candidate,decision.Assessment!,decision.MatchScore));}
+        foreach(var candidate in candidates){var decision=DecideCore(track,candidate,vocals);if(decision.Accepted)ranked.Add(new(candidate,decision.Assessment!,decision.MatchScore){UsesJapaneseReading=decision.UsesJapaneseReading});}
         return ranked.OrderByDescending(x=>x.MatchScore).ThenByDescending(x=>x.Assessment.Synced)
-            .ThenByDescending(x=>x.Assessment.Quality).ThenBy(x=>Math.Abs((x.Candidate.Track.DurationMs??0)-(track.DurationMs??0)))
+            .ThenBy(x=>x.UsesJapaneseReading).ThenByDescending(x=>x.Assessment.Quality).ThenBy(x=>Math.Abs((x.Candidate.Track.DurationMs??0)-(track.DurationMs??0)))
             .ThenBy(x=>x.Candidate.Id).FirstOrDefault();
     }
 }

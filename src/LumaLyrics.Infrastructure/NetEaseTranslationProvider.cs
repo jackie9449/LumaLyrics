@@ -9,7 +9,7 @@ public sealed record TranslationCandidate(long Id,Track Track,string Original,st
     public bool Instrumental {get;init;}
     public string? InstrumentalEvidence {get;init;}
     public LyricsCandidate OriginalCandidate=>new(Id,Track,Instrumental?null:Original,null,Instrumental,JsonSerializer.Serialize(new NetEaseOriginal("NetEase",Id,Track,Original,SourceUrl,Instrumental,InstrumentalEvidence))){ProviderName="NetEase"};
-    public LyricsCandidate OriginalCandidateFor(Track local)=>OriginalCandidate with{Track=Track with{Artist=local.Artist}};
+    public LyricsCandidate OriginalCandidateFor(Track local)=>NetEaseTranslationProvider.ApplyCreditCompatibility(local,OriginalCandidate);
 }
 public sealed record NetEaseOriginal(string Provider,long Id,Track Track,string Original,string SourceUrl,bool Instrumental=false,string? InstrumentalEvidence=null);
 public interface ITranslationProvider
@@ -53,26 +53,22 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         var score=MatchRules.Score(local,new(0,candidate,null,null,false));
         return local.DurationMs is >0 && candidate.DurationMs is >0 && (score.Eligible && score.Score>=.89 || NetEaseRecording.AdditionalCreditsMatch(local,candidate));
     }
+    // Existing extra-credit compatibility applies only when independently corroborated.
+    internal static LyricsCandidate ApplyCreditCompatibility(Track local,LyricsCandidate candidate)
+        =>!MatchRules.Score(local,candidate).Eligible && NetEaseRecording.AdditionalCreditsMatch(local,candidate.Track)
+            ?candidate with{Track=candidate.Track with{Artist=local.Artist}}:candidate;
     public async Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track input,CancellationToken token)
     {
         var track=TrackMetadata.FromAppleSession(input);if(track.DurationMs is null || string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))return [];
         try
         {
-            var search=await GetAsync("api/search/get?s="+Uri.EscapeDataString(track.Title+" "+track.Artist)+"&type=1&limit=30",token);
-            using var json=JsonDocument.Parse(search);CheckCode(json.RootElement);
-            if(!json.RootElement.TryGetProperty("result",out var result)||result.ValueKind!=JsonValueKind.Object||!result.TryGetProperty("songs",out var songs)||songs.ValueKind!=JsonValueKind.Array)return [];
-            var candidates=new List<(long Id,Track Track)>();
-            foreach(var song in songs.EnumerateArray())
-            {
-                if(song.ValueKind!=JsonValueKind.Object)continue;
-                string title=Text(song,"name");var artists=song.TryGetProperty("artists",out var ar)&&ar.ValueKind==JsonValueKind.Array?string.Join(" & ",ar.EnumerateArray().Select(a=>Text(a,"name"))):"";
-                string album=song.TryGetProperty("album",out var al)?Text(al,"name"):"";
-                double? duration=song.TryGetProperty("duration",out var d)&&d.ValueKind==JsonValueKind.Number&&d.TryGetDouble(out var ms)?ms:null;
-                if(song.TryGetProperty("id",out var id)&&id.ValueKind==JsonValueKind.Number&&id.TryGetInt64(out var n)&&n>0)
-                {var candidate=new Track(title,artists,album,duration);if(RecordingMatches(track,candidate))candidates.Add((n,candidate));}
-            }
+            var candidates=await SearchMatchingRecordingsAsync(track,track.Title+" "+track.Artist,token);
+            if(candidates.Count==0 && ManualLyricsSearch.KanaQuery(track) is {} kana)
+                candidates=await SearchMatchingRecordingsAsync(track,kana.Text,token);
             var found=new List<TranslationCandidate>();
-            foreach(var item in candidates.OrderByDescending(c=>MatchRules.Normalize(c.Track.Album)==MatchRules.Normalize(track.Album)).ThenBy(c=>Math.Abs(c.Track.DurationMs!.Value-track.DurationMs.Value)).DistinctBy(c=>c.Id).Take(3))
+            foreach(var item in candidates.OrderByDescending(c=>MatchRules.AlbumMatches(c.Track.Album,track.Album))
+                .ThenBy(c=>MatchRules.Score(track,new(0,c.Track,null,null,false)).UsesJapaneseReading)
+                .ThenBy(c=>Math.Abs(c.Track.DurationMs!.Value-track.DurationMs.Value)).DistinctBy(c=>c.Id).Take(3))
             {
                 var raw=await GetAsync($"api/song/lyric?id={item.Id}&lv=-1&kv=-1&tv=-1",token);using var lyrics=JsonDocument.Parse(raw);CheckCode(lyrics.RootElement);
                 string original=Nested(lyrics.RootElement,"lrc"),translation=Nested(lyrics.RootElement,"tlyric");
@@ -83,6 +79,24 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
             return found;
         }
         catch(JsonException){throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");}
+    }
+    async Task<List<(long Id,Track Track)>> SearchMatchingRecordingsAsync(Track track,string query,CancellationToken token)
+    {
+        var search=await GetAsync("api/search/get?s="+Uri.EscapeDataString(query)+"&type=1&limit=30",token);
+        using var json=JsonDocument.Parse(search);CheckCode(json.RootElement);
+        if(!json.RootElement.TryGetProperty("result",out var result)||result.ValueKind!=JsonValueKind.Object||!result.TryGetProperty("songs",out var songs)||songs.ValueKind!=JsonValueKind.Array)return [];
+        var candidates=new List<(long Id,Track Track)>();
+        foreach(var song in songs.EnumerateArray().Take(30))
+        {
+            if(song.ValueKind!=JsonValueKind.Object || !song.TryGetProperty("id",out var id) || id.ValueKind!=JsonValueKind.Number || !id.TryGetInt64(out var number) || number<=0)continue;
+            string title=Text(song,"name");
+            string artist=song.TryGetProperty("artists",out var ar)&&ar.ValueKind==JsonValueKind.Array?string.Join(" & ",ar.EnumerateArray().Select(a=>Text(a,"name"))):"";
+            string album=song.TryGetProperty("album",out var al)?Text(al,"name"):"";
+            double? duration=song.TryGetProperty("duration",out var d)&&d.ValueKind==JsonValueKind.Number&&d.TryGetDouble(out var ms)?ms:null;
+            var candidate=new Track(title,artist,album,duration);
+            if(RecordingMatches(track,candidate))candidates.Add((number,candidate));
+        }
+        return candidates;
     }
     static string Text(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object && e.TryGetProperty(name,out var v)&&v.ValueKind==JsonValueKind.String?v.GetString()??"":"";
     static string Nested(JsonElement e,string name)=>e.TryGetProperty(name,out var child)?Text(child,"lyric"):"";

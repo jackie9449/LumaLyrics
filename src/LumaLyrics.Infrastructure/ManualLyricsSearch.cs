@@ -29,12 +29,22 @@ public static partial class ManualLyricsSearch
         return cleaned.Length>0?Text(cleaned):original;
     }
     public static string CleanArtist(string artist)=>ArtistLabel().Replace(ArtistSeparator().Split(Brackets().Replace(Text(artist)," "))[0],"").Trim();
-    public static IReadOnlyList<ManualLyricsQuery> Queries(Track input)
+    public static IReadOnlyList<ManualLyricsQuery> Queries(Track input,bool includeKana=true)
     {
         var track=TrackMetadata.FromAppleSession(input);var title=Text(track.Title);var artist=Text(track.Artist);
         if(title.Length==0)return [];
-        return new[]{new ManualLyricsQuery(title,artist),new(CleanTitle(title),CleanArtist(artist),true),new(CleanTitle(title),"")}
-            .Distinct().ToArray();
+        var queries=new List<ManualLyricsQuery>{new(title,artist),new(CleanTitle(title),CleanArtist(artist),true),new(CleanTitle(title),"")};
+        if(includeKana && KanaQuery(track) is {} kana)queries.Add(kana);
+        return queries.Distinct().ToArray();
+    }
+    internal static ManualLyricsQuery? KanaQuery(Track track)
+    {
+        string title=CleanTitle(track.Title),artist=CleanArtist(track.Artist);
+        string? kanaTitle=JapaneseKana.SearchKatakana(title),kanaArtist=JapaneseKana.SearchKatakana(artist);
+        bool plausible=kanaTitle is not null && kanaArtist is not null
+            || new[]{title,artist,track.Album}.Any(value=>JapaneseKana.HasKana(value) || JapaneseKana.HasMarkedVowel(value));
+        if(!plausible || kanaTitle is null && kanaArtist is null || title.Length==0)return null;
+        return new(kanaTitle??title,kanaArtist??artist,Keywords:true);
     }
     static int TitleRank(Track query,Track candidate)
     {
@@ -43,13 +53,14 @@ public static partial class ManualLyricsSearch
         if(title.Length==0 || other.Length==0)return 0;
         if(title==other)return 4;
         if(clean==otherClean)return 4;
+        if(JapaneseKana.SameReading(query.Title,candidate.Title) || JapaneseKana.SameReading(CleanTitle(query.Title),CleanTitle(candidate.Title)))return 3;
         if(clean.Length>1 && otherClean.Contains(clean,StringComparison.Ordinal))return 2;
         return otherClean.Length>1 && clean.Contains(otherClean,StringComparison.Ordinal)?1:0;
     }
     static int ArtistRank(Track query,Track candidate)
     {
         var artist=MatchRules.Normalize(CleanArtist(query.Artist));var other=MatchRules.Normalize(CleanArtist(candidate.Artist));
-        return artist.Length==0?0:artist==other?2:other.Contains(artist,StringComparison.Ordinal)
+        return artist.Length==0?0:artist==other || JapaneseKana.SameReading(artist,other)?2:other.Contains(artist,StringComparison.Ordinal)
             || MatchRules.Normalize(candidate.Title+" "+candidate.Album).Contains(artist,StringComparison.Ordinal)?1:0;
     }
     public static IEnumerable<LyricsCandidate> Rank(Track query,IEnumerable<LyricsCandidate> candidates)=>candidates

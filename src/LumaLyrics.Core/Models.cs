@@ -33,7 +33,10 @@ public sealed record LyricsCandidate(long Id, Track Track, string? SyncedLyrics,
     public string Content => !string.IsNullOrWhiteSpace(SyncedLyrics)?SyncedLyrics:PlainLyrics??"";
     public override string ToString() => $"{Track.Title} · {Track.Artist}\n{Track.Album} · {Track.DurationMs / 1000:0}s · {(Instrumental ? "纯音乐" : SyncedLyrics is not null ? "同步歌词" : "静态歌词")} · {SourceLabel}";
 }
-public sealed record ScoredCandidate(LyricsCandidate Candidate, double Score, bool Eligible, string Reason);
+public sealed record ScoredCandidate(LyricsCandidate Candidate, double Score, bool Eligible, string Reason)
+{
+    public bool UsesJapaneseReading {get;init;}
+}
 public interface IPlaybackSource : IAsyncDisposable
 {
     event Action<PlaybackSnapshot?>? Changed;

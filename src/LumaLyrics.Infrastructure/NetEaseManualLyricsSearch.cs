@@ -11,8 +11,9 @@ public sealed partial class NetEaseTranslationProvider
     {
         token.ThrowIfCancellationRequested();var catalog=new List<LyricsCandidate>();var found=new List<LyricsCandidate>();var unavailable=new List<string>();
         if(automatic && !AutomaticLyricsSearch.CanExpand(query))return [];
-        var queries=automatic?AutomaticLyricsSearch.Queries(query):ManualLyricsSearch.Queries(query);
-        var originalQuery=ManualLyricsSearch.Queries(query).FirstOrDefault()?.Text;
+        // Ordinary NetEase lookup already tried the kana keyword variant if needed.
+        var queries=automatic?AutomaticLyricsSearch.Queries(query,includeKana:false):ManualLyricsSearch.Queries(query);
+        var originalQuery=ManualLyricsSearch.Queries(query,includeKana:false).FirstOrDefault()?.Text;
         var knownIds=known.Where(c=>c.ProviderName=="NetEase").Select(c=>c.Id).ToHashSet();
         using var budget=CancellationTokenSource.CreateLinkedTokenSource(token);budget.CancelAfter(TimeSpan.FromSeconds(20));
         try
@@ -56,10 +57,8 @@ public sealed partial class NetEaseTranslationProvider
                     var document=new LrcParser().Parse(original);bool synced=document.IsSynced;
                     var provenance=JsonSerializer.Serialize(new NetEaseOriginal("NetEase",item.Id,item.Track,instrumental?"":original,
                         $"https://music.163.com/#/song?id={item.Id}",instrumental,instrumental?original:null));
-                    // Match existing automatic credit handling only after RecordingMatches;
-                    // the source's original credits remain in the provenance above.
-                    var candidateTrack=automatic?item.Track with{Artist=TrackMetadata.FromAppleSession(query).Artist}:item.Track;
-                    found.Add(new(item.Id,candidateTrack,!instrumental && synced?original:null,!instrumental && !synced?original:null,instrumental,provenance){ProviderName="NetEase"});
+                    var candidate=new LyricsCandidate(item.Id,item.Track,!instrumental && synced?original:null,!instrumental && !synced?original:null,instrumental,provenance){ProviderName="NetEase"};
+                    found.Add(automatic?ApplyCreditCompatibility(TrackMetadata.FromAppleSession(query),candidate):candidate);
                 }
                 catch(LyricsProviderException ex)
                 {

@@ -12,11 +12,12 @@ public partial class MainWindow
         var oldSource=settings.LibraryPath;bool online=settings.OnlineLookup;string theme=settings.UiTheme;
         SettingsWindow? preferences=null;
         var tracks=Enumerable.Range(0,4).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
+        tracks[1]=new("Kaze no Oto","Sora Hikari","Kotoba no Umi - Single",479000);
         string[] lines=["We follow the river beyond the morning","We carry the light across the valley","The path remembers every quiet footstep","The distant hills are waiting for the sunrise","We leave the harbor with a song of our own","We reach the shore and rest beneath the stars"];
         string raw=string.Join("\n",lines.Select((line,i)=>$"[{i*40/60:00}:{i*40%60:00}]{line}")),plain=string.Join("\n",lines);
         string provenance=JsonSerializer.Serialize(new{id=991001,trackName=tracks[0].Title,artistName=tracks[0].Artist,albumName=tracks[0].Album,duration=479,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
         var good=new LyricsCandidate(991001,tracks[0],raw,plain,false,provenance);
-        var bad=good with{Id=991002,Track=tracks[1],PlainLyrics=null};
+        var bad=good with{Id=991002,Track=new("カゼノオト","ソラヒカリ","コトバノウミ",479000),PlainLyrics=null};
         try
         {
             settings.LibraryPath="own-ui";settings.OnlineLookup=true;
@@ -76,6 +77,9 @@ public partial class MainWindow
                     Descendants<ListBox>(dialog).Single().SelectedIndex=0;await Task.Delay(120);
                     string text=Descendants<TextBox>(dialog).Single(t=>t.IsReadOnly).Text;
                     checks["acquisition.dialog.metadataScore"]=text.StartsWith(UiText.F($"歌曲信息匹配度 {1d:P0} · {UiText.Status(MatchRules.Score(tracks[1],bad).Reason)}\n"));
+                    string readingReason=MatchRules.Score(tracks[1],bad).Reason;
+                    checks["acquisition.dialog.japaneseReadingReasonLocalized"]=readingReason.StartsWith("日文读法相符",StringComparison.Ordinal)
+                        && (UiText.Language=="zh-Hans" || UiText.Status(readingReason)!=readingReason);
                     checks["acquisition.dialog.independentRejection"]=text.Contains(UiText.F($"自动未采用：{UiText.Status(AutomaticLyricsMatcher.Decide(tracks[1],bad).Reason)}\n\n"));
                     checks["acquisition.dialog.manualStillAvailable"]=Descendants<Button>(dialog).Single(b=>b.Content?.ToString()==UiText.T("使用所选歌词")).IsEnabled;
                     foreach(var appTheme in AppThemes.All)

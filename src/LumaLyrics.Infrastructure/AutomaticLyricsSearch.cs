@@ -17,5 +17,6 @@ public static class AutomaticLyricsSearch
     }
     // The ordinary lookup already searched the original fields. Supplementary
     // query cleanup improves discovery only; acceptance still uses the real track.
-    public static IReadOnlyList<ManualLyricsQuery> Queries(Track track)=>CanExpand(track)?ManualLyricsSearch.Queries(track).Skip(1).Take(2).ToArray():[];
+    public static IReadOnlyList<ManualLyricsQuery> Queries(Track track,bool includeKana=true)
+        =>CanExpand(track)?ManualLyricsSearch.Queries(track,includeKana).Skip(1).ToArray():[];
 }

@@ -15,9 +15,10 @@ public partial class MainWindow
 {
     async Task VerifyBatchLyricsAsync(string directory,Dictionary<string,object?> checks)
     {
-        const string original="[00:01]We sail home\n[00:04]Across the quiet bay\n[00:08]The stars will guide us";
+        const string original="[00:01]ふるさとへ船をこぐ\n[00:04]静かな湾を渡って\n[00:08]星が道を照らす";
         const string translated="[00:01]我们驶向家乡\n[00:04]穿过宁静海湾\n[00:08]星光为我们引路";
-        var hard=new Track("Own Batch A","Own Author","Own Album",10000);
+        var hard=new Track("Kaze no Oto","Sora Hikari","Kotoba no Umi - Single",10000);
+        var kana=new Track("カゼノオト","ソラヒカリ","コトバノウミ",9800);
         var fast=hard with{Title="Own Batch B"};
         var missing=hard with{Title="Own Batch C"};
         var calls=new ConcurrentQueue<string>();
@@ -46,8 +47,8 @@ public partial class MainWindow
                 calls.Enqueue(url);
                 if(url.Contains("/song/lyric?",StringComparison.Ordinal))
                     return Task.FromResult(BatchJson(new{code=200,lrc=new{lyric=original},tlyric=new{lyric=translated}}));
-                object[] matches=url.Contains(hard.Title,StringComparison.Ordinal)
-                    ?[new{id=9,name=hard.Title,artists=new[]{new{name=hard.Artist}},album=new{name=hard.Album},duration=10000}]:[];
+                object[] matches=url.Contains(kana.Title+" "+kana.Artist,StringComparison.Ordinal)
+                    ?[new{id=9,name=kana.Title,artists=new[]{new{name=kana.Artist}},album=new{name=kana.Album},duration=kana.DurationMs}]:[];
                 return Task.FromResult(BatchJson(new{code=200,result=new{songs=matches}}));
             }),minimumInterval:TimeSpan.Zero));
         try
@@ -87,7 +88,8 @@ public partial class MainWindow
                 checks["batchLyrics.reusedTranslationBoundToOriginal"]=translation?.SourceHash==TranslationAlignment.Hash(original) && translation?.Lines.Count==3;
             }
             checks["batchLyrics.oneExactRequestPerRecording"]=calls.Count(IsExactRequest)==3;
-            checks["batchLyrics.oneNetEaseSearchAndLyricForFallback"]=calls.Count(url=>url.Contains("/api/search/get?",StringComparison.Ordinal) && url.Contains(hard.Title,StringComparison.Ordinal))==1
+            checks["batchLyrics.originalAndKanaQueryOnceEach"]=calls.Count(url=>url.Contains("/api/search/get?",StringComparison.Ordinal) && url.Contains(hard.Title,StringComparison.Ordinal))==1
+                && calls.Count(url=>url.Contains("/api/search/get?",StringComparison.Ordinal) && url.Contains(kana.Title+" "+kana.Artist,StringComparison.Ordinal))==1
                 && calls.Count(url=>url.Contains("/song/lyric?",StringComparison.Ordinal))==1;
             checks["batchLyrics.pendingClearedOnCompletion"]=coordinator.WorkspacePendingLookup.Count==0;
             checks["batchLyrics.totalFixtureRequests"]=calls.Count;
