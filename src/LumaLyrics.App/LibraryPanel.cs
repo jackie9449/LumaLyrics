@@ -35,7 +35,7 @@ public sealed class LibraryPanel:UserControl,IDisposable
     void Refresh()
     {
         if(disposed)return;var lyrics=coordinator.LibraryStatus;var artwork=coordinator.ArtworkStatus;status.Text=UiText.Status(lyrics.ToString())+"\n\n"+UiText.Status(artwork.ToString());
-        string next=$"{lyrics.Cached}:{lyrics.Total}:{artwork.Cached}:{coordinator.TranslationJobMessage}:{coordinator.WorkspaceMessage}:{coordinator.OfflineMessage}:{coordinator.Settings.LibraryPath}";if(subscribed&&stamp!=next){bool refresh=stamp is null;stamp=next;_=ReadCoverage(refresh);}
+        string next=$"{lyrics.Cached}:{lyrics.Total}:{artwork.Cached}:{coordinator.TranslationJobMessage}:{coordinator.WorkspaceResultsRevision}:{coordinator.OfflineMessage}:{coordinator.Settings.LibraryPath}";if(subscribed&&stamp!=next){bool refresh=stamp is null;stamp=next;_=ReadCoverage(refresh);}
         progress.Maximum=Math.Max(1,lyrics.Total+artwork.Total);progress.Value=lyrics.Cached+lyrics.Unavailable+lyrics.Errors+lyrics.Manual+artwork.Cached+artwork.Unavailable+artwork.Errors;
     }
     async Task ReadCoverage(bool refresh=false)

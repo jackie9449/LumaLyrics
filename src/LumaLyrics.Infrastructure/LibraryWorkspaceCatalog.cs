@@ -6,14 +6,16 @@ public sealed class LibraryWorkspaceCatalog(string root)
     readonly SemaphoreSlim readGate=new(1,1);
     Dictionary<LibrarySongKey,(AssessmentKey Key,LibraryManagedSong Song)> assessments=new(LibrarySongKey.Comparer);
     sealed record AssessmentKey(Track Track,LyricsBinding? Binding,string? Revision,bool Older,LibraryCoverState Cover,string? Reason);
-    public async Task<LibraryWorkspaceSnapshot> ReadAsync(string? source,long generation,CancellationToken token)
+    public async Task<LibraryWorkspaceSnapshot> ReadAsync(string? source,long generation,CancellationToken token,bool confirmedOnly=false)
     {
         await readGate.WaitAsync(token).ConfigureAwait(false);
-        try{return await Task.Run(()=>Read(source,generation,token),token).ConfigureAwait(false);}finally{readGate.Release();}
+        try{return await Task.Run(()=>Read(source,generation,token,confirmedOnly),token).ConfigureAwait(false);}finally{readGate.Release();}
     }
-    LibraryWorkspaceSnapshot Read(string? source,long generation,CancellationToken token)
+    LibraryWorkspaceSnapshot Read(string? source,long generation,CancellationToken token,bool confirmedOnly)
     {
-        var catalog=new MusicLibraryCatalog(root,source).Load(token);
+        var library=new MusicLibraryCatalog(root,source);
+        var cached=confirmedOnly?library.LoadConfirmedSongs(token):[];
+        var catalog=cached.Count>0?new MusicLibraryResult(cached,""):library.Load(token);
         if(catalog.Unavailable)throw new IOException(catalog.Message);
         var sources=catalog.Songs.Select(s=>s.Source).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if(sources.Length>1)throw new InvalidDataException("存在多个资料库来源，请明确选择本机资料库。");

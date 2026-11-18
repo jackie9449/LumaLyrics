@@ -36,7 +36,9 @@ public partial class MainWindow
         checks["workspace.existingChinese.completeManualAndPartial"]=VisibleIds().SequenceEqual(new[]{"0","1","2"})&&panel.SongList.Items.Cast<LibraryManagedSong>().Any(r=>r.Status.AiDraft)&&panel.SongList.Items.Cast<LibraryManagedSong>().Any(r=>r.Status.ManualChinese)&&panel.SongList.Items.Cast<LibraryManagedSong>().Any(r=>r.Status.Chinese==LibraryChineseState.Partial);
         checks["workspace.existingChinese.onlyCurrentTranslations"]=panel.SongList.Items.Cast<LibraryManagedSong>().All(r=>r.Status.Chinese is LibraryChineseState.Complete or LibraryChineseState.Partial);
         Click("全选当前筛选");checks["workspace.existingChinese.selectAll"]=panel.SelectedSongs.Count==3;
-        var search=Descendants<TextBox>(panel).Single();search.Text="song 1";await Task.Delay(250);
+        var search=Descendants<TextBox>(panel).Single();search.Text="song 1";
+        var searchDeadline=Environment.TickCount64+2000;
+        while(!VisibleIds().SequenceEqual(new[]{"1"}) && Environment.TickCount64<searchDeadline)await Task.Delay(25);
         checks["workspace.existingChinese.searchAndRetainedSelection"]=VisibleIds().SequenceEqual(new[]{"1"})&&panel.SelectedSongs.Count==3;
         search.Text="";await Task.Delay(250);
         foreach(var (label,id) in new[]{("缺中文译文","4"),("部分译文","2"),("原词已更新","3")}){Choose(label);checks["workspace.existingChinese.legacyFilter."+label]=VisibleIds().SequenceEqual(new[]{id});}

@@ -54,7 +54,7 @@ public sealed class LibraryTasksPanel:UserControl,IDisposable
         try{string text=await Task.Run(()=>LocalAgentTranslationPrompt.Create(coordinator.DataRoot,id,stop.Token),stop.Token);if(disposed||!IsLoaded||(batches.SelectedItem as LibraryTaskBatch)?.Id!=id)return;CopyText(text);status.Text=UiText.T("提示词已复制。粘贴给本地 agent，即可按任务说明开始或继续制作。");}
         catch(OperationCanceledException){}catch(Exception e){if(!disposed)status.Text=UiText.T("未能复制：")+UiText.Status(e.Message);}finally{copying=false;if(!disposed)copyPrompt.IsEnabled=batches.SelectedItem is LibraryTaskBatch{EntryPath:not null,Jobs.Count:>0};}
     }
-    void Updated(){string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceMessage;if(stamp==revision)return;revision=stamp;reloadDelay.Stop();reloadDelay.Start();}
+    void Updated(){string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceResultsRevision;if(stamp==revision)return;revision=stamp;reloadDelay.Stop();reloadDelay.Start();}
     internal async Task Reload()
     {
         if(disposed)return;if(readActive){rerun=true;return;}readActive=true;rerun=false;reading?.Cancel();reading?.Dispose();reading=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);var token=reading.Token;long request=++readVersion;string? source=coordinator.Settings.LibraryPath;

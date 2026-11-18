@@ -73,23 +73,35 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
     // An artist search is a ranked page, never proof that another recording is absent.
     // Batch and foreground lookup therefore use the same exact recording signature.
     public Task<IReadOnlyList<LyricsCandidate>> LookupLibraryAsync(Track input,CancellationToken token)=>LookupAsync(input,token);
-    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track, CancellationToken token)
+    static string Escape(string value)=>Uri.EscapeDataString(value);
+    internal async Task<LyricsLookupResult> LookupExactAsync(Track track,CancellationToken token)
     {
         track=TrackMetadata.FromAppleSession(track);
-        static string E(string s) => Uri.EscapeDataString(s);
+        if(searchOnly || !track.DurationMs.HasValue)return new([]);
         try
         {
-            var all = new List<LyricsCandidate>();var unavailable=new List<string>();
-            if (!searchOnly && track.DurationMs.HasValue)
-            {
-                string? raw=null;
-                try{raw = await GetAsync($"get?track_name={E(track.Title)}&artist_name={E(track.Artist)}&album_name={E(track.Album)}&duration={(track.DurationMs.Value / 1000).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}", token);}
-                catch(LyricsProviderException e) when(e.StatusCode>=500){unavailable.Add($"LRCLIB 精确匹配（{e.StatusCode}）");} // Search can remain available when exact lookup fails.
-                if (raw is not null) { using var doc = JsonDocument.Parse(raw); all.Add(Parse(doc.RootElement)); }
-                if (AutomaticLyricsMatcher.Select(track, all) is {Candidate.Instrumental:false}) return all;
-            }
+            var raw=await GetAsync($"get?track_name={Escape(track.Title)}&artist_name={Escape(track.Artist)}&album_name={Escape(track.Album)}&duration={(track.DurationMs.Value/1000).ToString("0.###",System.Globalization.CultureInfo.InvariantCulture)}",token);
+            if(raw is null)return new([]);
+            using var doc=JsonDocument.Parse(raw);
+            return new([Parse(doc.RootElement)]);
+        }
+        catch(LyricsProviderException e) when(e.StatusCode>=500){return new([],[$"LRCLIB 精确匹配（{e.StatusCode}）"]);}
+        catch(JsonException){throw new LyricsProviderException("歌词服务返回了无法解析的内容。");}
+        catch(InvalidOperationException){throw new LyricsProviderException("歌词服务返回的数据格式无效。");}
+    }
+    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)
+        =>await CompleteLookupAsync(track,await LookupExactAsync(track,token),token);
+
+    internal async Task<IReadOnlyList<LyricsCandidate>> CompleteLookupAsync(Track track,LyricsLookupResult exact,CancellationToken token)
+    {
+        track=TrackMetadata.FromAppleSession(track);
+        token.ThrowIfCancellationRequested();
+        if(AutomaticLyricsMatcher.Select(track,exact) is {Candidate.Instrumental:false})return exact;
+        var all=exact.ToList();var unavailable=exact.UnavailableSources;
+        try
+        {
             string? search;
-            try{search=await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist)}", token);}
+            try{search=await GetAsync($"search?track_name={Escape(track.Title)}&artist_name={Escape(track.Artist)}", token);}
             catch(LyricsProviderException ex) when(ex.StatusCode>=500 && all.Count>0){return new LyricsLookupResult(all,unavailable.Append($"LRCLIB 搜索（{ex.StatusCode}）"));}
             if (search is not null) { using var doc = JsonDocument.Parse(search); foreach (var e in doc.RootElement.EnumerateArray()) all.Add(Parse(e)); }
             // Observed Apple Music 1.1538: Artist="artist — album", AlbumTitle="".
@@ -98,7 +110,7 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
             int separator=track.Artist.IndexOf(" — ",StringComparison.Ordinal);
             if(all.Count==0 && track.Album.Length==0 && separator>0)
             {
-                var supplement=await GetAsync($"search?track_name={E(track.Title)}&artist_name={E(track.Artist[..separator])}",token);
+                var supplement=await GetAsync($"search?track_name={Escape(track.Title)}&artist_name={Escape(track.Artist[..separator])}",token);
                 if(supplement is not null){using var doc=JsonDocument.Parse(supplement);foreach(var e in doc.RootElement.EnumerateArray())all.Add(Parse(e));}
             }
             var filtered=all.Where(x => x.Instrumental || !string.IsNullOrWhiteSpace(x.Content)).DistinctBy(x => x.Id).Take(100).ToArray();

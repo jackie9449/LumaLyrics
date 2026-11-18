@@ -155,8 +155,10 @@ public sealed class AutomaticLyricsSearchTests
     {protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken token)=>Task.FromResult(send(request));}
     static HttpResponseMessage Json(object data)=>new(HttpStatusCode.OK){Content=new StringContent(JsonSerializer.Serialize(data))};
 
-    [Fact]
-    public async Task PrimarySupplementarySearchIsBoundedAndPreservesSourceProvenance()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrimarySupplementarySearchIsBoundedAndPreservesSourceProvenance(bool twoPasses)
     {
         var paths=new List<string>();
         using var primary=new LrclibProvider(new Handler(request=>
@@ -167,7 +169,15 @@ public sealed class AutomaticLyricsSearchTests
             return Json(new[]{new{id=5,trackName=track.Title,artistName=track.Artist,albumName=track.Album,duration=120,syncedLyrics=original}});
         }),minimumInterval:TimeSpan.Zero);
         using var provider=new ResilientLyricsProvider(primary,new Secondary());
-        var found=await provider.LookupAsync(track,default);
+        IReadOnlyList<LyricsCandidate> found;
+        if(twoPasses)
+        {
+            var exact=await provider.LookupExactAsync(track,default);
+            Assert.Empty(exact!);
+            Assert.Single(paths);
+            found=await provider.CompleteLookupAsync(track,exact,default);
+        }
+        else found=await provider.LookupAsync(track,default);
         Assert.Equal(4,paths.Count);Assert.Contains(paths,p=>p.Contains("search?q="));
         Assert.DoesNotContain(paths.Skip(2),p=>p.Contains("artist_name="));
         var selected=AutomaticLyricsMatcher.Select(track,found)!;Assert.NotNull(selected);

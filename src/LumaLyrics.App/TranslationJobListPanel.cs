@@ -19,6 +19,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     readonly System.Windows.Threading.DispatcherTimer searchDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
     readonly CancellationTokenSource stop=new();CancellationTokenSource? reading;long version;bool loading,disposed;
     LibraryManagedSong[] rows=[];string? entry,lastRevision;bool lastBusy;
+    long lastResultsRevision;
     internal ListBox SongList=>songs;
     internal IReadOnlyList<LibraryManagedSong> SelectedSongs=>rows.Where(r=>selection.Contains(Key(r))).ToArray();
     internal CheckBox PreferExisting=>prefer;
@@ -62,13 +63,26 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Updated;_=Reload(true);};Unloaded+=(_,_)=>{coordinator.Updated-=Updated;searchDelay.Stop();if(!disposed)reading?.Cancel();};
     }
     static void Open(string? path){if(path is not null&&File.Exists(path))Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
-    void Updated(){SetStatus(coordinator.WorkspaceMessage);string stamp=coordinator.TranslationJobMessage+coordinator.WorkspaceMessage+coordinator.OfflineMessage+coordinator.LibraryStatus+coordinator.ArtworkStatus+coordinator.Settings.LibraryPath;if(lastBusy!=coordinator.WorkspaceBusy||lastRevision!=stamp){lastBusy=coordinator.WorkspaceBusy;lastRevision=stamp;if(!lastBusy)_=Reload();}}
+    void Updated()
+    {
+        SetStatus(coordinator.WorkspaceMessage);
+        bool busy=coordinator.WorkspaceBusy;
+        string stamp=coordinator.TranslationJobMessage+coordinator.OfflineMessage+coordinator.LibraryStatus+coordinator.ArtworkStatus+coordinator.Settings.LibraryPath;
+        bool refreshed=lastResultsRevision!=coordinator.WorkspaceResultsRevision;
+        if(refreshed || !busy && (lastBusy || lastRevision!=stamp))_=Reload(refreshed);
+        lastResultsRevision=coordinator.WorkspaceResultsRevision;
+        lastBusy=busy;
+        lastRevision=stamp;
+    }
     internal async Task Reload(bool refresh=false)
     {
         if(disposed)return;reading?.Cancel();reading?.Dispose();reading=CancellationTokenSource.CreateLinkedTokenSource(stop.Token);var token=reading.Token;long request=++version;string? source=coordinator.Settings.LibraryPath;
-        try{var snapshot=await coordinator.ReadWorkspaceAsync(token,refresh);if(token.IsCancellationRequested||request!=version||source!=coordinator.Settings.LibraryPath)return;var latest=await Task.Run(()=>TranslationBatchExchange.LatestEntry(coordinator.DataRoot),token);if(disposed||token.IsCancellationRequested||request!=version||source!=coordinator.Settings.LibraryPath)return;rows=snapshot.Songs.ToArray();selection.IntersectWith(rows.Select(Key));entry=latest;ApplyFilter();SetStatus(coordinator.WorkspaceMessage+(string.IsNullOrWhiteSpace(snapshot.Message)?"":"\n"+snapshot.Message));}
+        try{var snapshot=await coordinator.ReadWorkspaceAsync(token,refresh);if(token.IsCancellationRequested||request!=version||source!=coordinator.Settings.LibraryPath)return;var latest=coordinator.WorkspaceBusy?entry:await Task.Run(()=>TranslationBatchExchange.LatestEntry(coordinator.DataRoot),token);if(disposed||token.IsCancellationRequested||request!=version||source!=coordinator.Settings.LibraryPath)return;rows=snapshot.Songs.Select(WithPendingLookup).ToArray();selection.IntersectWith(rows.Select(Key));entry=latest;ApplyFilter();SetStatus(coordinator.WorkspaceMessage+(string.IsNullOrWhiteSpace(snapshot.Message)?"":"\n"+snapshot.Message));}
         catch(OperationCanceledException){}catch(Exception e){if(!disposed&&request==version)status.Text=UiText.T("读取暂不可用，保留上次清单：")+UiText.Status(e.Message);}
     }
+    LibraryManagedSong WithPendingLookup(LibraryManagedSong song)
+        =>coordinator.WorkspacePendingLookup.Contains(Key(song)) && song.Status.Original is LibraryOriginalState.Missing or LibraryOriginalState.Unconfirmed
+            ?song with{Status=song.Status with{Reason="精确查询未采用，等待补查。"}}:song;
     void SetStatus(string text){string localized=UiText.Status(text);status.Text=localized.Split('\n')[0];status.ToolTip=localized;}
     void ApplyFilter()
     {

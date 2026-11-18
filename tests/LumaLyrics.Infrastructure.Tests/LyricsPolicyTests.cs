@@ -26,6 +26,19 @@ public sealed class LyricsPolicyTests:IDisposable
         Seed();var expected=new LibraryQueueItem("own","one",Song);using var repo=new LyricsRepository(Db);repo.SyncLibrary(new("other",0,[],"own"));
         Assert.Throws<InvalidDataException>(()=>repo.Save(Song,"[00:01]Own line","Own",false,expectedLibrary:expected));Assert.Null(repo.FindReadOnly(Song));
     }
+    [Fact]public void SameFingerprintAndNativeIdAreInsufficientAfterDurationChanges()
+    {
+        Seed();
+        using var repo=new LyricsRepository(Db);
+        var member=new LibraryQueueItem("own","one",Song);
+        var changed=Song with{DurationMs=Song.DurationMs+1000};
+        Assert.True(repo.IsCurrentLibraryMember(member));
+        repo.SyncLibrary(new("own",1,[new("one",changed)],"own"));
+        Assert.False(repo.IsCurrentLibraryMember(member));
+        Assert.Throws<InvalidDataException>(()=>repo.Save(Song,"[00:01]Own line","Own",false,expectedLibrary:member));
+        repo.RecordLookupFailure(Song,"stale failure",false,true,suppress:true,expectedLibrary:member);
+        Assert.False(repo.HasFailure(changed));
+    }
     [Fact]public void FailurePersistenceDoesNotDowngradeManualBindingOrOffset()
     {
         Seed();using var repo=new LyricsRepository(Db);var manual=repo.Save(Song,"Own manual body","manual",true,plain:true);repo.SetOffset(manual.Id,480);

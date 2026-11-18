@@ -55,6 +55,10 @@ public sealed class MusicLibraryCatalog(string root,string? libraryPath=null)
             snapshot.Playlists.Count(other=>string.Equals(other.Name,p.Name,StringComparison.OrdinalIgnoreCase))==1)).ToArray()??[];
         return new(songs.OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray(),message){Playlists=playlists,PlaylistsUnavailable=snapshot is null,ConfirmedMembership=snapshot,MembershipIsCached=snapshot is null};
     }
+    internal IReadOnlyList<MusicLibrarySong> LoadConfirmedSongs(CancellationToken token)
+        =>ReadCached(libraryPath??AppleMusicLibraryReader.Discover(),token).Values
+            .OrderBy(s=>s.Title,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Artist,StringComparer.CurrentCultureIgnoreCase).ThenBy(s=>s.Key,StringComparer.Ordinal).ToArray();
+
     Dictionary<string,MusicLibrarySong> ReadCached(string? source,CancellationToken token)
     {
         var result=new Dictionary<string,MusicLibrarySong>(StringComparer.OrdinalIgnoreCase);string path=Path.Combine(root,"lyrics.db");if(!File.Exists(path))return result;

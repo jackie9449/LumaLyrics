@@ -2,30 +2,42 @@ using System.Collections;
 using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
-public sealed class LyricsLookupResult(IEnumerable<LyricsCandidate> candidates,IEnumerable<string>? unavailable=null):IReadOnlyList<LyricsCandidate>
+public sealed class LyricsLookupResult(IEnumerable<LyricsCandidate> candidates,IEnumerable<string>? unavailable=null,IReadOnlyList<TranslationCandidate>? translationCandidates=null):IReadOnlyList<LyricsCandidate>
 {
     readonly LyricsCandidate[] entries=candidates.ToArray();
     public IReadOnlyList<string> UnavailableSources {get;}=(unavailable??[]).Distinct(StringComparer.Ordinal).ToArray();
+    public IReadOnlyList<TranslationCandidate>? TranslationCandidates {get;}=translationCandidates;
     public int Count=>entries.Length;
     public LyricsCandidate this[int index]=>entries[index];
     public IEnumerator<LyricsCandidate> GetEnumerator()=>((IEnumerable<LyricsCandidate>)entries).GetEnumerator();
     IEnumerator IEnumerable.GetEnumerator()=>GetEnumerator();
 }
 
-public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,IDisposable
+public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,ITranslationProvider,IDisposable
 {
     readonly ILyricsProvider primary;
     readonly ITranslationProvider secondary;
     public ResilientLyricsProvider(ILyricsProvider? primary=null,ITranslationProvider? secondary=null)
     {this.primary=primary??new LrclibProvider();this.secondary=secondary??new NetEaseTranslationProvider();}
-    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)
+    public Task<LyricsLookupResult?> LookupExactAsync(Track track,CancellationToken token)=>primary is LrclibProvider lrclib?Probe(lrclib,track,token):Task.FromResult<LyricsLookupResult?>(null);
+    static async Task<LyricsLookupResult?> Probe(LrclibProvider source,Track track,CancellationToken token)
+    {
+        try{return await source.LookupExactAsync(track,token);}
+        catch(Exception e) when(e is LyricsProviderException or HttpRequestException){return null;}
+    }
+    Task<IReadOnlyList<TranslationCandidate>> ITranslationProvider.LookupAsync(Track track,CancellationToken token)=>secondary.LookupAsync(track,token);
+    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>await CompleteLookupAsync(track,null,token);
+    public async Task<LyricsLookupResult> CompleteLookupAsync(Track track,LyricsLookupResult? exact,CancellationToken token)
     {
         track=TrackMetadata.FromAppleSession(track);
         token.ThrowIfCancellationRequested();var found=new List<LyricsCandidate>();var unavailable=new List<string>();int reachable=0;
         bool primaryAvailable=false,secondaryAvailable=false;
+        IReadOnlyList<TranslationCandidate>? translationCandidates=null;
         try
         {
-            var first=await primary.LookupAsync(track,token);token.ThrowIfCancellationRequested();found.AddRange(first);reachable++;
+            var first=exact is not null && primary is LrclibProvider lrclib
+                ?await lrclib.CompleteLookupAsync(track,exact,token):await primary.LookupAsync(track,token);
+            token.ThrowIfCancellationRequested();found.AddRange(first);reachable++;
             primaryAvailable=first is not LyricsLookupResult{UnavailableSources.Count:>0};
             if(first is LyricsLookupResult status)unavailable.AddRange(status.UnavailableSources);
             if(AutomaticLyricsMatcher.Select(track,found) is {Candidate.Instrumental:false})return new LyricsLookupResult(found,unavailable);
@@ -36,6 +48,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
         {
             var next=await secondary.LookupAsync(track,token);token.ThrowIfCancellationRequested();reachable++;
             secondaryAvailable=true;
+            translationCandidates=next;
             found.AddRange(next.Where(c=>NetEaseTranslationProvider.RecordingMatches(track,c.Track)).Select(c=>c.OriginalCandidateFor(track)));
         }
         catch(Exception ex) when(ex is LyricsProviderException or HttpRequestException){unavailable.Add(Diagnostic("NetEase",ex));}
@@ -55,7 +68,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
             found.AddRange(expanded.SelectMany(r=>r));
             unavailable.AddRange(expanded.OfType<LyricsLookupResult>().SelectMany(r=>r.UnavailableSources));
         }
-        return new LyricsLookupResult(found.DistinctBy(c=>(c.ProviderName,c.Id)),unavailable);
+        return new LyricsLookupResult(found.DistinctBy(c=>(c.ProviderName,c.Id)),unavailable,translationCandidates);
     }
     static string Diagnostic(string source,Exception error)=>error is LyricsProviderException{StatusCode:{ } code}?$"{source}（{code}）":source;
     public async Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)

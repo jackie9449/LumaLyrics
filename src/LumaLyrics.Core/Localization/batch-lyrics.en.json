@@ -1,0 +1,5 @@
+{
+  "原词快查 {0}/{1} 首 · 已保存 {2} 首 · 待补查 {3} 首": "Quick lyric lookup {0}/{1} · {2} saved · {3} awaiting deeper search",
+  "补查与译文 {0}/{1} 首 · 待导出 {2} 首": "Deeper search and translations {0}/{1} · {2} ready to export",
+  "精确查询未采用，等待补查。": "Exact lookup did not find a usable original. Deeper search pending."
+}

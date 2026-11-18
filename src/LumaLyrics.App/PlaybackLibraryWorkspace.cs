@@ -9,17 +9,20 @@ public sealed partial class PlaybackCoordinator
     internal ILyricsProvider? WorkspaceOriginalProvider {get;set;}
     internal ITranslationProvider? WorkspaceChineseProvider {get;set;}
     public string WorkspaceMessage {get;private set;}="选择歌曲后，一次准备原词与中文译文。";
+    internal long WorkspaceResultsRevision {get;private set;}
+    internal IReadOnlySet<LibrarySongKey> WorkspacePendingLookup {get;private set;}=new HashSet<LibrarySongKey>(LibrarySongKey.Comparer);
     public bool WorkspaceBusy=>workspaceOperation is {IsCompleted:false};
-    Task<LibraryWorkspaceSnapshot>? workspaceRead;LibraryWorkspaceCatalog? workspaceCatalog;string? workspaceReadSource;DateTime workspaceReadUntil;long workspaceEpoch;
+    Task<LibraryWorkspaceSnapshot>? workspaceRead;LibraryWorkspaceCatalog? workspaceCatalog;string? workspaceReadSource;DateTime workspaceReadUntil;long workspaceEpoch,workspaceReadResultsRevision;
     void InvalidateWorkspace()=>workspaceReadUntil=DateTime.MinValue;
     public Task<LibraryWorkspaceSnapshot> ReadWorkspaceAsync(CancellationToken token,bool refresh=false)
     {
         bool sameSource=workspaceReadSource==Settings.LibraryPath;
-        if(workspaceRead is null||!sameSource||workspaceRead.IsCompleted&&(refresh||DateTime.UtcNow>=workspaceReadUntil))
+        if(workspaceRead is null||!sameSource||workspaceReadResultsRevision!=WorkspaceResultsRevision||workspaceRead.IsCompleted&&(refresh||DateTime.UtcNow>=workspaceReadUntil))
         {
             if(!sameSource)workspaceEpoch++;workspaceReadSource=Settings.LibraryPath;workspaceReadUntil=DateTime.UtcNow.AddSeconds(5);
+            workspaceReadResultsRevision=WorkspaceResultsRevision;
             string? source=Settings.LibraryPath;if(Environment.GetCommandLineArgs().Contains("--verify-ui")&&source is null)source=Path.Combine(store.Root,"isolated-library.musicdb");
-            workspaceCatalog??=new(store.Root);workspaceRead=workspaceCatalog.ReadAsync(source,workspaceEpoch,lifetime.Token);
+            workspaceCatalog??=new(store.Root);workspaceRead=workspaceCatalog.ReadAsync(source,workspaceEpoch,lifetime.Token,confirmedOnly:WorkspaceBusy);
         }
         return workspaceRead.WaitAsync(token);
     }
@@ -39,62 +42,246 @@ public sealed partial class PlaybackCoordinator
     public Task PrepareWorkspaceAsync(IReadOnlyList<LibraryManagedSong> selected,bool retranslate,bool findExisting,bool prepareOriginal=true,bool exportAgent=true,bool includeArtwork=false)
     {
         if(WorkspaceBusy)throw new InvalidOperationException("已有准备工作，请等待或暂停。");
-        var targets=selected.Select(s=>s.Target).ToArray();bool online=Settings.OnlineLookup;string? source=Settings.LibraryPath;
-        workspaceCancellation?.Dispose();workspaceCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=workspaceCancellation.Token;
+        var targets=selected.Select(song=>song.Target).ToArray();
+        var recordings=targets.GroupBy(target=>target.Track).ToArray();
+        bool online=Settings.OnlineLookup;
+        string? source=Settings.LibraryPath;
+        workspaceCancellation?.Dispose();
+        var operation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        workspaceCancellation=operation;
+        var token=operation.Token;
         workspaceOperation=Task.Run(async()=>
         {
-            var exported=new List<TranslationBatchSelection>();int handled=0;var messages=new List<string>();
-            using var translationsProvider=new NetEaseTranslationProvider();var workflow=new TranslationWorkflow(store.Root,WorkspaceChineseProvider??translationsProvider);
+            var exported=new List<TranslationBatchSelection>();
+            var messages=new List<string>();
+            var exactMisses=new Dictionary<Track,LyricsLookupResult>();
+            var pending=new HashSet<LibrarySongKey>(LibrarySongKey.Comparer);
+            var originalProvider=WorkspaceOriginalProvider??provider;
+            var staged=originalProvider as ResilientLyricsProvider;
+            var workflow=new TranslationWorkflow(store.Root,WorkspaceChineseProvider??(ITranslationProvider)(staged??provider));
+            int handled=0,checkedFast=0,savedFast=0;
+            bool resultsChanged=false;
+            long lastProgress=0,lastResults=0;
             try
             {
+                CheckCurrent();
                 var membership=new MusicLibraryCatalog(store.Root,source).Load(token);
-                token.ThrowIfCancellationRequested();if(Settings.LibraryPath!=source)throw new OperationCanceledException();
-                if(membership.ConfirmedMembership is {} full){using var sync=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));sync.SyncLibrary(full);}
-                foreach(var captured in targets)
+                using var lyrics=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));
+                CheckCurrent();
+                if(membership.ConfirmedMembership is {} full)
+                    lyrics.SyncLibrary(full,token,()=>Settings.LibraryPath==source);
+                if(staged is not null && !retranslate && prepareOriginal && online && Settings.OnlineLookup)
                 {
-                    token.ThrowIfCancellationRequested();if(Settings.LibraryPath!=source)throw new OperationCanceledException("资料库来源已变化。");
-                    try
+                    foreach(var recording in recordings)
                     {
-                        using var lyrics=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));
-                        var members=lyrics.GetLibraryQueue(true);if(!members.Any(m=>m.Source.Equals(captured.Key.Source,StringComparison.OrdinalIgnoreCase)&&m.PersistentId==captured.Key.PersistentId&&m.Track==captured.Track))throw new InvalidDataException("目标不在已确认资料库，请先刷新来源。");
-                        var binding=lyrics.FindReadOnly(captured.Track);string? originalReason=null;var member=new LibraryQueueItem(captured.Key.Source,captured.Key.PersistentId,captured.Track);
-                        if(!retranslate&&prepareOriginal&&(binding is null||!binding.Manual&&!LibraryPrefetcher.QualityOf(binding,captured.Track))&&online&&Settings.OnlineLookup)
+                        CheckCurrent();
+                        var track=recording.Key;
+                        var binding=lyrics.FindReadOnly(track);
+                        if(NeedsOriginal(binding,track))
                         {
-                            using var lease=new FileStream(Path.Combine(store.Root,"library-prefetch.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
-                            while(foregroundLookupActive){await Task.Delay(250,token);}
-                            var found=await (WorkspaceOriginalProvider??provider).LookupAsync(captured.Track,token);token.ThrowIfCancellationRequested();if(!Settings.OnlineLookup||Settings.LibraryPath!=source)throw new OperationCanceledException();
-                            var best=AutomaticLyricsMatcher.Select(captured.Track,found);
-                            if(best is not null)binding=lyrics.Save(captured.Track,best.Candidate.Content,best.Candidate.SourceLabel+" · 自动检查",false,best.Candidate.Instrumental,providerJson:best.Candidate.RawJson,expectedLibrary:member);
-                            else{originalReason=LyricsLookupDiagnosis.Describe(captured.Track,found);lyrics.RecordLookupFailure(captured.Track,originalReason,LyricsLookupDiagnosis.Unavailable(found),found.Count==0,expectedLibrary:member);binding=lyrics.FindReadOnly(captured.Track);}
+                            var member=recording.Select(Member).FirstOrDefault(lyrics.IsCurrentLibraryMember);
+                            if(member is not null)
+                            {
+                                try
+                                {
+                                    using var lease=OriginalLease();
+                                    await WaitForPlaybackAsync();
+                                    var exact=await staged.LookupExactAsync(track,token);
+                                    CheckCurrent();
+                                    if(!Settings.OnlineLookup)throw new OperationCanceledException();
+                                    if(exact is not null && AutomaticLyricsMatcher.Select(track,exact) is {Candidate.Instrumental:false} best)
+                                    {
+                                        SaveOriginal(lyrics,member,best);
+                                        savedFast+=recording.Count();
+                                        resultsChanged=true;
+                                    }
+                                    else
+                                    {
+                                        if(exact is not null)exactMisses.Add(track,exact);
+                                        foreach(var target in recording)pending.Add(target.Key);
+                                        resultsChanged=true;
+                                    }
+                                }
+                                catch(Exception e) when(e is IOException or InvalidDataException)
+                                {
+                                    // Retry the normal chain in pass two if no exact result was retained.
+                                }
+                            }
                         }
-                        if(binding?.Instrumental==true){messages.Add(captured.Track.Title+"：已明确纯音乐，无需译文");continue;}
-                        if(binding is null||binding.Plain||!binding.Manual&&!LibraryPrefetcher.QualityOf(binding,captured.Track))
-                        {
-                            if(originalReason is null){originalReason=binding is {Manual:true,Plain:true}?"当前为手动静态原词，需动态时间轴。":!online?"联网查词已关闭，尚未查询原词。":"尚无可靠动态原词，请先准备原词。";lyrics.RecordLookupFailure(captured.Track,originalReason,false,false,expectedLibrary:member);}
-                            messages.Add(captured.Track.Title+"："+originalReason);continue;
-                        }
-                        var doc=new LrcParser().Parse(binding.Raw);using var tr=new TranslationRepository(store.Root,true);var active=tr.FindActive(captured.Track,doc);
-                        if(retranslate&&(captured.SourceHash!=TranslationAlignment.Hash(doc.Raw)||captured.ExpectedTranslationRevision!=active?.Revision))throw new InvalidDataException("原词或当前译文已更新，请重新选择。");
-                        if(!retranslate&&active is not null && (active.Record.Manual||!OfflineTranslationWorkflow.IsMachine(active.Record.Translation))){if(active.Record.Translation.Lines.Count<doc.Groups.Count)messages.Add(captured.Track.Title+"：沿用已有译文；部分稿需明确重译");continue;}
-                        if(!retranslate&&findExisting){using var sourceLease=new FileStream(Path.Combine(store.Root,"translation-preparation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);await workflow.PrepareAsync(captured.Track,online&&Settings.OnlineLookup,false,token);token.ThrowIfCancellationRequested();active=tr.FindActive(captured.Track,doc);if(active is not null && (active.Record.Manual||!OfflineTranslationWorkflow.IsMachine(active.Record.Translation)))continue;}
-                        token.ThrowIfCancellationRequested();if(Settings.LibraryPath!=source)throw new OperationCanceledException();
-                        if(!exportAgent){messages.Add(captured.Track.Title+"：来源暂无可用译文");continue;}
-                        var target=captured with{BindingId=binding.Id,SourceHash=TranslationAlignment.Hash(doc.Raw),ExpectedTranslationRevision=active?.Revision};
-                        exported.Add(new(captured.Track,retranslate&&active is not null?TranslationJobMode.ReplaceExpected:TranslationJobMode.FillMissing,Target:target));
+                        checkedFast+=recording.Count();
+                        Report($"原词快查 {checkedFast}/{targets.Length} 首 · 已保存 {savedFast} 首 · 待补查 {pending.Count} 首");
                     }
-                    catch(Exception e) when(e is IOException or InvalidDataException or LyricsProviderException or HttpRequestException){using var failed=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));failed.RecordLookupFailure(captured.Track,e.Message,e is LyricsProviderException or HttpRequestException,false,expectedLibrary:new(captured.Key.Source,captured.Key.PersistentId,captured.Track));messages.Add(captured.Track.Title+"："+e.Message);}
-                    finally{handled++;Report($"已处理 {handled}/{targets.Length} 首；待导出 {exported.Count} 首");}
+                    Report($"原词快查 {checkedFast}/{targets.Length} 首 · 已保存 {savedFast} 首 · 待补查 {pending.Count} 首",force:true);
                 }
-                token.ThrowIfCancellationRequested();if(Settings.LibraryPath!=source)throw new OperationCanceledException();
-                if(includeArtwork&&online&&Settings.OnlineLookup&&membership.ConfirmedMembership is {} artworkMembership){using var artwork=new LibraryArtworkImporter(store.Root);artwork.Progress+=p=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;ArtworkStatus=p;Updated?.Invoke();});};await artwork.RunAsync(artworkMembership,token,selectedKeys:targets.Select(t=>t.Key).ToHashSet(LibrarySongKey.Comparer));}
-                token.ThrowIfCancellationRequested();if(Settings.LibraryPath!=source)throw new OperationCanceledException();var result=TranslationBatchExchange.Create(store.Root,exported,token:token);
-                Report($"本轮处理 {handled} 首；生成 {result.Tickets.Count} 份任务；跳过 {messages.Count+result.Skipped.Count} 项。"+(result.Batch is null?"":"\n批量入口："+result.Batch.EntryPath)+string.Join("",messages.Concat(result.Skipped.Select(s=>s.Track.Title+"："+s.Message)).Select(m=>"\n"+m)));
+
+                foreach(var recording in recordings)
+                {
+                    IReadOnlyList<LyricsCandidate>? found=null;
+                    exactMisses.Remove(recording.Key,out var exact);
+                    foreach(var captured in recording)
+                    {
+                        CheckCurrent();
+                        var member=Member(captured);
+                        try
+                        {
+                            if(!lyrics.IsCurrentLibraryMember(member))throw new InvalidDataException("目标不在已确认资料库，请先刷新来源。");
+                            var binding=lyrics.FindReadOnly(captured.Track);
+                            string? originalReason=null;
+                            if(!retranslate && prepareOriginal && NeedsOriginal(binding,captured.Track) && online && Settings.OnlineLookup)
+                            {
+                                if(found is null)
+                                {
+                                    using var lease=OriginalLease();
+                                    await WaitForPlaybackAsync();
+                                    found=staged is not null
+                                        ?await staged.CompleteLookupAsync(captured.Track,exact,token)
+                                        :await originalProvider.LookupAsync(captured.Track,token);
+                                }
+                                CheckCurrent();
+                                if(!Settings.OnlineLookup)throw new OperationCanceledException();
+                                if(AutomaticLyricsMatcher.Select(captured.Track,found) is {} best)
+                                    binding=SaveOriginal(lyrics,member,best);
+                                else
+                                {
+                                    originalReason=LyricsLookupDiagnosis.Describe(captured.Track,found);
+                                    lyrics.RecordLookupFailure(captured.Track,originalReason,LyricsLookupDiagnosis.Unavailable(found),found.Count==0,expectedLibrary:member);
+                                    binding=lyrics.FindReadOnly(captured.Track);
+                                }
+                                resultsChanged=true;
+                            }
+
+                            if(binding?.Instrumental==true)
+                            {
+                                messages.Add(captured.Track.Title+"：已明确纯音乐，无需译文");
+                                continue;
+                            }
+                            if(binding is null || binding.Plain || NeedsOriginal(binding,captured.Track))
+                            {
+                                if(originalReason is null)
+                                {
+                                    originalReason=binding is {Manual:true,Plain:true}?"当前为手动静态原词，需动态时间轴。"
+                                        :!online?"联网查词已关闭，尚未查询原词。":"尚无可靠动态原词，请先准备原词。";
+                                    lyrics.RecordLookupFailure(captured.Track,originalReason,false,false,expectedLibrary:member);
+                                    resultsChanged=true;
+                                }
+                                messages.Add(captured.Track.Title+"："+originalReason);
+                                continue;
+                            }
+
+                            var doc=new LrcParser().Parse(binding.Raw);
+                            using var translations=new TranslationRepository(store.Root,true);
+                            var active=translations.FindActive(captured.Track,doc);
+                            var sourceHash=TranslationAlignment.Hash(doc.Raw);
+                            if(retranslate && (captured.SourceHash!=sourceHash || captured.ExpectedTranslationRevision!=active?.Revision))
+                                throw new InvalidDataException("原词或当前译文已更新，请重新选择。");
+                            if(!retranslate && IsUsableTranslation(active))
+                            {
+                                if(active!.Record.Translation.Lines.Count<doc.Groups.Count)
+                                    messages.Add(captured.Track.Title+"：沿用已有译文；部分稿需明确重译");
+                                continue;
+                            }
+                            if(!retranslate && findExisting)
+                            {
+                                using var lease=new FileStream(Path.Combine(store.Root,"translation-preparation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
+                                await WaitForPlaybackAsync();
+                                var previous=WorkspaceChineseProvider is null?(found as LyricsLookupResult)?.TranslationCandidates:null;
+                                var result=await workflow.PrepareAsync(captured.Track,online&&Settings.OnlineLookup,false,token,previous,member);
+                                CheckCurrent();
+                                active=translations.FindActive(captured.Track,doc);
+                                if(result.Lookup.State==TranslationLookupState.Found)resultsChanged=true;
+                                if(IsUsableTranslation(active))continue;
+                            }
+                            CheckCurrent();
+                            if(!exportAgent)
+                            {
+                                messages.Add(captured.Track.Title+"：来源暂无可用译文");
+                                continue;
+                            }
+                            var target=captured with{BindingId=binding.Id,SourceHash=sourceHash,ExpectedTranslationRevision=active?.Revision};
+                            exported.Add(new(captured.Track,retranslate&&active is not null?TranslationJobMode.ReplaceExpected:TranslationJobMode.FillMissing,Target:target));
+                        }
+                        catch(Exception e) when(e is IOException or InvalidDataException or LyricsProviderException or HttpRequestException)
+                        {
+                            CheckCurrent();
+                            lyrics.RecordLookupFailure(captured.Track,e.Message,e is LyricsProviderException or HttpRequestException,false,expectedLibrary:member);
+                            messages.Add(captured.Track.Title+"："+e.Message);
+                            resultsChanged=true;
+                        }
+                        finally
+                        {
+                            if(pending.Remove(captured.Key))resultsChanged=true;
+                            handled++;
+                            if(!token.IsCancellationRequested)
+                                Report($"补查与译文 {handled}/{targets.Length} 首 · 待导出 {exported.Count} 首");
+                        }
+                    }
+                }
+                CheckCurrent();
+                if(includeArtwork && online && Settings.OnlineLookup && membership.ConfirmedMembership is {} artworkMembership)
+                {
+                    using var artwork=new LibraryArtworkImporter(store.Root);
+                    artwork.Progress+=p=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;ArtworkStatus=p;Updated?.Invoke();});};
+                    await artwork.RunAsync(artworkMembership,token,selectedKeys:targets.Select(t=>t.Key).ToHashSet(LibrarySongKey.Comparer));
+                }
+                CheckCurrent();
+                var batch=TranslationBatchExchange.Create(store.Root,exported,token:token);
+                Report($"本轮处理 {handled} 首；生成 {batch.Tickets.Count} 份任务；跳过 {messages.Count+batch.Skipped.Count} 项。"
+                    +(batch.Batch is null?"":"\n批量入口："+batch.Batch.EntryPath)
+                    +string.Concat(messages.Concat(batch.Skipped.Select(s=>s.Track.Title+"："+s.Message)).Select(m=>"\n"+m)),force:true,done:true);
             }
-            catch(OperationCanceledException){Report("准备已暂停，已保存内容和任务保留。");}
-            catch(Exception e){Report("准备中断："+e.Message);}
-            finally{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;InvalidateWorkspace();RefreshTranslation();Updated?.Invoke();});}
-        },token);
+            catch(OperationCanceledException){Report("准备已暂停，已保存内容和任务保留。",force:true,done:true);}
+            catch(Exception e){Report("准备中断："+e.Message,force:true,done:true);}
+
+            void CheckCurrent()
+            {
+                token.ThrowIfCancellationRequested();
+                if(Settings.LibraryPath!=source)throw new OperationCanceledException();
+            }
+            async Task WaitForPlaybackAsync()
+            {
+                while(foregroundLookupActive)await Task.Delay(250,token);
+                CheckCurrent();
+            }
+            void Report(string message,bool force=false,bool done=false)
+            {
+                var now=Environment.TickCount64;
+                if(!force && now-lastProgress<500)return;
+                lastProgress=now;
+                bool refresh=done || resultsChanged && (force || now-lastResults>=5000);
+                HashSet<LibrarySongKey>? pendingSnapshot=null;
+                if(refresh)
+                {
+                    resultsChanged=false;
+                    lastResults=now;
+                    pendingSnapshot=done?new(LibrarySongKey.Comparer):new(pending,LibrarySongKey.Comparer);
+                }
+                if(disposed)return;
+                _=dispatcher.BeginInvoke(()=>
+                {
+                    if(disposed || workspaceCancellation!=operation)return;
+                    WorkspaceMessage=message;
+                    if(refresh)
+                    {
+                        WorkspacePendingLookup=pendingSnapshot!;
+                        WorkspaceResultsRevision++;
+                        InvalidateWorkspace();
+                    }
+                    if(done)RefreshTranslation();
+                    Updated?.Invoke();
+                });
+            }
+        });
         return workspaceOperation;
-        void Report(string message){if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;WorkspaceMessage=message;Updated?.Invoke();});}
+    }
+
+    static LibraryQueueItem Member(LibraryPreparationTarget target)=>new(target.Key.Source,target.Key.PersistentId,target.Track);
+    static bool NeedsOriginal(LyricsBinding? binding,Track track)=>binding is null || !binding.Manual && !LibraryPrefetcher.QualityOf(binding,track);
+    static bool IsUsableTranslation(ActiveTranslationRevision? active)=>active is not null && (active.Record.Manual || !OfflineTranslationWorkflow.IsMachine(active.Record.Translation));
+    FileStream OriginalLease()=>new(Path.Combine(store.Root,"library-prefetch.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
+    static LyricsBinding SaveOriginal(LyricsRepository lyrics,LibraryQueueItem member,AutomaticLyricsChoice choice)
+    {
+        var candidate=choice.Candidate;
+        return lyrics.Save(member.Track,candidate.Content,candidate.SourceLabel+" · 自动检查",false,candidate.Instrumental,
+            providerJson:candidate.RawJson,expectedLibrary:member,preserveReliable:true);
     }
 }
