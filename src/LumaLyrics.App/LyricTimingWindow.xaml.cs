@@ -1,0 +1,203 @@
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Text;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+using LumaLyrics.Core;
+using LumaLyrics.Infrastructure;
+using Microsoft.Win32;
+
+namespace LumaLyrics.App;
+
+public partial class LyricTimingWindow : Window
+{
+    readonly PlaybackCoordinator coordinator;
+    readonly LibraryPreparationTarget target;
+    readonly ObservableCollection<DisplayedLine> rows=[];
+    readonly DispatcherTimer playback=new(DispatcherPriority.Background){Interval=TimeSpan.FromMilliseconds(100)};
+    ManualLyricTiming? timing;
+    PlaybackSnapshot? recording;
+    bool saved,updatingRows;
+    sealed record DisplayedLine(string Number,string Text,string Times,string Gap);
+
+    internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain)
+    {
+        this.coordinator=coordinator;
+        this.target=target;
+        InitializeComponent();
+        Content=null;
+        ApplicationWindowFrame.SetContent(this,Editor);
+        RecordingLabel.Text=string.Join(" · ",new[]{target.Track.Title,target.Track.Artist,target.Track.Album}.Where(t=>t.Length>0));
+        RecordingLabel.ToolTip=RecordingLabel.Text;
+        TimedLines.ItemsSource=rows;
+        SourceText.Text=plain;
+        Step.Text=UiText.T("准备原词");
+        FeaturedLine.Text=UiText.T("每行放一句歌词");
+        Instruction.Text=UiText.T("粘贴静态原词或打开文本。开始打轴后，在 Apple Music 播放这首歌。");
+        Feedback.Text=UiText.T("空行会跳过。间奏可在打轴时单独标记。");
+        Loaded+=(_,_)=>{RefreshPlayback();playback.Start();if(plain.Length==0)SourceText.Focus();else BeginTiming.Focus();};
+        playback.Tick+=(_,_)=>RefreshPlayback();
+        Closed+=(_,_)=>playback.Stop();
+        Closing+=(_,e)=>
+        {
+            if(!saved && timing?.CanUndo==true)
+                e.Cancel=MessageBox.Show(this,UiText.T("当前打轴尚未保存。要关闭编辑器吗？"),Title,MessageBoxButton.OKCancel,MessageBoxImage.Question)==MessageBoxResult.Cancel;
+        };
+        PreviewKeyDown+=TimingKeyDown;
+    }
+
+    void LoadTextClicked(object sender,RoutedEventArgs e)
+    {
+        var picker=new OpenFileDialog{Filter=UiText.T("静态歌词文本|*.txt")};
+        if(picker.ShowDialog(this)!=true)return;
+        try
+        {
+            if(new FileInfo(picker.FileName).Length>512*1024)throw new InvalidDataException("打轴原词超过 128 KB。");
+            SourceText.Text=File.ReadAllText(picker.FileName,new UTF8Encoding(false,true));
+            Feedback.Text="";
+        }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or DecoderFallbackException)
+        {Feedback.Text=UiText.Status(ex.Message);}
+    }
+
+    void BeginClicked(object sender,RoutedEventArgs e)
+    {
+        try{timing=new ManualLyricTiming(SourceText.Text,target.Track.DurationMs);}
+        catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);return;}
+        SourceText.Visibility=LoadText.Visibility=BeginTiming.Visibility=Visibility.Collapsed;
+        TimedLines.Visibility=MarkActions.Visibility=Visibility.Visible;
+        LyricsHeading.Text=UiText.T("逐行时间轴");
+        RefreshSession(followActive:true);
+        Editor.Focus();
+    }
+
+    void TimingKeyDown(object sender,KeyEventArgs e)
+    {
+        if(timing is null || Keyboard.Modifiers!=ModifierKeys.None || e.Key is not (Key.Enter or Key.G or Key.Back)
+            || OwnsKeyInput(e.OriginalSource as DependencyObject))return;
+        e.Handled=true;
+        if(e.IsRepeat)return;
+        if(e.Key==Key.Back){Undo();return;}
+        if(timing.Complete)return;
+        Mark(e.Key==Key.G);
+    }
+
+    static bool OwnsKeyInput(DependencyObject? element)
+    {
+        for(var parent=element;parent is not null;parent=parent is Visual?VisualTreeHelper.GetParent(parent):LogicalTreeHelper.GetParent(parent))
+            if(parent is TextBoxBase or ButtonBase)return true;
+        return false;
+    }
+
+    void MarkClicked(object sender,RoutedEventArgs e){Mark(false);Editor.Focus();}
+    void GapClicked(object sender,RoutedEventArgs e){Mark(true);Editor.Focus();}
+    void UndoClicked(object sender,RoutedEventArgs e){Undo();Editor.Focus();}
+
+    void Mark(bool gap)
+    {
+        if(timing is null)return;
+        var sample=coordinator.ReadLyricTimingPlayback(target.Track,recording);
+        if(sample.PositionMs is not {} position){Feedback.Text=UiText.Status(sample.Status);return;}
+        try
+        {
+            timing.Mark(position,gap);
+            recording??=sample.Recording;
+            RefreshSession(followActive:true);
+        }
+        catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);}
+    }
+
+    void Undo()
+    {
+        if(timing?.CanUndo!=true)return;
+        timing.Undo();
+        if(!timing.CanUndo)recording=null;
+        RefreshSession(followActive:true);
+    }
+
+    void RefreshSession(bool followActive)
+    {
+        if(timing is null)return;
+        int index=followActive?Math.Min(timing.ActiveIndex,timing.Lines.Count-1):TimedLines.SelectedIndex;
+        updatingRows=true;
+        try
+        {
+            for(int i=0;i<timing.Lines.Count;i++)
+            {
+                var line=timing.Lines[i];
+                string times=line.StartMs is {} start?ManualLyricTiming.FormatTime(start)+"  →  "+(line.EndMs is {} end?ManualLyricTiming.FormatTime(end):"—"):"—";
+                string gap=i+1<timing.Lines.Count && line.EndMs is {} boundary && timing.Lines[i+1].StartMs is {} next && next>boundary
+                    ?UiText.F($"随后留白 {ManualLyricTiming.FormatTime(next-boundary)}"):"";
+                var row=new DisplayedLine((i+1).ToString("00",UiText.Culture),line.Text,times,gap);
+                if(i==rows.Count)rows.Add(row);
+                else if(rows[i]!=row)rows[i]=row;
+            }
+            TimedLines.SelectedIndex=index;
+            if(followActive && index>=0)TimedLines.ScrollIntoView(rows[index]);
+        }
+        finally{updatingRows=false;}
+        Completion.Maximum=timing.Lines.Count;
+        Completion.Value=timing.ActiveIndex;
+        CountLabel.Text=UiText.F($"已标记 {timing.ActiveIndex}/{timing.Lines.Count} 句");
+        UndoMark.IsEnabled=timing.CanUndo;
+        SaveTiming.IsEnabled=timing.Complete;
+        SaveTiming.Visibility=timing.Complete?Visibility.Visible:Visibility.Collapsed;
+        MarkLine.Visibility=MarkGap.Visibility=timing.Complete?Visibility.Collapsed:Visibility.Visible;
+        Completion.Visibility=timing.Complete?Visibility.Collapsed:Visibility.Visible;
+        Step.Text=timing.Complete?UiText.T("校对时间轴"):UiText.F($"第 {timing.ActiveIndex+1} 句");
+        FeaturedLine.Text=timing.Complete?"":timing.Lines[timing.ActiveIndex].Text;
+        MarkLine.Content=UiText.T(timing.WaitingForStart?"Enter · 标记开唱":"Enter · 唱完，下一句");
+        Instruction.Text=UiText.T(timing.Complete?"播放时可预览，选中左侧歌词可微调起止时间。"
+            :timing.WaitingForStart?"听到这句开唱时按 Enter。":"这句唱完时按 Enter。后面有一段器乐时按 G，等下一句开唱再按 Enter。");
+        Feedback.Text=UiText.T(timing.Complete?"确认后将以手动动态歌词保存。":"Backspace 撤销上一次标记或调整。");
+        RefreshSelectedTimes();
+        RefreshPlayback();
+    }
+
+    void RefreshPlayback()
+    {
+        var sample=coordinator.ReadLyricTimingPlayback(target.Track,recording);
+        PlaybackTime.Text=sample.PositionMs is {} position?ManualLyricTiming.FormatTime(position):"--:--.---";
+        PlaybackStatus.Text=UiText.Status(sample.Status);
+        if(timing is null)return;
+        MarkLine.IsEnabled=!timing.Complete && sample.PositionMs.HasValue;
+        MarkGap.IsEnabled=!timing.Complete && !timing.WaitingForStart && timing.ActiveIndex+1<timing.Lines.Count && sample.PositionMs.HasValue;
+        if(timing.Complete)
+        {
+            int index=sample.PositionMs is {} time?timing.LineAt(time):-1;
+            FeaturedLine.Text=index>=0?timing.Lines[index].Text:UiText.T(sample.PositionMs.HasValue?"当前没有歌词":"等待播放预览");
+        }
+    }
+
+    void LineSelectionChanged(object sender,SelectionChangedEventArgs e){if(!updatingRows)RefreshSelectedTimes();}
+    void RefreshSelectedTimes()
+    {
+        int index=TimedLines.SelectedIndex;
+        var line=timing is not null && index>=0?timing.Lines[index]:null;
+        Review.Visibility=line?.EndMs is not null?Visibility.Visible:Visibility.Collapsed;
+        EditStart.Text=line?.StartMs is {} start?ManualLyricTiming.FormatTime(start):"";
+        EditEnd.Text=line?.EndMs is {} end?ManualLyricTiming.FormatTime(end):"";
+    }
+
+    void EditClicked(object sender,RoutedEventArgs e)
+    {
+        if(timing is null || TimedLines.SelectedIndex<0)return;
+        if(!ManualLyricTiming.TryParseTime(EditStart.Text,out var start) || !ManualLyricTiming.TryParseTime(EditEnd.Text,out var end))
+        {Feedback.Text=UiText.T("时间请输入分:秒.毫秒，或直接输入秒数。");return;}
+        try{timing.Edit(TimedLines.SelectedIndex,start,end);RefreshSession(followActive:false);}
+        catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);}
+    }
+
+    void SaveClicked(object sender,RoutedEventArgs e)
+    {
+        if(timing?.Complete!=true)return;
+        try{coordinator.SaveManualLyricTiming(target,timing);saved=true;DialogResult=true;}
+        catch(Exception ex) when(ex is InvalidDataException or IOException or Microsoft.Data.Sqlite.SqliteException)
+        {Feedback.Text=UiText.Status(ex.Message);}
+    }
+    void CloseClicked(object sender,RoutedEventArgs e)=>Close();
+}

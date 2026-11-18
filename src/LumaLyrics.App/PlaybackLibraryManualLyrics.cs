@@ -42,6 +42,11 @@ public sealed partial class PlaybackCoordinator
         var binding=repository.Save(target.Track,candidate.Content,candidate.SourceLabel,true,candidate.Instrumental,
             plain:!candidate.Instrumental && string.IsNullOrWhiteSpace(candidate.SyncedLyrics),
             providerJson:candidate.RawJson,expectedLibrary:Member(target),expectedBindingId:target.BindingId);
+        ApplyLibraryOriginal(target,binding);
+    }
+
+    void ApplyLibraryOriginal(LibraryPreparationTarget target,LyricsBinding binding)
+    {
         WorkspaceResultsRevision++;
         InvalidateWorkspace();
         var latest=Source.Latest;

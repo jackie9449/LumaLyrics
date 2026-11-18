@@ -72,14 +72,20 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         ThemeManager.Bind(menu,Control.BackgroundProperty,"ControlBrush");
         ThemeManager.Bind(menu,Control.ForegroundProperty,"TextBrush");
         var searchLyrics=new MenuItem{Header=UiText.T("手动查词…")};
+        var timeLyrics=new MenuItem{Header=UiText.T("制作动态歌词…")};
         menu.Items.Add(searchLyrics);
+        menu.Items.Add(timeLyrics);
         LibraryPreparationTarget? target=null;
         menu.Opened+=(_,_)=>
         {
-            target=menu.PlacementTarget is ListBoxItem item && songs.ItemContainerGenerator.ItemFromContainer(item) is LibraryManagedSong row?row.Target:null;
+            var song=menu.PlacementTarget is ListBoxItem item?songs.ItemContainerGenerator.ItemFromContainer(item) as LibraryManagedSong:null;
+            target=song?.Target;
             searchLyrics.IsEnabled=target is not null && !manualLookupOpen;
+            timeLyrics.IsEnabled=searchLyrics.IsEnabled && song!.Status.Original is LibraryOriginalState.Missing or LibraryOriginalState.ManualPlain;
         };
-        searchLyrics.Click+=async (_,_)=>
+        searchLyrics.Click+=async (_,_)=>await OpenSongToolAsync(false);
+        timeLyrics.Click+=async (_,_)=>await OpenSongToolAsync(true);
+        async Task OpenSongToolAsync(bool timing)
         {
             if(target is not {} captured || manualLookupOpen || disposed || Window.GetWindow(this) is not {} owner)return;
             menu.IsOpen=false;
@@ -88,16 +94,19 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
             {
                 await coordinator.ConfirmLibraryManualTargetAsync(captured,stop.Token);
                 if(disposed || !IsLoaded)return;
-                var dialog=new CandidateWindow(coordinator,captured){Owner=owner};
+                Window dialog=timing
+                    ?new LyricTimingWindow(coordinator,captured,coordinator.ReadStaticTimingSource(captured))
+                    :new CandidateWindow(coordinator,captured);
+                dialog.Owner=owner;
                 if(dialog.ShowDialog()==true && !disposed)await Reload(true);
             }
             catch(OperationCanceledException){}
             catch(Exception e) when(e is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
             {
-                if(!disposed && IsLoaded)MessageBox.Show(owner,UiText.Status(e.Message),UiText.T("手动查词"));
+                if(!disposed && IsLoaded)MessageBox.Show(owner,UiText.Status(e.Message),UiText.T(timing?"制作动态歌词":"手动查词"));
             }
             finally{manualLookupOpen=false;}
-        };
+        }
         var style=new Style(typeof(ListBoxItem),TryFindResource(typeof(ListBoxItem)) as Style);
         style.Setters.Add(new Setter(ContextMenuProperty,menu));
         songs.ItemContainerStyle=style;

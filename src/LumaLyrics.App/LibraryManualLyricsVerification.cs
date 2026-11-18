@@ -52,7 +52,7 @@ public partial class MainWindow
             ManualLyricsMouseEvent(0x0008,0,0,0,0);
             ManualLyricsMouseEvent(0x0010,0,0,0,0);
             await WaitFor(()=>menu.IsOpen);
-            var command=menu.Items.OfType<MenuItem>().Single();
+            var command=menu.Items.OfType<MenuItem>().Single(item=>Equals(item.Header,UiText.T("手动查词…")));
             checks["libraryManual.nativeRightClickTarget"]=ReferenceEquals(menu.PlacementTarget,targetItem) && command.IsEnabled;
             checks["libraryManual.rightClickKeepsMultiSelection"]=panel.SelectedSongs.Select(row=>row.Track).ToHashSet().SetEquals([playing,other]);
             checks["libraryManual.themedMenu"]=menu.Style==FindResource("LibraryActionMenu") && command.Header?.ToString()==UiText.T("手动查词…");
