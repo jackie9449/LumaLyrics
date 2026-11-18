@@ -63,15 +63,20 @@ public partial class MainWindow
                     Click(dialog.BeginTiming);
                     checks["timing.saveNeedsComplete"]=!dialog.SaveTiming.IsEnabled && dialog.TimedLines.Items.Count==3;
                     SetTime(4000);
-                    checks["timing.enterStartsFirstLine"]=KeyPress(dialog.Editor,Key.Enter) && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记句尾");
+                    checks["timing.enterStartsFirstLine"]=KeyPress(dialog.Editor,Key.Enter) && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 唱完，下一句");
                     SetTime(7200);
-                    Click(dialog.JoinLine);
-                    checks["timing.joinEndsAndStartsTogether"]=dialog.TimedLines.SelectedIndex==1 && dialog.FeaturedLine.Text=="We follow the light"
-                        && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记句尾");
+                    checks["timing.enterJoinsConsecutiveLyrics"]=KeyPress(dialog.Editor,Key.Enter) && dialog.TimedLines.SelectedIndex==1
+                        && dialog.FeaturedLine.Text=="We follow the light" && dialog.InsertGap.Visibility==Visibility.Visible;
                     SetTime(12500);
-                    checks["timing.enterAtVocalEndWaitsForNextStart"]=KeyPress(dialog.Editor,Key.Enter) && dialog.TimedLines.SelectedIndex==2
-                        && dialog.Step.Text==UiText.T("等待下一句开唱") && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记开唱")
-                        && dialog.JoinLine.Visibility==Visibility.Collapsed;
+                    checks["timing.nextLineAppearsBeforeGapIsMarked"]=KeyPress(dialog.Editor,Key.Enter) && dialog.TimedLines.SelectedIndex==2
+                        && dialog.FeaturedLine.Text=="The quiet road";
+                    SetTime(18100);
+                    checks["timing.gEntersGapAfterAdvancing"]=KeyPress(dialog.Editor,Key.G) && dialog.Step.Text==UiText.T("间奏")
+                        && dialog.FeaturedLine.Text==UiText.T("等待下一句开唱") && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 结束间奏")
+                        && dialog.InsertGap.Visibility==Visibility.Collapsed;
+                    checks["timing.undoGapRestoresNextLine"]=KeyPress(dialog.Editor,Key.Back) && dialog.FeaturedLine.Text=="The quiet road"
+                        && dialog.InsertGap.Visibility==Visibility.Visible;
+                    SetTime(21100);KeyPress(dialog.Editor,Key.G);
                     if(UiText.Language=="zh-Hans")VisualVerification.Save(dialog,Path.Combine(directory,"timing-waiting-for-vocals.png"));
                     SetTime(16800,other,revision:2);KeyPress(dialog.Editor,Key.Enter);
                     checks["timing.wrongRecordingBlocksMark"]=dialog.Feedback.Text==UiText.T("请在 Apple Music 播放这首歌。");

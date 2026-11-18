@@ -77,16 +77,15 @@ public partial class LyricTimingWindow : Window
 
     void TimingKeyDown(object sender,KeyEventArgs e)
     {
-        if(timing is null || e.Key is not (Key.Enter or Key.Back)
+        if(timing is null || Keyboard.Modifiers!=ModifierKeys.None || e.Key is not (Key.Enter or Key.G or Key.Back)
             || OwnsKeyInput(e.OriginalSource as DependencyObject))return;
-        var modifiers=Keyboard.Modifiers;
-        bool join=e.Key==Key.Enter && modifiers==ModifierKeys.Shift;
-        if(join?!timing.CanJoinNext:modifiers!=ModifierKeys.None)return;
+        if(e.Key==Key.G && !timing.CanInsertGap)return;
         e.Handled=true;
         if(e.IsRepeat)return;
         if(e.Key==Key.Back){Undo();return;}
         if(timing.Complete)return;
-        Mark(join);
+        if(e.Key==Key.G)BeginGap();
+        else Mark();
     }
 
     static bool OwnsKeyInput(DependencyObject? element)
@@ -96,22 +95,29 @@ public partial class LyricTimingWindow : Window
         return false;
     }
 
-    void MarkClicked(object sender,RoutedEventArgs e){Mark(false);Editor.Focus();}
-    void JoinClicked(object sender,RoutedEventArgs e){Mark(true);Editor.Focus();}
+    void MarkClicked(object sender,RoutedEventArgs e){Mark();Editor.Focus();}
+    void GapClicked(object sender,RoutedEventArgs e){BeginGap();Editor.Focus();}
     void UndoClicked(object sender,RoutedEventArgs e){Undo();Editor.Focus();}
 
-    void Mark(bool join)
+    void Mark()
     {
         if(timing is null)return;
         var sample=coordinator.ReadLyricTimingPlayback(target.Track,recording);
         if(sample.PositionMs is not {} position){Feedback.Text=UiText.Status(sample.Status);return;}
         try
         {
-            timing.Mark(position,join);
+            timing.Mark(position);
             recording??=sample.Recording;
             RefreshSession(followActive:true);
         }
         catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);}
+    }
+
+    void BeginGap()
+    {
+        if(timing?.CanInsertGap!=true)return;
+        timing.BeginGap();
+        RefreshSession(followActive:true);
     }
 
     void Undo()
@@ -133,8 +139,14 @@ public partial class LyricTimingWindow : Window
             {
                 var line=timing.Lines[i];
                 string times=line.StartMs is {} start?ManualLyricTiming.FormatTime(start)+"  →  "+(line.EndMs is {} end?ManualLyricTiming.FormatTime(end):"—"):"—";
-                string gap=i+1<timing.Lines.Count && line.EndMs is {} boundary && timing.Lines[i+1].StartMs is {} next && next>boundary
-                    ?UiText.F($"随后留白 {ManualLyricTiming.FormatTime(next-boundary)}"):"";
+                string gap="";
+                if(i+1<timing.Lines.Count && line.EndMs is {} boundary)
+                {
+                    if(timing.Lines[i+1].StartMs is {} next && next>boundary)
+                        gap=UiText.F($"随后留白 {ManualLyricTiming.FormatTime(next-boundary)}");
+                    else if(timing.WaitingForStart && timing.ActiveIndex==i+1)
+                        gap=UiText.F($"间奏开始于 {ManualLyricTiming.FormatTime(boundary)}");
+                }
                 var row=new DisplayedLine((i+1).ToString("00",UiText.Culture),line.Text,times,gap);
                 if(i==rows.Count)rows.Add(row);
                 else if(rows[i]!=row)rows[i]=row;
@@ -150,16 +162,17 @@ public partial class LyricTimingWindow : Window
         SaveTiming.IsEnabled=timing.Complete;
         SaveTiming.Visibility=timing.Complete?Visibility.Visible:Visibility.Collapsed;
         MarkLine.Visibility=timing.Complete?Visibility.Collapsed:Visibility.Visible;
-        JoinLine.Visibility=timing.CanJoinNext?Visibility.Visible:Visibility.Collapsed;
+        InsertGap.Visibility=timing.CanInsertGap?Visibility.Visible:Visibility.Collapsed;
         Completion.Visibility=timing.Complete?Visibility.Collapsed:Visibility.Visible;
-        bool waitingForNext=timing.WaitingForStart && timing.ActiveIndex>0;
-        Step.Text=timing.Complete?UiText.T("校对时间轴")
-            :waitingForNext?UiText.T("等待下一句开唱"):UiText.F($"第 {timing.ActiveIndex+1} 句");
-        FeaturedLine.Text=timing.Complete?"":timing.Lines[timing.ActiveIndex].Text;
-        MarkLine.Content=UiText.T(timing.WaitingForStart?"Enter · 标记开唱":"Enter · 标记句尾");
+        bool inGap=timing.WaitingForStart && timing.ActiveIndex>0;
+        Step.Text=timing.Complete?UiText.T("校对时间轴"):inGap?UiText.T("间奏"):UiText.F($"第 {timing.ActiveIndex+1} 句");
+        FeaturedLine.Text=timing.Complete?"":inGap?UiText.T("等待下一句开唱"):timing.Lines[timing.ActiveIndex].Text;
+        MarkLine.Content=UiText.T(inGap?"Enter · 结束间奏":timing.WaitingForStart?"Enter · 标记开唱"
+            :timing.ActiveIndex+1<timing.Lines.Count?"Enter · 唱完，下一句":"Enter · 标记句尾");
         Instruction.Text=UiText.T(timing.Complete?"播放时可预览，选中左侧歌词可微调起止时间。"
-            :waitingForNext?"人声回来时按 Enter，间奏会留白。"
-            :timing.WaitingForStart?"听到这句开唱时按 Enter。":"这句唱完时按 Enter。");
+            :inGap?"听到下一句开唱时按 Enter，结束间奏。"
+            :timing.WaitingForStart?"听到这句开唱时按 Enter。"
+            :timing.CanInsertGap?"唱完按 Enter。听到间奏时按 G，留白从上一句结束时开始。":"这句唱完时按 Enter。");
         Feedback.Text=UiText.T(timing.Complete?"确认后将以手动动态歌词保存。":"Backspace 撤销上一次标记或调整。");
         RefreshSelectedTimes();
         RefreshPlayback();
@@ -172,7 +185,6 @@ public partial class LyricTimingWindow : Window
         PlaybackStatus.Text=UiText.Status(sample.Status);
         if(timing is null)return;
         MarkLine.IsEnabled=!timing.Complete && sample.PositionMs.HasValue;
-        JoinLine.IsEnabled=timing.CanJoinNext && sample.PositionMs.HasValue;
         if(timing.Complete)
         {
             int index=sample.PositionMs is {} time?timing.LineAt(time):-1;
