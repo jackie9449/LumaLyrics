@@ -130,10 +130,17 @@ public partial class OverlaySurface : UserControl
     void UpdateClip()
     {
         if(Surface.ActualWidth<=0 || Surface.ActualHeight<=0)return;
-        // Preserve fractional edge coverage instead of stacking geometric clips on the visible silhouette.
-        Surface.Clip=null;
-        double radius=appearance.ResolveCornerRadius(Surface.ActualWidth,Surface.ActualHeight);
-        var shape=new RectangleGeometry(new Rect(0,0,Surface.ActualWidth,Surface.ActualHeight),radius,radius);
-        var mask=new DrawingBrush(new GeometryDrawing(Brushes.White,null,shape)){Stretch=Stretch.Fill};mask.Freeze();Surface.OpacityMask=mask;
+        var bounds=new Rect(Surface.RenderSize);
+        double radius=appearance.ResolveCornerRadius(bounds.Width,bounds.Height);
+        var shape=new RectangleGeometry(bounds,radius,radius);
+        // A retiring line can still extend beyond the current panel while it fades.
+        // Anchor the mask to the panel instead of stretching it over the visual's ink bounds.
+        var mask=new DrawingBrush(new GeometryDrawing(Brushes.White,null,shape))
+        {
+            ViewboxUnits=BrushMappingMode.Absolute,Viewbox=bounds,
+            ViewportUnits=BrushMappingMode.Absolute,Viewport=bounds
+        };
+        mask.Freeze();
+        Surface.OpacityMask=mask;
     }
 }

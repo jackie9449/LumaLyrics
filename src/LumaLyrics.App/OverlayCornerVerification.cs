@@ -19,7 +19,8 @@ public partial class MainWindow
         var scene=new Window{Owner=this,Title="浮光歌词 · 圆角合成验证",Left=40,Top=40,Width=1100,Height=440,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,ShowInTaskbar=false,Topmost=true,Background=new DrawingBrush(tile){TileMode=TileMode.Tile,ViewportUnits=BrushMappingMode.Absolute,Viewport=new Rect(0,0,12,12)}};
         scene.Show();await scene.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
         var fixture=new AppSettings{OverlayLeft=100,OverlayTop=120};
-        var floating=new OverlayWindow(this,new PlayerViewModel{Current="把此刻，轻轻唱成一束光。",Next="下一句，随微风慢慢抵达"},fixture){Owner=scene};
+        var lyrics=new PlayerViewModel{Current="把此刻，轻轻唱成一束光。",Next="下一句，随微风慢慢抵达"};
+        var floating=new OverlayWindow(this,lyrics,fixture){Owner=scene};
         async Task Settle(){floating.UpdateLayout();await floating.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);await Task.Delay(80);}
         static System.Drawing.Bitmap Capture(CornerNative.Rect screen)
         {
@@ -111,9 +112,94 @@ public partial class MainWindow
             }
             finally{floating.Opacity=1;floating.LyricSurface.Opacity=oldTextOpacity;await Settle();}
         }
+        async Task CheckPaperContour()
+        {
+            var originalBackground=scene.Background;
+            scene.Background=new SolidColorBrush(Color.FromRgb(24,24,24));
+            var paper=OverlayThemes.All.First(t=>t.Appearance.Material=="paper").Appearance with
+            {Width=820,Font="FangSong",FontSize=31,Padding=24,Weight="Bold",CornerRatio=1,Opacity=.98,TwoLines=false,Animations=false};
+            string originalText=lyrics.Current;
+            try
+            {
+                paper.Apply(fixture);floating.ApplyStyle();
+                foreach(var (name,current,translation) in new[]
+                {
+                    ("blank","",""),
+                    ("oneLine","The evening light follows the quiet road",""),
+                    ("wrap",string.Join(" ",Enumerable.Repeat("We follow the evening light all the way home",4)),""),
+                    ("translation","The evening light follows the quiet road","暮色沿着安静的小路缓缓落下。"),
+                    ("blankAgain","","")
+                })
+                {
+                    lyrics.Current=current;lyrics.CurrentTranslation=translation;
+                    await Settle();
+                    CheckPaperFrame(name);
+                }
+                if(SystemParameters.ClientAreaAnimation)
+                {
+                    (paper with{Animations=true,TransitionMs=500}).Apply(fixture);
+                    floating.ApplyStyle();
+                    lyrics.Current=string.Join(" ",Enumerable.Repeat("We follow the evening light all the way home",4));
+                    await Settle();
+                    await Task.Delay(550);
+                    lyrics.Current="The quiet road";
+                    await floating.Dispatcher.InvokeAsync(()=>{},DispatcherPriority.ApplicationIdle);
+                    foreach(int frame in Enumerable.Range(1,3))
+                    {
+                        await Task.Delay(45);
+                        CheckPaperFrame("shrinkingTransition-"+frame,expectOverflow:true);
+                    }
+                    await Task.Delay(400);
+                    CheckPaperFrame("settledAfterShrink");
+                }
+            }
+            finally{lyrics.Current=originalText;lyrics.CurrentTranslation="";scene.Background=originalBackground;}
+
+            void CheckPaperFrame(string name,bool expectOverflow=false)
+            {
+                var surface=(FrameworkElement)floating.LyricSurface.FindName("Surface");
+                var dpi=VisualTreeHelper.GetDpi(surface);
+                var origin=surface.PointToScreen(new());
+                var ink=VisualTreeHelper.GetDescendantBounds(surface);
+                CornerNative.GetWindowRect(NativeWindow.Handle(floating),out var screen);
+                using var image=Capture(screen);
+                image.Save(Path.Combine(directory,"overlay-paper-"+name+".png"));
+
+                double width=surface.RenderSize.Width*dpi.DpiScaleX,height=surface.RenderSize.Height*dpi.DpiScaleY;
+                double radius=paper.ResolveCornerRadius(surface.RenderSize.Width,surface.RenderSize.Height);
+                double radiusX=radius*dpi.DpiScaleX,radiusY=radius*dpi.DpiScaleY;
+                double top=origin.Y-screen.Top,left=origin.X-screen.Left;
+                double error=0;
+                int first=(int)Math.Ceiling(top+3),last=(int)Math.Floor(top+height-4);
+                for(int y=first;y<=last;y++)
+                {
+                    int FindEdge(bool right)
+                    {
+                        for(int inset=0;inset<image.Width/2;inset++)
+                        {
+                            int x=right?image.Width-1-inset:inset;
+                            if(image.GetPixel(x,y).R>140)return inset;
+                        }
+                        return image.Width/2;
+                    }
+                    double fromEdge=Math.Min(y+.5-top,top+height-y-.5);
+                    double fraction=Math.Max(0,1-fromEdge/radiusY);
+                    double inset=radiusX*(1-Math.Sqrt(1-fraction*fraction));
+                    double leftError=Math.Abs(FindEdge(false)+.5-(left+inset));
+                    double rightError=Math.Abs(FindEdge(true)+.5-(image.Width-left-width+inset));
+                    error=Math.Max(error,Math.Max(leftError,rightError));
+                }
+                string key="overlayCorners.paper."+name;
+                checks[key+".symmetricCapsule"]=first<last && error<=3;
+                if(expectOverflow)
+                    checks[key+".capturedDuringOverflow"]=floating.LyricSurface.TransitionState.OutgoingOpacity>0 && ink.Bottom>surface.RenderSize.Height+20;
+                checks[key+".measurements"]=new{EdgeErrorPx=error,PhysicalHeight=image.Height,LayoutHeight=height,InkHeight=ink.Height*dpi.DpiScaleY};
+            }
+        }
         floating.Show();
         try
         {
+            await CheckPaperContour();
             foreach(var theme in OverlayThemes.All.Where(t=>t.Appearance.Material is "liquid" or "frost"))
             {
                 string material=theme.Appearance.Material;
