@@ -18,7 +18,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     readonly CheckBox prefer,artwork;readonly HashSet<LibrarySongKey> selection=new(LibrarySongKey.Comparer);
     readonly System.Windows.Threading.DispatcherTimer searchDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
     readonly CancellationTokenSource stop=new();CancellationTokenSource? reading;long version;bool loading,disposed;
-    LibraryManagedSong[] rows=[];string? entry,lastRevision;bool lastBusy;
+    LibraryManagedSong[] rows=[];string? entry,lastRevision;bool lastBusy,manualLookupOpen;
     long lastResultsRevision;
     internal ListBox SongList=>songs;
     internal IReadOnlyList<LibraryManagedSong> SelectedSongs=>rows.Where(r=>selection.Contains(Key(r))).ToArray();
@@ -32,6 +32,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){MinHeight=48});root.RowDefinitions.Add(new(){Height=GridLength.Auto});root.RowDefinitions.Add(new(){Height=GridLength.Auto});
         var header=new StackPanel();root.Children.Add(header);var heading=LibraryWorkspaceUi.Heading(UiText.T("歌曲与译文"),UiText.T("选择歌曲，一次准备原词、现有中文和本地翻译任务。"));header.Children.Add(heading);
         var actions=new WrapPanel{Margin=new(0,0,0,4)};header.Children.Add(actions);songs.ItemTemplate=LibraryWorkspaceUi.SongTemplate();
+        ConfigureSongMenu();
         var menu=new ContextMenu();menu.SetResourceReference(StyleProperty,"LibraryActionMenu");menu.ItemContainerStyle=(Style)FindResource("LibraryActionMenuItem");ThemeManager.Bind(menu,Control.BackgroundProperty,"ControlBrush");ThemeManager.Bind(menu,Control.ForegroundProperty,"TextBrush");
         var options=new StackPanel();prefer=DialogUi.Check(options,UiText.T("优先查找现有来源译文"),true);artwork=DialogUi.Check(options,UiText.T("同时补封面"),false);menu.Items.Add(new MenuItem{Header=options,StaysOpenOnClick=true});
         void Action(string label,Action action){var item=new MenuItem{Header=label};item.Click+=(_,_)=>action();menu.Items.Add(item);}
@@ -63,6 +64,49 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         Loaded+=(_,_)=>{if(disposed)return;coordinator.Updated+=Updated;_=Reload(true);};Unloaded+=(_,_)=>{coordinator.Updated-=Updated;searchDelay.Stop();if(!disposed)reading?.Cancel();};
     }
     static void Open(string? path){if(path is not null&&File.Exists(path))Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}
+    void ConfigureSongMenu()
+    {
+        var menu=new ContextMenu();
+        menu.SetResourceReference(StyleProperty,"LibraryActionMenu");
+        menu.ItemContainerStyle=(Style)FindResource("LibraryActionMenuItem");
+        ThemeManager.Bind(menu,Control.BackgroundProperty,"ControlBrush");
+        ThemeManager.Bind(menu,Control.ForegroundProperty,"TextBrush");
+        var searchLyrics=new MenuItem{Header=UiText.T("手动查词…")};
+        menu.Items.Add(searchLyrics);
+        LibraryPreparationTarget? target=null;
+        menu.Opened+=(_,_)=>
+        {
+            target=menu.PlacementTarget is ListBoxItem item && songs.ItemContainerGenerator.ItemFromContainer(item) is LibraryManagedSong row?row.Target:null;
+            searchLyrics.IsEnabled=target is not null && !manualLookupOpen;
+        };
+        searchLyrics.Click+=async (_,_)=>
+        {
+            if(target is not {} captured || manualLookupOpen || disposed || Window.GetWindow(this) is not {} owner)return;
+            menu.IsOpen=false;
+            manualLookupOpen=true;
+            try
+            {
+                await coordinator.ConfirmLibraryManualTargetAsync(captured,stop.Token);
+                if(disposed || !IsLoaded)return;
+                var dialog=new CandidateWindow(coordinator,captured){Owner=owner};
+                if(dialog.ShowDialog()==true && !disposed)await Reload(true);
+            }
+            catch(OperationCanceledException){}
+            catch(Exception e) when(e is IOException or InvalidDataException or UnauthorizedAccessException or Microsoft.Data.Sqlite.SqliteException)
+            {
+                if(!disposed && IsLoaded)MessageBox.Show(owner,UiText.Status(e.Message),UiText.T("手动查词"));
+            }
+            finally{manualLookupOpen=false;}
+        };
+        var style=new Style(typeof(ListBoxItem),TryFindResource(typeof(ListBoxItem)) as Style);
+        style.Setters.Add(new Setter(ContextMenuProperty,menu));
+        songs.ItemContainerStyle=style;
+        songs.PreviewMouseRightButtonDown+=(_,e)=>
+        {
+            if(e.OriginalSource is DependencyObject origin && ItemsControl.ContainerFromElement(songs,origin) is ListBoxItem)
+                e.Handled=true; // Keep ListBoxItem from changing the batch selection on right-button down.
+        };
+    }
     void Updated()
     {
         SetStatus(coordinator.WorkspaceMessage);

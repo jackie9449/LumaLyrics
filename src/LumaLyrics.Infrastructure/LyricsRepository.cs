@@ -106,13 +106,16 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         using var reader=check.ExecuteReader();
         return reader.Read() && member.Track==new Track(reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.IsDBNull(3)?null:reader.GetDouble(3));
     }
-    public LyricsBinding Save(Track track, string raw, string source, bool manual, bool instrumental = false, bool plain = false, string? providerJson = null,LibraryQueueItem? expectedLibrary=null,bool onlyIfMissing=false,bool preserveReliable=false)
+    public LyricsBinding Save(Track track, string raw, string source, bool manual, bool instrumental = false, bool plain = false, string? providerJson = null,LibraryQueueItem? expectedLibrary=null,bool onlyIfMissing=false,bool preserveReliable=false,string? expectedBindingId=null)
     {
         track=TrackMetadata.FromAppleSession(track);
         using var tx = db.BeginTransaction(deferred:false);
         if(expectedLibrary is {} member && (TrackMetadata.FromAppleSession(member.Track)!=track || !IsCurrentLibraryMember(member)))
             throw new InvalidDataException("写入前资料库成员已变化，未保存自动歌词。");
-        var current = FindReadOnly(track); if (current?.Manual == true && !manual){tx.Commit();return current;}
+        var current=FindReadOnly(track);
+        if(manual && expectedLibrary is not null && current?.Id!=expectedBindingId)
+            throw new InvalidDataException("所选歌曲的原词已变化，请从歌曲列表重新打开手动查词。");
+        if(current?.Manual==true && !manual){tx.Commit();return current;}
         if(!manual&&onlyIfMissing&&current is not null){tx.Commit();return current;}
         if(!manual&&preserveReliable&&current is not null&&LibraryPrefetcher.QualityOf(current,track)){tx.Commit();return current;}
         if(!manual && current is not null && current.Source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal)

@@ -58,6 +58,22 @@ public sealed class LyricsPolicyTests:IDisposable
         var kept=repo.Save(Song,"[00:02]New proposed text","Own",false,expectedLibrary:new("own","one",Song),onlyIfMissing:true);
         Assert.Equal(existing.Id,kept.Id);Assert.Equal(existing.Raw,kept.Raw);Assert.Equal(-250,kept.OffsetMs);
     }
+    [Fact]public void LibraryManualSaveRequiresExpectedBindingAndCurrentMember()
+    {
+        Seed();
+        using var repo=new LyricsRepository(Db);
+        var member=new LibraryQueueItem("own","one",Song);
+        var first=repo.Save(Song,"[00:01]Own first manual line","Own",true,expectedLibrary:member);
+        repo.SetOffset(first.Id,350);
+        Assert.Throws<InvalidDataException>(()=>repo.Save(Song,"[00:02]Outdated choice","Own",true,expectedLibrary:member));
+        Assert.Equal(350,repo.FindReadOnly(Song)!.OffsetMs);
+        var replacement=repo.Save(Song,"[00:02]Own approved replacement","Own",true,expectedLibrary:member,expectedBindingId:first.Id);
+        Assert.True(replacement.Manual);
+        Assert.Equal(replacement.Id,repo.Save(Song,"[00:03]Automatic choice","Own",false).Id);
+        repo.SyncLibrary(new("another library",0,[],"own"));
+        Assert.Throws<InvalidDataException>(()=>repo.Save(Song,"[00:03]Stale choice","Own",true,expectedLibrary:member,expectedBindingId:replacement.Id));
+        Assert.Equal(replacement.Id,repo.FindReadOnly(Song)!.Id);
+    }
     [Fact]public async Task ProviderOutageIsVisibleWithoutNegativeSuppression()
     {
         Seed();using(var repo=new LyricsRepository(Db))

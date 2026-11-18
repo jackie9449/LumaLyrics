@@ -81,13 +81,18 @@ public sealed class ImportWindow : Window
 public sealed class CandidateWindow : Window
 {
     readonly PlaybackCoordinator coordinator;Track? target,searchQuery;readonly PlaybackSnapshot? playbackTarget;
+    readonly LibraryPreparationTarget? libraryTarget;
     readonly ListBox list;readonly TextBox preview;readonly TextBlock status,targetLabel;readonly Button choose;
-    readonly CancellationTokenSource searchLifetime=new();long searchVersion;bool searching,closed;
+    readonly CancellationTokenSource searchLifetime=new();CancellationTokenSource? activeSearch;long searchVersion;bool searching,closed;
     public CandidateWindow(PlaybackCoordinator coordinator)
         : this(coordinator,owner=>LyricsSearchWindow.Prompt(owner,((CandidateWindow)owner).searchQuery),(owner,message)=>MessageBox.Show(owner,message)) { }
-    internal CandidateWindow(PlaybackCoordinator coordinator,Func<Window,Track?> manualTrack,Action<Window,string> notify)
+    internal CandidateWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget libraryTarget)
+        : this(coordinator,owner=>LyricsSearchWindow.Prompt(owner,((CandidateWindow)owner).searchQuery),(owner,message)=>MessageBox.Show(owner,message),libraryTarget) { }
+    internal CandidateWindow(PlaybackCoordinator coordinator,Func<Window,Track?> manualTrack,Action<Window,string> notify,LibraryPreparationTarget? libraryTarget=null)
     {
-        this.coordinator=coordinator;target=coordinator.ActiveTrack;searchQuery=target;playbackTarget=coordinator.Snapshot;Title=UiText.T("浮光歌词 · 更换歌词");
+        this.coordinator=coordinator;this.libraryTarget=libraryTarget;
+        target=libraryTarget?.Track??coordinator.ActiveTrack;searchQuery=target;playbackTarget=coordinator.Snapshot;
+        Title=UiText.T(libraryTarget is null?"浮光歌词 · 更换歌词":"手动查词");
         var p=DialogUi.Panel(this,UiText.T("选择适合这首歌的版本"),UiText.T("手动搜索只改变搜索条件，所选歌词直接应用到绑定目标。确认后锁定绑定，自动查询不会覆盖你的选择。"));
         targetLabel=new TextBlock{Text=TargetText(),TextWrapping=TextWrapping.Wrap};p.Children.Add(targetLabel);
         status=new TextBlock{TextWrapping=TextWrapping.Wrap};p.Children.Add(status);
@@ -97,12 +102,9 @@ public sealed class CandidateWindow : Window
             var query=manualTrack(this);if(query is null || closed)return;
             searchQuery=query;
             // Provider metadata is editable; the live song's binding identity is not.
-            if(playbackTarget is null)target=query;
-            targetLabel.Text=TargetText();var version=++searchVersion;searching=true;
-            ShowCandidates([],UiText.T("正在搜索…"));
-            var results=await coordinator.LookupManualAsync(query,searchLifetime.Token);
-            if(closed || version!=searchVersion)return;
-            searching=false;ShowCandidates(results??[],coordinator.LyricsStatus);
+            if(libraryTarget is null && playbackTarget is null)target=query;
+            targetLabel.Text=TargetText();
+            await SearchAsync(query);
         });
         list=new ListBox{Height=200};
         var candidateText=new FrameworkElementFactory(typeof(TextBlock));candidateText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);candidateText.SetBinding(TextBlock.TextProperty,new System.Windows.Data.Binding(){Converter=new CandidateTextConverter()});list.ItemTemplate=new DataTemplate{VisualTree=candidateText};
@@ -114,10 +116,21 @@ public sealed class CandidateWindow : Window
         }
         choose=DialogUi.Button(p,UiText.T("使用所选歌词"),()=>
         {
-            if(closed || searching || target is null || list.SelectedItem is not LyricsCandidate c || !ConfirmTarget())return;
-            coordinator.SelectCandidate(target,c);DialogResult=true;
+            if(closed || searching || target is null || list.SelectedItem is not LyricsCandidate c)return;
+            if(libraryTarget is {} member)
+            {
+                try{coordinator.SelectLibraryCandidate(member,c);}
+                catch(Exception e) when(e is IOException or InvalidDataException or Microsoft.Data.Sqlite.SqliteException)
+                {status.Text=UiText.Status(e.Message);return;}
+            }
+            else
+            {
+                if(!ConfirmTarget())return;
+                coordinator.SelectCandidate(target,c);
+            }
+            DialogResult=true;
         });
-        DialogUi.Button(p,UiText.T("恢复自动匹配"),async()=>
+        if(libraryTarget is null)DialogUi.Button(p,UiText.T("恢复自动匹配"),async()=>
         {
             if(closed || !ConfirmTarget())return;
             var version=++searchVersion;searching=true;ShowCandidates([],UiText.T("正在恢复自动匹配…"));
@@ -128,11 +141,34 @@ public sealed class CandidateWindow : Window
         list.SelectionChanged+=(_,_)=>
         {
             choose.IsEnabled=!searching && list.SelectedItem is LyricsCandidate;
-            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);var decision=target is null?null:AutomaticLyricsMatcher.Decide(target,c,coordinator.Candidates);preview.Text=UiText.F($"歌曲信息匹配度 {score?.Score:P0} · {UiText.Status(score?.Reason)}\n")+(decision is null?"":decision.Accepted?UiText.F($"自动检查通过：{UiText.Status(decision.Reason)}\n\n"):UiText.F($"自动未采用：{UiText.Status(decision.Reason)}\n\n"))+string.Join("\n",c.Content.Split('\n').Take(10));}
+            if(list.SelectedItem is LyricsCandidate c){var score=target is null?null:MatchRules.Score(target,c);var decision=target is null?null:AutomaticLyricsMatcher.Decide(target,c,list.ItemsSource as IReadOnlyList<LyricsCandidate>);preview.Text=UiText.F($"歌曲信息匹配度 {score?.Score:P0} · {UiText.Status(score?.Reason)}\n")+(decision is null?"":decision.Accepted?UiText.F($"自动检查通过：{UiText.Status(decision.Reason)}\n\n"):UiText.F($"自动未采用：{UiText.Status(decision.Reason)}\n\n"))+string.Join("\n",c.Content.Split('\n').Take(10));}
             else preview.Clear();
         };
         Closed+=(_,_)=>{closed=true;searchVersion++;searchLifetime.Cancel();searchLifetime.Dispose();};
-        ShowCandidates(coordinator.Candidates,coordinator.LyricsStatus);
+        if(libraryTarget is null)ShowCandidates(coordinator.Candidates,coordinator.LyricsStatus);
+        else
+        {
+            ShowCandidates([],"");
+            Loaded+=async (_,_)=>await SearchAsync(libraryTarget.Track);
+        }
+    }
+    async Task SearchAsync(Track query)
+    {
+        if(closed)return;
+        activeSearch?.Cancel();
+        using var request=CancellationTokenSource.CreateLinkedTokenSource(searchLifetime.Token);
+        activeSearch=request;
+        var version=++searchVersion;searching=true;
+        ShowCandidates([],"正在搜索…");
+        try
+        {
+            var result=libraryTarget is not null
+                ?await coordinator.SearchLibraryCandidatesAsync(query,request.Token)
+                :(await coordinator.LookupManualAsync(query,request.Token)??[],coordinator.LyricsStatus);
+            if(closed || version!=searchVersion)return;
+            searching=false;ShowCandidates(result.Item1,result.Item2);
+        }
+        finally{if(activeSearch==request)activeSearch=null;}
     }
     string TargetText()=>target is null?UiText.T("尚无绑定目标"):UiText.F($"绑定目标：{target.Title} · {target.Artist}\n{target.Album}");
     bool TargetIsCurrent()
