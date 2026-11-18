@@ -73,7 +73,7 @@
       <TextBlock x:Name="Instruction" Style="{StaticResource TimingCaption}" Margin="0,0,0,8"/>
       <WrapPanel x:Name="MarkActions" Visibility="Collapsed" Margin="0,4,0,8">
        <Button x:Name="MarkLine" Style="{StaticResource PrimaryButton}" Click="MarkClicked" Margin="0,0,7,6"/>
-       <Button x:Name="MarkGap" Content="{local:Loc Text='G · 留出间奏'}" Click="GapClicked" Margin="0,0,7,6"/>
+       <Button x:Name="JoinLine" Content="{local:Loc Text='Shift+Enter · 衔接下一句'}" Click="JoinClicked" Margin="0,0,7,6"/>
        <Button x:Name="UndoMark" Content="{local:Loc Text='撤销'}" Click="UndoClicked" Margin="0,0,7,6"/>
       </WrapPanel>
       <ProgressBar x:Name="Completion" Height="4" Visibility="Collapsed" Margin="0,0,0,14"/>

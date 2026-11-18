@@ -63,17 +63,22 @@ public partial class MainWindow
                     Click(dialog.BeginTiming);
                     checks["timing.saveNeedsComplete"]=!dialog.SaveTiming.IsEnabled && dialog.TimedLines.Items.Count==3;
                     SetTime(4000);
-                    checks["timing.enterStartsFirstLine"]=KeyPress(dialog.Editor,Key.Enter) && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 唱完，下一句");
-                    SetTime(7200);KeyPress(dialog.Editor,Key.Enter);
-                    checks["timing.enterEndsAndAdvances"]=dialog.TimedLines.SelectedIndex==1 && dialog.FeaturedLine.Text=="We follow the light";
-                    SetTime(12500);KeyPress(dialog.Editor,Key.G);
-                    checks["timing.gapWaitsForNextStart"]=dialog.TimedLines.SelectedIndex==2 && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记开唱");
+                    checks["timing.enterStartsFirstLine"]=KeyPress(dialog.Editor,Key.Enter) && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记句尾");
+                    SetTime(7200);
+                    Click(dialog.JoinLine);
+                    checks["timing.joinEndsAndStartsTogether"]=dialog.TimedLines.SelectedIndex==1 && dialog.FeaturedLine.Text=="We follow the light"
+                        && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记句尾");
+                    SetTime(12500);
+                    checks["timing.enterAtVocalEndWaitsForNextStart"]=KeyPress(dialog.Editor,Key.Enter) && dialog.TimedLines.SelectedIndex==2
+                        && dialog.Step.Text==UiText.T("等待下一句开唱") && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记开唱")
+                        && dialog.JoinLine.Visibility==Visibility.Collapsed;
                     if(UiText.Language=="zh-Hans")VisualVerification.Save(dialog,Path.Combine(directory,"timing-waiting-for-vocals.png"));
                     SetTime(16800,other,revision:2);KeyPress(dialog.Editor,Key.Enter);
                     checks["timing.wrongRecordingBlocksMark"]=dialog.Feedback.Text==UiText.T("请在 Apple Music 播放这首歌。");
                     SetTime(30000,target,revision:2);KeyPress(dialog.Editor,Key.Enter);
                     checks["timing.newPlaybackRevisionBlocksMark"]=dialog.Feedback.Text==UiText.T("播放会话已变化。请撤销标记后重新开始打轴。");
-                    SetTime(39000);KeyPress(dialog.Editor,Key.Enter);
+                    SetTime(39000);
+                    checks["timing.nextEnterMarksVocalReturn"]=KeyPress(dialog.Editor,Key.Enter) && dialog.MarkLine.Content?.ToString()==UiText.T("Enter · 标记句尾");
                     SetTime(44200);KeyPress(dialog.Editor,Key.Enter);
                     checks["timing.completeEnablesSave"]=dialog.SaveTiming.IsEnabled;
                     KeyPress(dialog.Editor,Key.Back);

@@ -30,9 +30,10 @@ public sealed class ManualLyricTiming
     public int ActiveIndex {get;private set;}
     public bool Complete=>ActiveIndex==lines.Length;
     public bool WaitingForStart=>!Complete && lines[ActiveIndex].StartMs is null;
+    public bool CanJoinNext=>ActiveIndex+1<lines.Length && !WaitingForStart;
     public bool CanUndo=>history.Count>0;
 
-    public void Mark(double positionMs,bool leaveGap=false)
+    public void Mark(double positionMs,bool startNext=false)
     {
         if(Complete)throw new InvalidDataException("所有歌词已经标记，可以校对并保存。");
         int at=CheckedTime(positionMs);
@@ -40,18 +41,18 @@ public sealed class ManualLyricTiming
         var line=lines[index];
         if(line.StartMs is null)
         {
-            if(leaveGap)throw new InvalidDataException("请先标记这一句开始唱的时间。");
-            if(index>0 && at<=lines[index-1].EndMs)throw new InvalidDataException("下一句须晚于上一句的结束时间。");
+            if(startNext)throw new InvalidDataException("请先标记这一句开始唱的时间。");
+            if(index>0 && at<lines[index-1].EndMs)throw new InvalidDataException("下一句不能早于上一句的结束时间。");
             history.Push(new(index,line,null,index));
             lines[index]=line with{StartMs=at};
             return;
         }
         if(at<=line.StartMs)throw new InvalidDataException("结束时间须晚于开始时间。可以撤销后重标。");
-        bool startNext=!leaveGap && index+1<lines.Length;
-        history.Push(new(index,line,startNext?lines[index+1]:null,index));
+        bool join=startNext && CanJoinNext;
+        history.Push(new(index,line,join?lines[index+1]:null,index));
         lines[index]=line with{EndMs=at};
         ActiveIndex++;
-        if(startNext)lines[index+1]=lines[index+1] with{StartMs=at};
+        if(join)lines[index+1]=lines[index+1] with{StartMs=at};
     }
 
     public void Edit(int index,double startMs,double endMs)

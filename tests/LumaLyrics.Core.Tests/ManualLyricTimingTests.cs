@@ -3,13 +3,14 @@ namespace LumaLyrics.Core.Tests;
 public sealed class ManualLyricTimingTests
 {
     [Fact]
-    public void EnterAdvancesAndAnExplicitInstrumentalGapClearsTheDisplayedLyric()
+    public void EnterEndsEachLineAndTheNextEnterResumesAfterAnInstrumentalGap()
     {
         var timing=new ManualLyricTiming("The quiet road\n\nWe follow the light\nThe quiet road",60000);
         timing.Mark(4100);
-        timing.Mark(7200);
-        timing.Mark(13000,leaveGap:true);
+        timing.Mark(7200,startNext:true);
+        timing.Mark(13000);
         Assert.True(timing.WaitingForStart);
+        Assert.Null(timing.Lines[2].StartMs);
         Assert.Equal(-1,timing.LineAt(18000));
         timing.Mark(42500);
         timing.Mark(48000);
@@ -25,13 +26,13 @@ public sealed class ManualLyricTimingTests
     public void UndoReopensTheBoundaryAndEditsDoNotOverlapOrMoveOtherLines()
     {
         var timing=new ManualLyricTiming("One\nTwo",15000);
-        timing.Mark(1500);timing.Mark(6000);
+        timing.Mark(1500);timing.Mark(6000,startNext:true);
         timing.Undo();
         Assert.Equal(0,timing.ActiveIndex);
         Assert.Null(timing.Lines[1].StartMs);
         Assert.Throws<InvalidDataException>(()=>timing.Mark(1499));
-        timing.Mark(6000,true);
-        Assert.Throws<InvalidDataException>(()=>timing.Mark(6000));
+        timing.Mark(6000);
+        Assert.Throws<InvalidDataException>(()=>timing.Mark(5999));
         timing.Mark(8000);timing.Mark(11000);
         Assert.Throws<InvalidDataException>(()=>timing.Edit(0,1400,8100));
         Assert.Throws<InvalidDataException>(()=>timing.Edit(1,8000,15001));
@@ -44,11 +45,26 @@ public sealed class ManualLyricTimingTests
     }
 
     [Fact]
+    public void SeparateMarksAtTheSameBoundaryDoNotInsertABlankGroup()
+    {
+        var timing=new ManualLyricTiming("One\nTwo",15000);
+        timing.Mark(1500);
+        timing.Mark(6000);
+        Assert.True(timing.WaitingForStart);
+        timing.Mark(6000);
+        timing.Mark(11000);
+
+        var groups=new LrcParser().Parse(timing.MakeLrc()).Groups;
+        Assert.Equal(new double[]{1500,6000,11000},groups.Select(g=>g.TimeMs));
+        Assert.Equal(new[]{"One","Two",""},groups.Select(g=>g.Text));
+    }
+
+    [Fact]
     public void IncompleteDraftAndNonplainInputCannotBeSaved()
     {
         var timing=new ManualLyricTiming("One",4000);
         Assert.Throws<InvalidDataException>(()=>timing.Mark(double.NaN));
-        Assert.Throws<InvalidDataException>(()=>timing.Mark(0,leaveGap:true));
+        Assert.Throws<InvalidDataException>(()=>timing.Mark(0,startNext:true));
         timing.Mark(1000);
         Assert.Throws<InvalidDataException>(()=>timing.MakeLrc());
         Assert.Throws<InvalidDataException>(()=>new ManualLyricTiming("[00:01]Previous timeline",4000));
