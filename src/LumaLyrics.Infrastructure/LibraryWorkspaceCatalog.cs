@@ -46,8 +46,14 @@ public sealed class LibraryWorkspaceCatalog(string root)
                 var assessment=new AssessmentKey(song.Track,binding,active.Revision,stored.Length>0,covers.GetValueOrDefault(song.Key),reasons.GetValueOrDefault(key));
                 if(assessments.TryGetValue(key,out var previous)&&previous.Key==assessment){next[key]=previous;result.Add(previous.Song);continue;}
                 var doc=binding is null?null:parser.Parse(binding.Raw,binding.Plain) with{Instrumental=binding.Instrumental};
-                var status=LibraryWorkspaceProjection.Assess(new(doc,binding is not null&&(binding.Manual||LibraryPrefetcher.QualityOf(binding,song.Track)),binding?.Manual==true,active.Record?.Translation,active.Record?.Manual==true,stored.Length>0,active.Revision,assessment.Cover));
-                if(status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental))status=status with{Reason=assessment.Reason??(status.Original==LibraryOriginalState.Unconfirmed?"当前缓存未通过检查，请重新准备以查看具体原因。":status.Original==LibraryOriginalState.ManualPlain?"当前为手动静态原词，需动态时间轴。":null)};
+                var status=LibraryWorkspaceProjection.Assess(new(doc,binding is not null&&(binding.Manual||binding.StaticFallback||LibraryPrefetcher.QualityOf(binding,song.Track)),binding?.Manual==true,active.Record?.Translation,active.Record?.Manual==true,stored.Length>0,active.Revision,assessment.Cover));
+                if(status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental))status=status with{Reason=assessment.Reason??(status.Original switch
+                {
+                    LibraryOriginalState.Unconfirmed=>"当前缓存未通过检查，请重新准备以查看具体原因。",
+                    LibraryOriginalState.ManualPlain=>"当前为手动静态原词，需动态时间轴。",
+                    LibraryOriginalState.Static=>"已保留静态歌词，可重新查找动态原词。",
+                    _=>null
+                })};
                 var row=new LibraryManagedSong(key,song.Track,binding?.Id,status);next[key]=(assessment,row);result.Add(row);
             }
             assessments=next;

@@ -86,8 +86,8 @@ internal static class PersonalLibrarySnapshot
         {
             token.ThrowIfCancellationRequested();var bound=bindings.FirstOrDefault(b=>Matches(b.Track,row.Track))?.Binding;
             string id=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(row.Source+"\0"+row.PersistentId))).ToLowerInvariant()[..24];
-            bool ready=bound is not null && (bound.Manual || LibraryPrefetcher.QualityOf(bound,row.Track));
-            string kind=bound is null?"Missing":!ready?"NeedsReview":bound.Instrumental?"Instrumental":bound.Manual?"Manual":"Synced";
+            bool ready=bound is not null && (bound.Manual || bound.StaticFallback || LibraryPrefetcher.QualityOf(bound,row.Track));
+            string kind=bound is null?"Missing":!ready?"NeedsReview":bound.Instrumental?"Instrumental":bound.Manual?"Manual":bound.StaticFallback?"Static":"Synced";
             string? lyric=null;
             if(ready && !bound!.Instrumental && !string.IsNullOrWhiteSpace(bound.Raw))
             {

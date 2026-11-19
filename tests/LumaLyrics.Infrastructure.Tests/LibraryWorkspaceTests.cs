@@ -24,6 +24,31 @@ public sealed class LibraryWorkspaceTests:IDisposable
         using(var l=new LyricsRepository(Path.Combine(root,"lyrics.db"))){l.SyncLibrary(new("own",3,[new("a",Song),new("b",Song),new("c",Song with{Title="Own C"})],"own"));l.Save(Song with{Title="Orphan"},Raw,"own",true);}
         var snapshot=await new LibraryWorkspaceCatalog(root).ReadAsync("own",2,CancellationToken.None);Assert.Equal(3,snapshot.Songs.Count);Assert.Equal(2,snapshot.Songs.Count(s=>s.Track==Song));Assert.DoesNotContain(snapshot.Songs,s=>s.Track.Title=="Orphan");
     }
+    [Fact] public async Task StaticFallbackStaysUpgradeableAndCannotDisplaceManualOrCheckedLyrics()
+    {
+        var fallbackTrack=Song with{Title="Own static fixture"};
+        using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));
+        lyrics.SyncLibrary(new("own",3,[new("a",Song),new("b",Song with{Title="Own B"}),new("c",fallbackTrack)],"own"));
+        var member=new LibraryQueueItem("own","c",fallbackTrack);
+        var staticCandidate=new LyricsCandidate(12,fallbackTrack,null,"We follow the river home\nBeyond the quiet shore",false);
+        var binding=lyrics.SaveStaticFallback(fallbackTrack,[staticCandidate],member)!;
+        Assert.True(binding.StaticFallback);
+        Assert.Equal(binding.Id,lyrics.SaveStaticFallback(fallbackTrack,[staticCandidate],member)!.Id);
+        Assert.Equal(binding.Id,lyrics.Save(fallbackTrack,"","Own false instrumental",false,instrumental:true).Id);
+        Assert.True(lyrics.SaveStaticFallback(Song,[staticCandidate with{Track=Song}])!.Manual);
+        lyrics.RecordLookupFailure(fallbackTrack,"只有静态文字，未提供可靠时间戳",false,false,expectedLibrary:member);
+        Assert.Contains(lyrics.GetLibraryQueue(includeDeferred:true),r=>r.PersistentId=="c");
+        var catalog=new LibraryWorkspaceCatalog(root);
+        var row=(await catalog.ReadAsync("own",1,default)).Songs.Single(s=>s.Key.PersistentId=="c");
+        Assert.True(row.Status.HasOnlyStaticLyrics);
+        Assert.Equal(LibraryChineseState.BlockedOriginal,row.Status.Chinese);
+        Assert.Throws<InvalidDataException>(()=>TranslationJobExchange.Create(root,fallbackTrack,TranslationJobMode.FillMissing,expected:row.Target));
+        var timed=lyrics.Save(fallbackTrack,Raw,"Own checked fixture",false);
+        Assert.Equal(timed.Id,lyrics.SaveStaticFallback(fallbackTrack,[staticCandidate],member)!.Id);
+        var updated=(await catalog.ReadAsync("own",1,default)).Songs.Single(s=>s.Key.PersistentId=="c");
+        Assert.Equal(LibraryOriginalState.Ready,updated.Status.Original);
+        Assert.Null(updated.Status.Reason);
+    }
     [Fact] public async Task ExactTargetDoesNotUseCurrentlyPlayingSongAndRejectsStaleRevision()
     {
         var snapshot=await new LibraryWorkspaceCatalog(root).ReadAsync("own",1,CancellationToken.None);var b=snapshot.Songs.Single(s=>s.Key.PersistentId=="b");

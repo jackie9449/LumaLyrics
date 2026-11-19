@@ -163,7 +163,7 @@ public static class PersonalLibraryArchive
         var ids=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach(var track in manifest.Tracks)
         {
-            if(track is null||track.Track is null||string.IsNullOrWhiteSpace(track.Id)||!ids.Add(track.Id)||!double.IsFinite(track.OffsetMs)||track.LyricState is not ("Synced" or "Manual" or "Instrumental" or "Missing" or "NeedsReview"))throw new InvalidDataException("曲目记录无效。");
+            if(track is null||track.Track is null||string.IsNullOrWhiteSpace(track.Id)||!ids.Add(track.Id)||!double.IsFinite(track.OffsetMs)||track.LyricState is not ("Synced" or "Manual" or "Static" or "Instrumental" or "Missing" or "NeedsReview"))throw new InvalidDataException("曲目记录无效。");
             if(track.LyricPath is not null && (!files.TryGetValue(track.LyricPath,out var lyric)||lyric.Kind!="lyric"||track.LyricState is "Instrumental" or "Missing" or "NeedsReview"))throw new InvalidDataException("歌词文件映射无效。");
             if(track.CoverPath is not null&&!manifest.Images.Any(i=>i.Path==track.CoverPath))throw new InvalidDataException("曲目封面映射无效。");
         }

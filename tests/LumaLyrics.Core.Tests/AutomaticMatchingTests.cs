@@ -44,6 +44,24 @@ public class AutomaticMatchingTests
         Assert.True(AutomaticLyricsMatcher.Assess(new(1,track,null,null,true)).Accepted);
         Assert.Null(AutomaticLyricsMatcher.Select(track,[new(1,track,null,null,false)]));
     }
+    [Fact] public void StaticFallbackUsesIndependentPlainTextOrTrulyUntimedProviderText()
+    {
+        var broken=Candidate() with{SyncedLyrics="[00:99]Malformed source time"};
+        Assert.Null(AutomaticLyricsMatcher.Select(track,[broken]));
+        var fallback=Assert.IsType<LyricsCandidate>(AutomaticLyricsMatcher.SelectStatic(track,[broken]));
+        Assert.Equal(plain,fallback.PlainLyrics);Assert.Null(fallback.SyncedLyrics);
+        var textOnly=broken with{SyncedLyrics="[Verse 1]\nWe carry our own light",PlainLyrics=null};
+        Assert.Equal(textOnly.SyncedLyrics,AutomaticLyricsMatcher.SelectStatic(track,[textOnly])?.PlainLyrics);
+    }
+    [Fact] public void StaticFallbackRejectsWrongRecordingAndContentWithoutUsableLyrics()
+    {
+        var text=Candidate() with{SyncedLyrics=null};
+        Assert.Null(AutomaticLyricsMatcher.SelectStatic(track,[
+            text with{Track=track with{Album="Album (Live)"}},text with{Track=track with{DurationMs=210000}},
+            text with{PlainLyrics="纯音乐，请欣赏"},text with{PlainLyrics="lyrics not available"},
+            text with{PlainLyrics="[ar:Artist]"},text with{PlainLyrics="[00:99]This time is malformed"},
+            text with{SyncedLyrics=Timed(),PlainLyrics=null}]));
+    }
     [Fact] public void DifferentAlbumNeedsVeryCloseRecordingDuration()
     {
         Assert.Null(AutomaticLyricsMatcher.Select(track,[Candidate() with{Track=track with{Album="Other edition",DurationMs=184000}}]));
@@ -53,6 +71,7 @@ public class AutomaticMatchingTests
         var instrumental=new LyricsCandidate(1,track,null,null,true);
         var partial=Candidate(2) with{SyncedLyrics=null};
         Assert.Null(AutomaticLyricsMatcher.Select(track,[instrumental,partial]));
+        Assert.Null(AutomaticLyricsMatcher.Select(track,[instrumental,partial with{PlainLyrics="帰ろう"}]));
         Assert.False(AutomaticLyricsMatcher.Select(track,[instrumental,Candidate(3)])!.Candidate.Instrumental);
     }
     static LyricsCandidate LongTail()

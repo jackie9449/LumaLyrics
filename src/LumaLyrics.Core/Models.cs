@@ -44,7 +44,12 @@ public interface IPlaybackSource : IAsyncDisposable
 }
 public interface ILyricsParser { LyricsDocument Parse(string raw, bool forcePlain = false); }
 public interface ILyricsProvider { Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track, CancellationToken token); }
-public sealed record LyricsBinding(string Id, string TrackId, string Raw, string Source, bool Manual, double OffsetMs, bool Instrumental, bool Plain = false,string? ProviderJson=null);
+public sealed record LyricsBinding(string Id, string TrackId, string Raw, string Source, bool Manual, double OffsetMs, bool Instrumental, bool Plain = false,string? ProviderJson=null)
+{
+    public const string StaticFallbackSourceSuffix=" · [static-fallback]";
+    public bool StaticFallback=>Plain && !Manual && !Instrumental && Source.EndsWith(StaticFallbackSourceSuffix,StringComparison.Ordinal);
+    public string DisplaySource=>StaticFallback?Source[..^StaticFallbackSourceSuffix.Length]:Source;
+}
 public interface ILyricsRepository
 {
     LyricsBinding? Find(Track track);

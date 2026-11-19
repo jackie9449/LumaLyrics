@@ -13,7 +13,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
     readonly PlaybackCoordinator coordinator;
     readonly WorkspaceSongList songs=new(){SelectionMode=SelectionMode.Extended,HorizontalContentAlignment=HorizontalAlignment.Stretch};
     readonly TextBox search=new(){MinWidth=100};
-    readonly ComboBox filter=new(){ItemsSource=new[]{UiText.T("全部"),UiText.T("缺动态原词"),UiText.T("缺中文译文"),UiText.T("部分译文"),UiText.T("原词已更新"),UiText.T("有中文译文")},SelectedIndex=0,MinWidth=120};
+    readonly ComboBox filter=new(){ItemsSource=new[]{UiText.T("全部"),UiText.T("缺动态原词"),UiText.T("缺中文译文"),UiText.T("部分译文"),UiText.T("原词已更新"),UiText.T("有中文译文"),UiText.T("仅有静态歌词")},SelectedIndex=0,MinWidth=120};
     readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap},detail=new(){TextWrapping=TextWrapping.Wrap};
     readonly CheckBox prefer,artwork;readonly HashSet<LibrarySongKey> selection=new(LibrarySongKey.Comparer);
     readonly System.Windows.Threading.DispatcherTimer searchDelay=new(){Interval=TimeSpan.FromMilliseconds(160)};
@@ -81,7 +81,7 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
             var song=menu.PlacementTarget is ListBoxItem item?songs.ItemContainerGenerator.ItemFromContainer(item) as LibraryManagedSong:null;
             target=song?.Target;
             searchLyrics.IsEnabled=target is not null && !manualLookupOpen;
-            timeLyrics.IsEnabled=searchLyrics.IsEnabled && song!.Status.Original is LibraryOriginalState.Missing or LibraryOriginalState.ManualPlain;
+            timeLyrics.IsEnabled=searchLyrics.IsEnabled && (song!.Status.Original==LibraryOriginalState.Missing || song.Status.HasOnlyStaticLyrics);
         };
         searchLyrics.Click+=async (_,_)=>await OpenSongToolAsync(false);
         timeLyrics.Click+=async (_,_)=>await OpenSongToolAsync(true);
@@ -134,13 +134,13 @@ public sealed class TranslationJobListPanel:UserControl,IDisposable
         catch(OperationCanceledException){}catch(Exception e){if(!disposed&&request==version)status.Text=UiText.T("读取暂不可用，保留上次清单：")+UiText.Status(e.Message);}
     }
     LibraryManagedSong WithPendingLookup(LibraryManagedSong song)
-        =>coordinator.WorkspacePendingLookup.Contains(Key(song)) && song.Status.Original is LibraryOriginalState.Missing or LibraryOriginalState.Unconfirmed
+        =>coordinator.WorkspacePendingLookup.Contains(Key(song)) && song.Status.Original is LibraryOriginalState.Missing or LibraryOriginalState.Unconfirmed or LibraryOriginalState.Static
             ?song with{Status=song.Status with{Reason="精确查询未采用，等待补查。"}}:song;
     void SetStatus(string text){string localized=UiText.Status(text);status.Text=localized.Split('\n')[0];status.ToolTip=localized;}
     void ApplyFilter()
     {
         if(songs is null)return;var terms=search.Text.Split(' ',StringSplitOptions.RemoveEmptyEntries);
-        var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,5=>r.Status.Chinese is LibraryChineseState.Complete or LibraryChineseState.Partial,_=>true})).ToArray();
+        var shown=rows.Where(r=>terms.All(t=>(r.Track.Title+" "+r.Track.Artist+" "+r.Track.Album).Contains(t,StringComparison.CurrentCultureIgnoreCase))&&(filter.SelectedIndex switch{1=>r.Status.Original is not (LibraryOriginalState.Ready or LibraryOriginalState.Instrumental),2=>r.Status.Chinese==LibraryChineseState.Missing,3=>r.Status.Chinese==LibraryChineseState.Partial,4=>r.Status.Chinese==LibraryChineseState.Outdated,5=>r.Status.Chinese is LibraryChineseState.Complete or LibraryChineseState.Partial,6=>r.Status.HasOnlyStaticLyrics,_=>true})).ToArray();
         loading=true;try{if(!songs.Items.Cast<LibraryManagedSong>().SequenceEqual(shown,ReferenceEqualityComparer.Instance))songs.ItemsSource=shown;var picked=shown.Where(r=>selection.Contains(Key(r))).ToArray();if(songs.SelectedItems.Count!=picked.Length||songs.SelectedItems.Cast<LibraryManagedSong>().Any(r=>!selection.Contains(Key(r))))songs.ApplySelection(picked);}finally{loading=false;}UpdateDetail();
     }
     void UpdateDetail(){var picked=rows.Where(r=>selection.Contains(Key(r))).ToArray();detail.Text=UiText.F($"已选 {picked.Length} 首 · 当前可见 {songs.Items.Count} 首 · 共 {rows.Length} 首")+(picked.Length==1?$"\n{picked[0].Track.Title} · {UiText.Status(picked[0].Status.OriginalLabel)} · {UiText.Status(picked[0].Status.ChineseLabel)}"+(string.IsNullOrWhiteSpace(picked[0].Status.Reason)?"":"\n"+UiText.Status(picked[0].Status.Reason)):"");}

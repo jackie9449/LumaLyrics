@@ -1,0 +1,5 @@
+{
+  "仅有静态歌词": "Only untimed lyrics",
+  "已保留静态歌词，可重新查找动态原词。": "Untimed lyrics kept. You can search for timed originals again.",
+  "优先使用通过检查的动态原词。只有符合录音的静态歌词时，先保存供显示，仍可重查。保留手动绑定。": "Automatically use checked timed originals first. If only matched untimed lyrics are available, keep them for playback and later retry. Manual bindings stay intact."
+}

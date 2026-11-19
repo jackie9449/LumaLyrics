@@ -77,7 +77,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         libraryCancellation?.Dispose();libraryCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=libraryCancellation.Token;
         var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),provider,()=>foregroundLookupActive);
         prefetcher.Progress+=progress=>{if(!disposed)dispatcher.BeginInvoke(()=>{LibraryStatus=progress;Updated?.Invoke();});};
-        prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;if(Snapshot is { } s && TrackMetadata.FromAppleSession(s.Track).Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(s.Track);if(b is not null)Apply(b);}});};
+        prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;InvalidateWorkspace();if(Snapshot is { } s && TrackMetadata.FromAppleSession(s.Track).Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(s.Track);if(b is not null && b.Id!=Binding?.Id)Apply(b);}});};
         libraryTask=Task.Run(async()=>{try{await prefetcher.RunAsync(path,token);}catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{LibraryStatus=LibraryStatus with{Running=false,Message="资料库扫描失败："+e.Message};Updated?.Invoke();});}},token);
     }
     void StartArtworkPrefetch(string path)
@@ -104,11 +104,17 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
             var path=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(libraryTask is not {IsCompleted:false} && File.Exists(path))LibraryStatus=(System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(path))??LibraryStatus) with{Running=LibraryPrefetcher.IsRunning(Path.Combine(store.Root,"lyrics.db"))};
             path=LibraryArtworkImporter.ProgressPath(store.Root);if(artworkTask is not {IsCompleted:false} && File.Exists(path))ArtworkStatus=(System.Text.Json.JsonSerializer.Deserialize<ArtworkProgress>(File.ReadAllText(path))??ArtworkStatus) with{Running=LibraryArtworkImporter.IsRunning(store.Root)};
             RefreshTranslationProgress();
-            if(ActiveTrack is { } active && Binding is null && repository.Find(active) is { } imported && (imported.Manual || LibraryPrefetcher.QualityOf(imported,active)))Apply(imported);
+            RefreshCachedOriginal();
             RefreshTranslation();
             Updated?.Invoke();
         }
         catch(IOException){}catch(System.Text.Json.JsonException){}
+    }
+    void RefreshCachedOriginal()
+    {
+        if((Binding is null || Binding.StaticFallback) && ActiveTrack is {} active
+            && repository.FindReadOnly(active) is {} imported && imported.Id!=Binding?.Id
+            && (imported.Manual || imported.StaticFallback || LibraryPrefetcher.QualityOf(imported,active)))Apply(imported);
     }
     public void PauseLibraryPrefetch(){File.WriteAllText(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db")),"");libraryCancellation?.Cancel();artworkCancellation?.Cancel();}
     public async Task ResumeLibraryPrefetchAsync(bool retryDeferred=false)
@@ -139,7 +145,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
             if (s is not null) { _ = LookupAsync(false); _ = LoadArtworkAsync(s); }
         }
         else if (durationArrived && s is not null && Binding is null) _ = LookupAsync(false);
-        else if(s is not null && Binding is null && Settings.OnlineLookup && !foregroundLookupActive && DateTimeOffset.UtcNow>=nextLookupRetry)_=LookupAsync(false);
+        else if(s is not null && (Binding is null || Binding.StaticFallback) && Settings.OnlineLookup && !foregroundLookupActive && DateTimeOffset.UtcNow>=nextLookupRetry)_=LookupAsync(false);
         Updated?.Invoke();
     }
     async Task LoadArtworkAsync(PlaybackSnapshot expected)
@@ -189,12 +195,10 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         bool Current() => !disposed && !token.IsCancellationRequested && requests.IsCurrent(serial) && Snapshot?.SessionId==s.SessionId && Snapshot?.Generation == s.Generation && Snapshot?.Revision == s.Revision && Source.Latest is { } latest && latest.SessionId==s.SessionId && latest.Generation==s.Generation && latest.Revision==s.Revision;
         try
         {
-            if(repository.Find(s.Track) is {Manual:true} locked){AppleOriginalStatus="已保留当前歌曲的手动歌词绑定。";Apply(locked);return;}
-            if (!force)
-            {
-                var cached = repository.Find(s.Track);
-                if (cached is not null && (cached.Manual || LibraryPrefetcher.QualityOf(cached,s.Track))) { Apply(cached); return; }
-            }
+            var cached=repository.Find(s.Track);
+            if(cached is {Manual:true}){AppleOriginalStatus="已保留当前歌曲的手动歌词绑定。";Apply(cached);return;}
+            if(!force && cached is not null && LibraryPrefetcher.QualityOf(cached,s.Track)){Apply(cached);return;}
+            if(cached?.StaticFallback==true && cached.Id!=Binding?.Id)Apply(cached);
             foregroundLookupActive=true;
             if(Settings.AppleMusicOriginalLyrics)
             {
@@ -208,35 +212,49 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
                 }
                 AppleOriginalStatus="当前未取得可核对的 TTML。可在 Apple Music 展开动态歌词后重新查词；自动读取不会弹出窗口。";
             }
-            if (!Settings.OnlineLookup) { LyricsStatus = "未取得可核对的本机原词；联网查词已关闭，可导入本地歌词"; Updated?.Invoke(); return; }
-            if (!force && repository.HasFailure(s.Track)) { LyricsStatus = "暂未找到可靠歌词，后台稍后自动重试"; Updated?.Invoke(); return; }
-            LyricsStatus = "正在查找歌词…"; Updated?.Invoke();
+            if (!Settings.OnlineLookup) { if(Binding?.StaticFallback!=true)LyricsStatus = "未取得可核对的本机原词；联网查词已关闭，可导入本地歌词"; Updated?.Invoke(); return; }
+            if (!force && repository.HasFailure(s.Track)) { if(Binding?.StaticFallback!=true)LyricsStatus = "暂未找到可靠歌词，后台稍后自动重试"; Updated?.Invoke(); return; }
+            if(Binding?.StaticFallback!=true)LyricsStatus = "正在查找歌词…";
+            Updated?.Invoke();
             foregroundLookupActive=true;
             await Task.Delay(300,token);
             var results = await provider.LookupAsync(s.Track,token);
-            if (!Current()) return;
-            Candidates = results.OrderByDescending(c => MatchRules.Score(s.Track,c).Score).ToArray();
-            var selection = AutomaticLyricsMatcher.Select(s.Track,Candidates);
-            if (selection is not null)
-            {
-                var best=selection.Candidate;
-                // Preserve the complete provider response locally, separately from parsed lyrics.
-                var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir);
-                File.WriteAllText(Path.Combine(dir,(best.ProviderName=="NetEase"?"netease-":"lrclib-")+best.Id+".json"),best.RawJson);
-                Apply(repository.Save(s.Track,best.Content,best.SourceLabel+" · 自动检查",false,best.Instrumental,providerJson:best.RawJson));
-            }
-            else {bool partial=LyricsLookupDiagnosis.Unavailable(results);LyricsStatus=LyricsLookupDiagnosis.Describe(s.Track,results);repository.RecordLookupFailure(s.Track,LyricsStatus,partial,results.Count==0,!partial);Updated?.Invoke();}
+            if (!Current() || !Settings.OnlineLookup) return;
+            ApplyAutomaticLookupResult(s.Track,results);
         }
         catch (OperationCanceledException) { }
-        catch (Exception e) { if (Current()) { LyricsStatus = e is LyricsProviderException ? e.Message : "歌词加载失败，可重试或导入"; if(e is LyricsProviderException or HttpRequestException)repository.RecordLookupFailure(s.Track,LyricsStatus,true,false);store.Log("Lookup: " + e.GetType().Name+" "+e.Message); Updated?.Invoke(); } }
+        catch (Exception e) { if (Current()) { var reason=e is LyricsProviderException ? e.Message : "歌词加载失败，可重试或导入";if(Binding?.StaticFallback!=true)LyricsStatus=reason; if(e is LyricsProviderException or HttpRequestException)repository.RecordLookupFailure(s.Track,reason,true,false);store.Log("Lookup: " + e.GetType().Name+" "+e.Message); Updated?.Invoke(); } }
         finally{if(requests.IsCurrent(serial))foregroundLookupActive=false;}
+    }
+    internal void ApplyAutomaticLookupResult(Track track,IReadOnlyList<LyricsCandidate> results)
+    {
+        Candidates = results.OrderByDescending(c => MatchRules.Score(track,c).Score).ToArray();
+        var selection = AutomaticLyricsMatcher.Select(track,Candidates);
+        if (selection is not null)
+        {
+            var best=selection.Candidate;
+            // Preserve the complete provider response locally, separately from parsed lyrics.
+            var dir = Path.Combine(store.Root,"cache","responses"); Directory.CreateDirectory(dir);
+            File.WriteAllText(Path.Combine(dir,(best.ProviderName=="NetEase"?"netease-":"lrclib-")+best.Id+".json"),best.RawJson);
+            Apply(repository.Save(track,best.Content,best.SourceLabel+" · 自动检查",false,best.Instrumental,providerJson:best.RawJson));
+            return;
+        }
+        var fallback=repository.SaveStaticFallback(track,Candidates);
+        bool partial=LyricsLookupDiagnosis.Unavailable(results);
+        var reason=LyricsLookupDiagnosis.Describe(track,results);
+        repository.RecordLookupFailure(track,reason,partial,results.Count==0,!partial);
+        if(fallback is not null && fallback.Id!=Binding?.Id){Apply(fallback);return;}
+        RefreshCachedOriginal();
+        if(Binding?.StaticFallback!=true)LyricsStatus=reason;
+        Updated?.Invoke();
     }
     void Apply(LyricsBinding binding)
     {
         InvalidateWorkspace();
+        if((binding.StaticFallback || Binding?.StaticFallback==true) && binding.Id!=Binding?.Id)WorkspaceResultsRevision++;
         Binding = binding; Document = parser.Parse(binding.Raw,binding.Plain) with { Instrumental = binding.Instrumental };
         RefreshTranslation();
-        LyricsStatus = binding.Instrumental ? "纯音乐" : $"{(Document.IsSynced ? "逐行歌词" : "静态歌词")} · {binding.Source}{(binding.Manual ? " · 已锁定绑定" : "")}";
+        LyricsStatus = binding.Instrumental ? "纯音乐" : $"{(Document.IsSynced ? "逐行歌词" : "静态歌词")} · {binding.DisplaySource}{(binding.Manual ? " · 已锁定绑定" : "")}";
         Updated?.Invoke();
     }
     public void Import(Track target, string raw, string source, bool plain)

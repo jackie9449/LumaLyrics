@@ -144,8 +144,8 @@ public sealed partial class PlaybackCoordinator
                                 else
                                 {
                                     originalReason=LyricsLookupDiagnosis.Describe(captured.Track,found);
+                                    binding=lyrics.SaveStaticFallback(captured.Track,found,member)??lyrics.FindReadOnly(captured.Track);
                                     lyrics.RecordLookupFailure(captured.Track,originalReason,LyricsLookupDiagnosis.Unavailable(found),found.Count==0,expectedLibrary:member);
-                                    binding=lyrics.FindReadOnly(captured.Track);
                                 }
                                 resultsChanged=true;
                             }
@@ -160,9 +160,13 @@ public sealed partial class PlaybackCoordinator
                                 if(originalReason is null)
                                 {
                                     originalReason=binding is {Manual:true,Plain:true}?"当前为手动静态原词，需动态时间轴。"
+                                        :binding?.StaticFallback==true?"已保留静态歌词，可重新查找动态原词。"
                                         :!online?"联网查词已关闭，尚未查询原词。":"尚无可靠动态原词，请先准备原词。";
-                                    lyrics.RecordLookupFailure(captured.Track,originalReason,false,false,expectedLibrary:member);
-                                    resultsChanged=true;
+                                    if(binding?.StaticFallback!=true)
+                                    {
+                                        lyrics.RecordLookupFailure(captured.Track,originalReason,false,false,expectedLibrary:member);
+                                        resultsChanged=true;
+                                    }
                                 }
                                 messages.Add(captured.Track.Title+"："+originalReason);
                                 continue;
@@ -266,7 +270,7 @@ public sealed partial class PlaybackCoordinator
                         WorkspaceResultsRevision++;
                         InvalidateWorkspace();
                     }
-                    if(done)RefreshTranslation();
+                    if(done){RefreshCachedOriginal();RefreshTranslation();}
                     Updated?.Invoke();
                 });
             }

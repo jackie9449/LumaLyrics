@@ -23,16 +23,18 @@ public sealed record AutomaticLyricsDecision(bool Accepted,double MatchScore,Lyr
 
 public static partial class AutomaticLyricsMatcher
 {
-    public const int PolicyVersion=3;
+    public const int PolicyVersion=4;
     [GeneratedRegex(@"(?im)^\s*\[(?:verse|chorus|bridge|intro|outro|instrumental|refrain)[^\]]*\]\s*$")]private static partial Regex Sections();
     [GeneratedRegex(@"(?i)<html|<!doctype|暂无歌词|暫無歌詞|仅供试听|僅供試聽|lyrics not available|lyrics unavailable|sample lyrics|preview only")]private static partial Regex Placeholder();
+    [GeneratedRegex(@"(?i)\binstrumental\b|伴奏")]private static partial Regex InstrumentalTitle();
+    [GeneratedRegex(@"(?i)^\s*(?:instrumental(?: only)?|no lyrics|纯音乐(?:[，,]\s*请欣赏)?|純音樂(?:[，,]\s*請欣賞)?|无歌词|無歌詞)[。.!！]?\s*$")]private static partial Regex StaticNotice();
     static string Canonical(string value)=>MatchRules.Normalize(Sections().Replace(value,""));
     public static LyricsAssessment Assess(LyricsCandidate candidate)
     {
         if(candidate.Instrumental)return string.IsNullOrWhiteSpace(candidate.SyncedLyrics) && string.IsNullOrWhiteSpace(candidate.PlainLyrics)
             ?new(true,false,1,"匹配来源明确标记为纯音乐")
             :new(false,false,0,"纯音乐标记与歌词内容矛盾，需确认");
-        if(Regex.IsMatch(candidate.Track.Title,@"\binstrumental\b|伴奏",RegexOptions.IgnoreCase))return new(false,false,0,"伴奏录音标记与人声原词矛盾，需确认");
+        if(InstrumentalTitle().IsMatch(candidate.Track.Title))return new(false,false,0,"伴奏录音标记与人声原词矛盾，需确认");
         if(string.IsNullOrWhiteSpace(candidate.Content)||Placeholder().IsMatch(candidate.Content))return new(false,false,0,"空内容或占位歌词");
         LyricsDocument document;
         try{document=new LrcParser().Parse(candidate.Content);}catch(InvalidDataException){return new(false,false,0,"歌词大小异常");}
@@ -66,7 +68,9 @@ public static partial class AutomaticLyricsMatcher
         }
         return new(true,true,.8+(coverage??.5)*.2,coverage.HasValue?"时间戳范围及同步/纯文本覆盖检查通过":"时间戳范围及文本结构检查通过；来源无全文对照",coverage);
     }
-    static bool HasVocalEvidence(Track track,IReadOnlyList<LyricsCandidate> candidates)=>candidates.Any(c=>!c.Instrumental&&!string.IsNullOrWhiteSpace(c.Content)&&!Placeholder().IsMatch(c.Content)&&Canonical(c.Content).Length>10&&MatchRules.Score(track,c).Eligible);
+    static bool HasVocalEvidence(Track track,IReadOnlyList<LyricsCandidate> candidates)
+        =>candidates.Any(c=>!c.Instrumental && !string.IsNullOrWhiteSpace(c.Content) && !Placeholder().IsMatch(c.Content)
+            && MatchRules.Score(track,c).Eligible && (Canonical(c.Content).Length>10 || StaticText(c) is not null));
     public static AutomaticLyricsDecision Decide(Track input,LyricsCandidate candidate,IReadOnlyList<LyricsCandidate>? context=null)
     {
         var track=TrackMetadata.FromAppleSession(input);return DecideCore(track,candidate,HasVocalEvidence(track,context??[candidate]));
@@ -74,12 +78,18 @@ public static partial class AutomaticLyricsMatcher
     static AutomaticLyricsDecision DecideCore(Track track,LyricsCandidate candidate,bool vocalEvidence)
     {
         var score=MatchRules.Score(track,candidate);
-        if(!score.Eligible)return new(false,score.Score,null,score.Reason);
-        if(score.Score+1e-9<.80)return new(false,score.Score,null,"歌曲信息匹配度不足，需手动确认");
-        if(track.Album.Length>0 && candidate.Track.Album.Length>0 && !MatchRules.AlbumMatches(track.Album,candidate.Track.Album)
-            && Math.Abs((track.DurationMs??0)-(candidate.Track.DurationMs??0))>2000)return new(false,score.Score,null,"专辑不同且时长差超过 2 秒，需手动确认");
+        if(RecordingRejection(track,score) is {} rejection)return new(false,score.Score,null,rejection);
         if(candidate.Instrumental&&vocalEvidence)return new(false,score.Score,null,"纯音乐标记与同录音的人声歌词冲突，需手动确认");
         var quality=Assess(candidate);return new(quality.Accepted,score.Score,quality,quality.Reason){UsesJapaneseReading=score.UsesJapaneseReading};
+    }
+    static string? RecordingRejection(Track track,ScoredCandidate score)
+    {
+        if(!score.Eligible)return score.Reason;
+        if(score.Score+1e-9<.80)return "歌曲信息匹配度不足，需手动确认";
+        var candidate=score.Candidate.Track;
+        if(track.Album.Length>0 && candidate.Album.Length>0 && !MatchRules.AlbumMatches(track.Album,candidate.Album)
+            && Math.Abs((track.DurationMs??0)-(candidate.DurationMs??0))>2000)return "专辑不同且时长差超过 2 秒，需手动确认";
+        return null;
     }
     public static string RejectionReason(Track input,IReadOnlyList<LyricsCandidate> candidates)
     {
@@ -94,5 +104,29 @@ public static partial class AutomaticLyricsMatcher
         return ranked.OrderByDescending(x=>x.MatchScore).ThenByDescending(x=>x.Assessment.Synced)
             .ThenBy(x=>x.UsesJapaneseReading).ThenByDescending(x=>x.Assessment.Quality).ThenBy(x=>Math.Abs((x.Candidate.Track.DurationMs??0)-(track.DurationMs??0)))
             .ThenBy(x=>x.Candidate.Id).FirstOrDefault();
+    }
+
+    // Called after the timed search chain. Evaluate the source text without modifying its lyrics.
+    public static LyricsCandidate? SelectStatic(Track input,IReadOnlyList<LyricsCandidate> candidates)
+    {
+        var track=TrackMetadata.FromAppleSession(input);
+        foreach(var score in candidates.Where(c=>!c.Instrumental && !InstrumentalTitle().IsMatch(c.Track.Title))
+            .Select(c=>MatchRules.Score(track,c)).Where(score=>RecordingRejection(track,score) is null)
+            .OrderByDescending(score=>score.Score).ThenBy(score=>score.UsesJapaneseReading)
+            .ThenBy(score=>Math.Abs(score.Candidate.Track.DurationMs!.Value-track.DurationMs!.Value)).ThenBy(score=>score.Candidate.Id))
+        {
+            var candidate=score.Candidate;
+            if(StaticText(candidate) is {} raw)return candidate with{PlainLyrics=raw,SyncedLyrics=null};
+        }
+        return null;
+    }
+    static string? StaticText(LyricsCandidate candidate)
+    {
+        var raw=string.IsNullOrWhiteSpace(candidate.PlainLyrics)?candidate.SyncedLyrics:candidate.PlainLyrics;
+        if(string.IsNullOrWhiteSpace(raw) || raw.Length>2*1024*1024 || Placeholder().IsMatch(raw))return null;
+        var body=Sections().Replace(raw,"").TrimStart('\uFEFF');
+        if(StaticNotice().IsMatch(body) || !body.Split('\n').Any(line=>!line.TrimStart().StartsWith('[') && line.Any(char.IsLetter)))return null;
+        var document=new LrcParser().Parse(body);
+        return document.IsSynced || document.Warnings.Count>0 || raw.Contains("[offset:",StringComparison.OrdinalIgnoreCase)?null:raw;
     }
 }

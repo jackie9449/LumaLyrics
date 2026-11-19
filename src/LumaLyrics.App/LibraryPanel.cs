@@ -29,7 +29,7 @@ public sealed class LibraryPanel:UserControl,IDisposable
         LibraryWorkspaceUi.Button(actions,UiText.T("继续预缓存"),async()=>{if(!coordinator.Settings.OnlineLookup){status.Text=UiText.T("请先在常规设置开启联网查词。");return;}coordinator.Settings.AutoPrefetchLibrary=true;coordinator.SaveSettings();await coordinator.ResumeLibraryPrefetchAsync();},true);
         LibraryWorkspaceUi.Button(actions,UiText.T("暂停后台预缓存"),()=>{coordinator.Settings.AutoPrefetchLibrary=false;coordinator.SaveSettings();coordinator.PauseLibraryPrefetch();});
         LibraryWorkspaceUi.Button(actions,UiText.T("立即重试尚未缓存的歌曲"),async()=>{coordinator.Settings.AutoPrefetchLibrary=true;coordinator.SaveSettings();await coordinator.ResumeLibraryPrefetchAsync(true);});body.Children.Add(LibraryWorkspaceUi.Card(background));
-        body.Children.Add(LibraryWorkspaceUi.Text(UiText.T("自动保存通过录音版本与时间轴检查的动态原词；手动绑定保留，缺词不会被标为纯音乐。"),11));
+        body.Children.Add(LibraryWorkspaceUi.Text(UiText.T("优先使用通过检查的动态原词。只有符合录音的静态歌词时，先保存供显示，仍可重查。保留手动绑定。"),11));
         Loaded+=(_,_)=>{if(disposed)return;if(!subscribed){coordinator.Updated+=Refresh;subscribed=true;}stamp=null;Refresh();};Unloaded+=(_,_)=>Unsubscribe();Refresh();
     }
     void Refresh()

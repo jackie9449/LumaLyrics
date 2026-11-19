@@ -79,6 +79,19 @@ public sealed class PersonalLibraryTests : IDisposable
         using var zip=ZipFile.OpenRead(PathOf("own.lumalibrary.zip"));Assert.DoesNotContain(zip.Entries,e=>e.FullName.EndsWith(".dll")||e.FullName.Contains("prefetch.pause")||e.FullName.Contains("worker.json"));
         Assert.Equal("",File.ReadAllText(PathOf("source/library-prefetch.pause")));
     }
+    [Fact] public void ValidatedStaticFallbackIsExportedAsReadableTextAndRestored()
+    {
+        using var source=Seed();
+        const string raw="A quiet road carries us home";
+        var saved=source.SaveStaticFallback(Missing,[new(123,Missing,null,raw,false)])!;
+        var manifest=PersonalLibraryArchive.Export(PathOf("source"),PathOf("collection"));
+        var track=manifest.Tracks.Single(t=>t.Track==Missing);
+        Assert.Equal("Static",track.LyricState);Assert.EndsWith(".txt",track.LyricPath);
+        Assert.Equal(raw,File.ReadAllText(PathOf("collection/"+track.LyricPath)));
+        PersonalLibraryArchive.Restore(PathOf("collection"),PathOf("restored"));
+        using var restored=new LyricsRepository(PathOf("restored/lyrics.db"));
+        Assert.Equal(saved,restored.FindReadOnly(Missing));
+    }
     [Fact] public void TranslationSnapshotAndReadableProvenanceSurvivePersonalRoundTrip()
     {
         using var source=Seed();var document=new LrcParser().Parse(Timed);

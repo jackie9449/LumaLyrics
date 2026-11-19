@@ -11,22 +11,25 @@ public partial class MainWindow
     {
         var oldSource=settings.LibraryPath;bool online=settings.OnlineLookup;string theme=settings.UiTheme;
         SettingsWindow? preferences=null;
-        var tracks=Enumerable.Range(0,4).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
+        var tracks=Enumerable.Range(0,6).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
         tracks[1]=new("Kaze no Oto","Sora Hikari","Kotoba no Umi - Single",479000);
         string[] lines=["We follow the river beyond the morning","We carry the light across the valley","The path remembers every quiet footstep","The distant hills are waiting for the sunrise","We leave the harbor with a song of our own","We reach the shore and rest beneath the stars"];
         string raw=string.Join("\n",lines.Select((line,i)=>$"[{i*40/60:00}:{i*40%60:00}]{line}")),plain=string.Join("\n",lines);
         string provenance=JsonSerializer.Serialize(new{id=991001,trackName=tracks[0].Title,artistName=tracks[0].Artist,albumName=tracks[0].Album,duration=479,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
         var good=new LyricsCandidate(991001,tracks[0],raw,plain,false,provenance);
         var bad=good with{Id=991002,Track=new("カゼノオト","ソラヒカリ","コトバノウミ",479000),PlainLyrics=null};
+        var staticCandidate=new LyricsCandidate(991004,tracks[4],null,plain,false);
         try
         {
             settings.LibraryPath="own-ui";settings.OnlineLookup=true;
             using(var repo=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db")))
             {
-                repo.SyncLibrary(new("own-ui",4,tracks.Select((t,i)=>new LibraryTrack(i.ToString(),t)).ToArray(),"own"));
+                repo.SyncLibrary(new("own-ui",tracks.Length,tracks.Select((t,i)=>new LibraryTrack(i.ToString(),t)).ToArray(),"own"));
                 repo.RecordLookupFailure(tracks[3],"时间戳超出歌曲时长",false,false);
+                repo.Save(tracks[5],plain,"Own manual text",true,plain:true);
             }
-            coordinator.WorkspaceOriginalProvider=new WorkspaceOriginalFixture((track,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(track==tracks[0]?[good]:track==tracks[1]?[bad]:[]));
+            coordinator.WorkspaceOriginalProvider=new WorkspaceOriginalFixture((track,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(
+                track==tracks[0]?[good]:track==tracks[1]?[bad]:track==tracks[4]?new LyricsLookupResult([staticCandidate],["Own unavailable source"]):[]));
             coordinator.WorkspaceChineseProvider=new WorkspaceChineseFixture((_,_)=>Task.FromResult<IReadOnlyList<TranslationCandidate>>([]));
             preferences=new(coordinator,id=>SelectUiTheme(id,false)){Owner=this,Width=1220,Height=900};preferences.Show();preferences.SelectLibrarySongs();
             var panel=preferences.Library.Songs;await panel.Reload(true);await Task.Delay(180);
@@ -36,11 +39,14 @@ public partial class MainWindow
             var until=DateTime.UtcNow.AddSeconds(15);while(coordinator.WorkspaceBusy&&DateTime.UtcNow<until)await Task.Delay(40);
             await panel.Reload(true);await Task.Delay(150);
             var rows=panel.SongList.Items.Cast<LibraryManagedSong>().ToArray();
-            checks["acquisition.actualPrepareCompletes"]=!coordinator.WorkspaceBusy&&rows.Length==4;
+            checks["acquisition.actualPrepareCompletes"]=!coordinator.WorkspaceBusy&&rows.Length==tracks.Length;
             checks["acquisition.tailAccepted"]=rows.Single(r=>r.Track==tracks[0]).Status.Reason is null;
             checks["acquisition.missingReferenceReason"]=rows.Single(r=>r.Track==tracks[1]).Status.Reason=="尾段较长且来源缺少全文对照，需手动确认";
             checks["acquisition.noCandidateReason"]=rows.Single(r=>r.Track==tracks[2]).Status.Reason=="来源未返回歌词候选";
             using(var repo=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"),true))checks["acquisition.originalUnchanged"]=repo.FindReadOnly(tracks[0])?.Raw==raw&&repo.FindReadOnly(tracks[1]) is null;
+            var staticRow=rows.Single(r=>r.Track==tracks[4]);
+            checks["acquisition.partialSourceCanStillSaveStatic"]=staticRow.Status.Original==LibraryOriginalState.Static
+                && staticRow.Status.Chinese==LibraryChineseState.BlockedOriginal && staticRow.Status.Reason?.Contains("Own unavailable source")==true;
             foreach(var appTheme in AppThemes.All)
             {
                 SelectUiTheme(appTheme.Id,false);
@@ -63,10 +69,38 @@ public partial class MainWindow
             Descendants<Button>(panel).Single(b=>b.Content?.ToString()==UiText.T("准备所选原词与译文")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             until=DateTime.UtcNow.AddSeconds(15);while(coordinator.WorkspaceBusy&&DateTime.UtcNow<until)await Task.Delay(40);await panel.Reload(true);await Task.Delay(100);
             checks["acquisition.successClearsVisibleReason"]=panel.SongList.Items.Cast<LibraryManagedSong>().Single(r=>r.Track==tracks[1]).Status.Reason is null;
+            var filters=Descendants<ComboBox>(panel).Single();
+            panel.SelectKeys([]);
+            filters.SelectedItem=UiText.T("仅有静态歌词");
+            var onlyStatic=panel.SongList.Items.Cast<LibraryManagedSong>().ToArray();
+            checks["acquisition.staticOnlyFilter"]=onlyStatic.Select(r=>r.Track).ToHashSet().SetEquals([tracks[4],tracks[5]])
+                && (UiText.Language=="zh-Hans" || filters.SelectedItem?.ToString()!="仅有静态歌词");
+            VisualVerification.Save(preferences,Path.Combine(directory,"static-only-filter.png"));
+            panel.SelectKeys(onlyStatic.Select(r=>r.Key));
+            coordinator.WorkspaceOriginalProvider=new WorkspaceOriginalFixture((track,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(
+                [good with{Id=991004,Track=track,RawJson=JsonSerializer.Serialize(new{id=991004,trackName=track.Title,artistName=track.Artist,albumName=track.Album,duration=479,syncedLyrics=raw,plainLyrics=plain,instrumental=false})}]));
+            Descendants<Button>(panel).Single(b=>b.Content?.ToString()==UiText.T("准备所选原词与译文")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            until=DateTime.UtcNow.AddSeconds(15);while(coordinator.WorkspaceBusy&&DateTime.UtcNow<until)await Task.Delay(40);
+            await panel.Reload(true);
+            checks["acquisition.staticUpgradeLeavesOnlyManualStaticInFilter"]=panel.SongList.Items.Cast<LibraryManagedSong>().SingleOrDefault()?.Track==tracks[5];
+            filters.SelectedIndex=0;
+            checks["acquisition.upgradedStaticIsTimed"]=panel.SongList.Items.Cast<LibraryManagedSong>().Single(r=>r.Track==tracks[4]).Status.Original==LibraryOriginalState.Ready;
             // The candidate dialog must distinguish metadata score from the automatic quality gate.
             var fixtureStore=new SettingsStore(Path.Combine(coordinator.DataRoot,"candidate-fixture"));
             var provider=new ManualLyricsFixtureProvider(bad);
             await using var subject=new PlaybackCoordinator(Dispatcher,fixtureStore,new AppSettings{OnlineLookup=true,AutoPrefetchLibrary=false,AppleMusicOriginalLyrics=false},provider);
+            subject.SetTranslationVerificationSnapshot(tracks[4],1000);
+            subject.ApplyAutomaticLookupResult(tracks[4],[staticCandidate]);
+            checks["acquisition.playbackDisplaysUntimedFallback"]=subject.Binding?.StaticFallback==true && subject.Document is {IsSynced:false}
+                && subject.Document.Raw==plain && subject.Translation is null;
+            await using(var offline=new PlaybackCoordinator(Dispatcher,fixtureStore,new AppSettings{OnlineLookup=false,AutoPrefetchLibrary=false,AppleMusicOriginalLyrics=false}))
+            {
+                offline.SetTranslationVerificationSnapshot(tracks[4],1000);
+                await offline.LookupAsync(false);
+                checks["acquisition.playbackLoadsFallbackOffline"]=offline.Document?.Raw==plain && offline.LyricsStatus.StartsWith("静态歌词",StringComparison.Ordinal);
+            }
+            subject.ApplyAutomaticLookupResult(tracks[4],[good with{Track=tracks[4],RawJson=""}]);
+            checks["acquisition.playbackUpgradesToTimed"]=subject.Binding?.StaticFallback==false && subject.Document?.IsSynced==true;
             subject.SetTranslationVerificationSnapshot(tracks[1],1000);await subject.LookupManualAsync(tracks[1],default);
             var dialog=new CandidateWindow(subject,_=>tracks[1],(_,_)=>{}){Owner=preferences};
             var finished=new TaskCompletionSource();

@@ -106,6 +106,12 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         using var reader=check.ExecuteReader();
         return reader.Read() && member.Track==new Track(reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.IsDBNull(3)?null:reader.GetDouble(3));
     }
+    public LyricsBinding? SaveStaticFallback(Track track,IReadOnlyList<LyricsCandidate> candidates,LibraryQueueItem? expectedLibrary=null)
+    {
+        var selected=AutomaticLyricsMatcher.SelectStatic(track,candidates);
+        return selected is null?null:Save(track,selected.Content,selected.SourceLabel+LyricsBinding.StaticFallbackSourceSuffix,false,plain:true,
+            providerJson:selected.RawJson,expectedLibrary:expectedLibrary,preserveReliable:true);
+    }
     public LyricsBinding Save(Track track, string raw, string source, bool manual, bool instrumental = false, bool plain = false, string? providerJson = null,LibraryQueueItem? expectedLibrary=null,bool onlyIfMissing=false,bool preserveReliable=false,string? expectedBindingId=null)
     {
         track=TrackMetadata.FromAppleSession(track);
@@ -116,8 +122,9 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         if(manual && expectedLibrary is not null && current?.Id!=expectedBindingId)
             throw new InvalidDataException("所选歌曲的原词已变化，请从歌曲列表重新打开手动查词。");
         if(current?.Manual==true && !manual){tx.Commit();return current;}
+        if(!manual && instrumental && current?.StaticFallback==true){tx.Commit();return current;}
         if(!manual&&onlyIfMissing&&current is not null){tx.Commit();return current;}
-        if(!manual&&preserveReliable&&current is not null&&LibraryPrefetcher.QualityOf(current,track)){tx.Commit();return current;}
+        if(!manual&&preserveReliable&&current is not null&&(plain&&current.StaticFallback || LibraryPrefetcher.QualityOf(current,track))){tx.Commit();return current;}
         if(!manual && current is not null && current.Source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal)
             && !source.StartsWith("Apple Music · 本机 TTML",StringComparison.Ordinal) && LibraryPrefetcher.QualityOf(current,track)){tx.Commit();return current;}
         string trackId = FindTrack(track) ?? Guid.NewGuid().ToString("N");
@@ -155,7 +162,7 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
         track=TrackMetadata.FromAppleSession(track);using var tx=db.BeginTransaction(deferred:false);
         if(expectedLibrary is {} member && (TrackMetadata.FromAppleSession(member.Track)!=track || !IsCurrentLibraryMember(member)))return;
         var current=FindReadOnly(track);if(current is not null&&(current.Manual||LibraryPrefetcher.QualityOf(current,track))){tx.Commit();return;}
-        string state=unavailable?"Error":noCandidates?"Missing":"Incomplete";
+        string state=unavailable?"Error":noCandidates && current?.StaticFallback!=true?"Missing":"Incomplete";
         string retry=DateTimeOffset.UtcNow.Add(unavailable?TimeSpan.FromMinutes(15):TimeSpan.FromDays(1)).ToString("O");
         const string update="UPDATE LibraryTracks SET State=$state,Detail=$detail,RetryUtc=$retry,LyricsKind='' WHERE Active=1 AND ";
         if(expectedLibrary is {} target)

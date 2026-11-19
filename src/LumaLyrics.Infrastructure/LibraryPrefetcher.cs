@@ -64,10 +64,19 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                     if(File.Exists(PausePath(databasePath))){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
                     if(selected is not null)
                     {
-                        repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson,expectedLibrary:item);
-                        repository.SetLibraryState(item,repository.FindReadOnly(item.Track)?.Manual==true?"Manual":"Cached",selected.Assessment.Reason,selected.Candidate.Instrumental?"Instrumental":"Synced");Cached?.Invoke(item.Track);
+                        var saved=repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson,expectedLibrary:item);
+                        if(saved.StaticFallback)
+                            repository.RecordLookupFailure(item.Track,"已保留静态歌词，可重新查找动态原词。",false,false,expectedLibrary:item);
+                        else
+                            repository.SetLibraryState(item,saved.Manual?"Manual":"Cached",selected.Assessment.Reason,saved.Instrumental?"Instrumental":"Synced");
+                        Cached?.Invoke(item.Track);
                     }
-                    else repository.RecordLookupFailure(item.Track,LyricsLookupDiagnosis.Describe(item.Track,candidates),LyricsLookupDiagnosis.Unavailable(candidates),candidates.Count==0,expectedLibrary:item);
+                    else
+                    {
+                        var fallback=repository.SaveStaticFallback(item.Track,candidates,item);
+                        repository.RecordLookupFailure(item.Track,LyricsLookupDiagnosis.Describe(item.Track,candidates),LyricsLookupDiagnosis.Unavailable(candidates),candidates.Count==0,expectedLibrary:item);
+                        if(fallback?.StaticFallback==true)Cached?.Invoke(item.Track);
+                    }
                 }
                 catch(OperationCanceledException){throw;}
                 catch(Exception e) when(e is LyricsProviderException or HttpRequestException){repository.SetLibraryState(item,"Error",e.Message);consecutiveErrors++;}
