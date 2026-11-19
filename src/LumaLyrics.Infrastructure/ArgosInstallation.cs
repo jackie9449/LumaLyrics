@@ -52,11 +52,14 @@ public sealed class ArgosInstallation
         string prefix=Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar,path=Path.GetFullPath(Path.Combine(root,relative));
         if(!path.StartsWith(prefix,StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Archive escaped destination");return path;
     }
-    public static void Extract(string archive,string destination,bool wheel=false)
+    public static void Extract(string archive,string destination,bool wheel=false)=>Extract(archive,destination,wheel,null,default);
+    internal static void Extract(string archive,string destination,bool wheel,Func<string,bool>? skip,CancellationToken token)
     {
         using var zip=ZipFile.OpenRead(archive);long total=0;
         foreach(var entry in zip.Entries)
         {
+            token.ThrowIfCancellationRequested();
+            if(skip?.Invoke(entry.FullName)==true)continue;
             total+=entry.Length;if(total>1024L*1024*1024 || entry.Length>512L*1024*1024 || ((entry.ExternalAttributes>>16)&0xf000)==0xa000)throw new InvalidDataException("Archive exceeds limits");
             string name=entry.FullName;
             if(wheel && name.Contains(".data/"))

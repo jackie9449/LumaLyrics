@@ -3,6 +3,7 @@ using System.Globalization;
 namespace LumaLyrics.Core;
 
 public sealed record LyricTimingLine(string Text,int? StartMs=null,int? EndMs=null);
+public readonly record struct LyricTimingSpan(int StartMs,int? EndMs);
 
 /// <summary>Records only boundaries explicitly marked or edited by the listener.</summary>
 public sealed class ManualLyricTiming
@@ -11,7 +12,7 @@ public sealed class ManualLyricTiming
     readonly LyricTimingLine[] lines;
     readonly Stack<Change> history=new();
     readonly int maximumMs;
-    readonly record struct Change(int Index,LyricTimingLine Before,LyricTimingLine? Next,int Active);
+    readonly record struct Change(int Index,LyricTimingLine? Before,LyricTimingLine? Next,int Active,int Shift=0);
 
     public ManualLyricTiming(string source,double? durationMs)
     {
@@ -32,6 +33,38 @@ public sealed class ManualLyricTiming
     public bool WaitingForStart=>!Complete && lines[ActiveIndex].StartMs is null;
     public bool CanInsertGap=>ActiveIndex>0 && !Complete && lines[ActiveIndex].StartMs is {} start && lines[ActiveIndex-1].EndMs==start;
     public bool CanUndo=>history.Count>0;
+    public bool HasDraft {get;private set;}
+    public int MarkedCount=>HasDraft?lines.Count(l=>l.EndMs.HasValue):ActiveIndex;
+
+    public void LoadDraft(IReadOnlyList<LyricTimingSpan?> suggested)
+    {
+        if(suggested.Count!=lines.Length || history.Count!=0 || HasDraft)
+            throw new InvalidDataException("草稿与当前原词不一致。");
+        // Discard invalid or conflicting suggestions; an unaligned row remains editable.
+        int lastEnd=0;
+        for(int i=0;i<lines.Length;i++)
+        {
+            if(suggested[i] is not {} span || span.StartMs<lastEnd || span.StartMs>=maximumMs || span.EndMs<=span.StartMs || span.EndMs>maximumMs)continue;
+            if(i+1<suggested.Count && suggested[i+1] is {} next && next.StartMs>span.StartMs && next.StartMs<span.EndMs)span=span with{EndMs=null};
+            lines[i]=lines[i] with{StartMs=span.StartMs,EndMs=span.EndMs};
+            lastEnd=span.EndMs??(span.StartMs+1);
+        }
+        HasDraft=true;
+        FindUnfinished();
+    }
+
+    void FindUnfinished()
+    {
+        int index=Array.FindIndex(lines,l=>l.EndMs is null);
+        ActiveIndex=index<0?lines.Length:index;
+    }
+
+    bool FitsKnownNeighbors(int index,int start,int end)
+    {
+        int? lower=lines.Take(index).Reverse().Select(l=>l.EndMs??l.StartMs).FirstOrDefault(t=>t.HasValue);
+        int? upper=lines.Skip(index+1).Select(l=>l.StartMs).FirstOrDefault(t=>t.HasValue);
+        return (!lower.HasValue||lower<=start) && (!upper.HasValue||end<=upper);
+    }
 
     public void Mark(double positionMs)
     {
@@ -42,16 +75,20 @@ public sealed class ManualLyricTiming
         if(line.StartMs is null)
         {
             if(index>0 && at<lines[index-1].EndMs)throw new InvalidDataException("下一句不能早于上一句的结束时间。");
+            if(HasDraft&&!FitsKnownNeighbors(index,at,at))throw new InvalidDataException("请保持每句起止时间正确，且相邻歌词不重叠。");
             history.Push(new(index,line,null,index));
             lines[index]=line with{StartMs=at};
             return;
         }
         if(at<=line.StartMs)throw new InvalidDataException("结束时间须晚于开始时间。可以撤销后重标。");
+        if(HasDraft && !FitsKnownNeighbors(index,line.StartMs.Value,at))throw new InvalidDataException("请保持每句起止时间正确，且相邻歌词不重叠。");
         var next=index+1<lines.Length?lines[index+1]:null;
+        if(HasDraft && next?.StartMs is not null)next=null;
         history.Push(new(index,line,next,index));
         lines[index]=line with{EndMs=at};
         ActiveIndex++;
         if(next is not null)lines[ActiveIndex]=next with{StartMs=at};
+        if(HasDraft)FindUnfinished();
     }
 
     public void BeginGap()
@@ -65,19 +102,40 @@ public sealed class ManualLyricTiming
     public void Edit(int index,double startMs,double endMs)
     {
         var line=lines[index];
-        if(line.EndMs is null)throw new InvalidDataException("请先完成这一句的标记。");
+        if(line.EndMs is null&&!HasDraft)throw new InvalidDataException("请先完成这一句的标记。");
         int start=CheckedTime(startMs),end=CheckedTime(endMs);
-        if(end<=start || index>0 && start<lines[index-1].EndMs || index+1<lines.Length && end>lines[index+1].StartMs)
+        if(end<=start || !FitsKnownNeighbors(index,start,end))
             throw new InvalidDataException("请保持每句起止时间正确，且相邻歌词不重叠。");
         if(line.StartMs==start && line.EndMs==end)return;
         history.Push(new(index,line,null,ActiveIndex));
         lines[index]=line with{StartMs=start,EndMs=end};
+        if(HasDraft)FindUnfinished();
+    }
+
+    public bool CanShiftDraft=>HasDraft && lines.Any(l=>l.StartMs.HasValue);
+
+    public void ShiftDraft(double milliseconds)
+    {
+        if(!CanShiftDraft || !double.IsFinite(milliseconds) || Math.Abs(milliseconds)>5000)
+            throw new InvalidDataException("整体校准请输入 −5 到 5 秒。");
+        int delta=(int)Math.Round(milliseconds);
+        if(delta==0)return;
+        if(lines.Any(l=>l.StartMs is {} start && (start+delta<0 || start+delta>=maximumMs) || l.EndMs+delta>maximumMs))
+            throw new InvalidDataException("调整后歌词会超出歌曲时间范围。");
+        history.Push(new(-1,null,null,ActiveIndex,delta));
+        ShiftKnown(delta);
+    }
+
+    void ShiftKnown(int delta)
+    {
+        for(int i=0;i<lines.Length;i++)lines[i]=lines[i] with{StartMs=lines[i].StartMs+delta,EndMs=lines[i].EndMs+delta};
     }
 
     public void Undo()
     {
         if(!history.TryPop(out var change))return;
-        lines[change.Index]=change.Before;
+        if(change.Shift!=0){ShiftKnown(-change.Shift);return;}
+        lines[change.Index]=change.Before!;
         if(change.Next is not null)lines[change.Index+1]=change.Next;
         ActiveIndex=change.Active;
     }

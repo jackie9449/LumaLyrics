@@ -71,6 +71,19 @@
       <TextBlock x:Name="FeaturedLine" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"
        Foreground="{DynamicResource TextBrush}" Margin="0,8,0,10"/>
       <TextBlock x:Name="Instruction" Style="{StaticResource TimingCaption}" Margin="0,0,0,8"/>
+      <Border x:Name="AutoTimingPanel" Style="{StaticResource TimingCard}" Padding="10" Margin="0,4,0,8">
+       <StackPanel>
+        <TextBlock Text="{local:Loc Text='离线自动打轴'}" FontWeight="SemiBold" Margin="0,0,0,5"/>
+        <TextBlock x:Name="AutoTimingStatus" Style="{StaticResource TimingCaption}" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite"/>
+        <ProgressBar x:Name="AutoTimingProgress" Height="5" Margin="0,0,0,8" Visibility="Collapsed"/>
+        <WrapPanel>
+         <Button x:Name="PrepareAutoTiming" Click="PrepareAutoClicked" Margin="0,0,6,6"/>
+         <Button x:Name="CaptureAutoTiming" Content="{local:Loc Text='用 Apple Music 播放打轴'}" Click="CaptureAutoClicked" Margin="0,0,6,6"/>
+         <Button x:Name="OpenAutoAudio" Content="{local:Loc Text='选择本地 WAV…'}" Click="OpenAutoClicked" Margin="0,0,6,6"/>
+         <Button x:Name="CancelAutoTiming" Content="{local:Loc Text='取消'}" Click="CancelAutoClicked" Visibility="Collapsed" Margin="0,0,6,6"/>
+        </WrapPanel>
+       </StackPanel>
+      </Border>
       <WrapPanel x:Name="MarkActions" Visibility="Collapsed" Margin="0,4,0,8">
        <Button x:Name="MarkLine" Style="{StaticResource PrimaryButton}" Click="MarkClicked" Margin="0,0,7,6"/>
        <Button x:Name="InsertGap" Content="{local:Loc Text='G · 在上一句后插入间奏'}" Click="GapClicked" Margin="0,0,7,6"/>
@@ -83,15 +96,21 @@
         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
         <StackPanel>
          <TextBlock Text="{local:Loc Text='开始时间'}" Style="{StaticResource TimingCaption}" Margin="0,0,0,3"/>
-         <TextBox x:Name="EditStart" FontFamily="Consolas" Padding="8,6" AutomationProperties.Name="{local:Loc Text='开始时间'}"/>
+         <TextBox x:Name="EditStart" FontFamily="Consolas" Padding="8,4" MinHeight="30" AutomationProperties.Name="{local:Loc Text='开始时间'}"/>
         </StackPanel>
         <StackPanel Grid.Column="2">
          <TextBlock Text="{local:Loc Text='结束时间'}" Style="{StaticResource TimingCaption}" Margin="0,0,0,3"/>
-         <TextBox x:Name="EditEnd" FontFamily="Consolas" Padding="8,6" AutomationProperties.Name="{local:Loc Text='结束时间'}"/>
+         <TextBox x:Name="EditEnd" FontFamily="Consolas" Padding="8,4" MinHeight="30" AutomationProperties.Name="{local:Loc Text='结束时间'}"/>
         </StackPanel>
        </Grid>
        <Button x:Name="ApplyTimes" Content="{local:Loc Text='应用时间'}" Click="EditClicked" HorizontalAlignment="Left" Margin="0,8,0,0"/>
       </StackPanel>
+      <Expander x:Name="DraftShiftPanel" Header="{local:Loc Text='整体校准（秒）'}" Visibility="Collapsed" Margin="0,12,0,0">
+       <WrapPanel Margin="0,6,0,0">
+        <TextBox x:Name="ShiftSeconds" Text="0" Width="77" MinHeight="30" FontFamily="Consolas" Margin="0,0,6,4" AutomationProperties.Name="{local:Loc Text='整体校准（秒）'}"/>
+        <Button x:Name="ApplyShift" Content="{local:Loc Text='平移草稿'}" Click="ShiftClicked" Margin="0,0,0,4"/>
+       </WrapPanel>
+      </Expander>
      </StackPanel>
     </ScrollViewer>
    </Border>

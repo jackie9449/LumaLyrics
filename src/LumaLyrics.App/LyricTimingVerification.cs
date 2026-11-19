@@ -132,6 +132,54 @@ public partial class MainWindow
             checks["timing.originalSelectionAndOtherBindingRetained"]=panel.SelectedSongs.Single().Track==other && repository.FindReadOnly(other)?.Id==unrelated.Id;
             await Until(()=>panel.SongList.Items.Cast<LibraryManagedSong>().Single(r=>r.Track==target).Status.Original==LibraryOriginalState.Ready);
             checks["timing.workspaceRefreshesStatus"]=true;
+            var draftTrack=target with{Title="Draft Road"};
+            repository.SyncLibrary(new("own-timing",3,[new("one",target),new("two",other),new("draft",draftTrack)],"own"));
+            var originalDraft=repository.Save(draftTrack,plain,"Own draft fixture",true,plain:true);
+            var draftTarget=new LibraryPreparationTarget(new("own-timing","draft"),draftTrack,originalDraft.Id,null,null);
+            var fixture=new TimingEngineFixture();
+            var draftWindow=new LyricTimingWindow(subject,draftTarget,plain,fixture,async token=>
+            {
+                await Task.Delay(55,token);
+                return new LyricTimingAudio(new short[16000],16000,0,0);
+            }){Owner=preferences,Width=680,Height=600};
+            var reviewFinished=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _=Dispatcher.BeginInvoke(async()=>
+            {
+                try
+                {
+                    Click(draftWindow.CaptureAutoTiming);
+                    checks["timing.autoCanCancelWhileManualActionsAreDisabled"]=draftWindow.CancelAutoTiming.IsVisible && !draftWindow.BeginTiming.IsEnabled;
+                    Click(draftWindow.CancelAutoTiming);
+                    await Until(()=>draftWindow.CaptureAutoTiming.IsEnabled);
+                    checks["timing.cancelKeepsStaticOriginal"]=repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id;
+                    Click(draftWindow.CaptureAutoTiming);
+                    await Until(()=>draftWindow.TimedLines.Items.Count==3);
+                    checks["timing.autoDraftDoesNotWriteBeforeReview"]=repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id && !draftWindow.SaveTiming.IsEnabled;
+                    checks["timing.unalignedLineCanBeEdited"]=draftWindow.Review.IsVisible && draftWindow.EditStart.Text.Length==0;
+                    draftWindow.DraftShiftPanel.IsExpanded=true;
+                    draftWindow.ShiftSeconds.Text="0.5";Click(draftWindow.ApplyShift);
+                    draftWindow.TimedLines.SelectedIndex=0;
+                    checks["timing.autoDraftShiftAndUndo"]=draftWindow.EditStart.Text=="00:04.500" && KeyPress(draftWindow.Editor,Key.Back);
+                    draftWindow.DraftShiftPanel.IsExpanded=false;
+                    draftWindow.TimedLines.SelectedIndex=1;
+                    draftWindow.EditStart.Text="9.250";draftWindow.EditEnd.Text="14.125";
+                    Click(draftWindow.ApplyTimes);
+                    checks["timing.autoDraftCanSaveOnlyWhenComplete"]=draftWindow.SaveTiming.IsEnabled;
+                    await Task.Delay(180);
+                    if(UiText.Language=="zh-Hans")VisualVerification.Save(draftWindow,Path.Combine(directory,"timing-auto-draft.png"));
+                    Click(draftWindow.SaveTiming);
+                    reviewFinished.TrySetResult();
+                }
+                catch(Exception e){reviewFinished.TrySetException(e);}
+                finally{if(draftWindow.IsVisible)draftWindow.Close();}
+            });
+            draftWindow.ShowDialog();
+            await reviewFinished.Task.WaitAsync(TimeSpan.FromSeconds(8));
+            var reviewed=repository.FindReadOnly(draftTrack);
+            var draftGroups=reviewed is null?null:new LrcParser().Parse(reviewed.Raw).Groups;
+            checks["timing.reviewedDraftPreservesRepeatedLinesAndGaps"]=reviewed is {Manual:true,Plain:false,Source:"离线打轴 · 已校对"}
+                && draftGroups?.Select(g=>g.TimeMs).SequenceEqual([4000d,7200d,9250d,14125d,39000d,44200d])==true
+                && draftGroups?.Select(g=>g.Text).SequenceEqual(["The quiet road","","We follow the light","","The quiet road",""])==true;
         }
         finally{preferences.Close();SelectUiTheme(theme,false);}
 
@@ -152,6 +200,18 @@ public partial class MainWindow
             long end=Environment.TickCount64+5000;
             while(!ready() && Environment.TickCount64<end)await Task.Delay(30);
             if(!ready())throw new TimeoutException("Timed lyric fixture did not reach the expected state.");
+        }
+    }
+
+    sealed class TimingEngineFixture : IOfflineLyricTiming
+    {
+        public bool Ready=>true;
+        public long DownloadBytes=>1;
+        public Task PrepareAsync(IProgress<(long Done,long Total)>? progress,CancellationToken token)=>Task.CompletedTask;
+        public Task<IReadOnlyList<LyricTimingSpan?>> AlignAsync(LyricTimingAudio audio,string[] lines,CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<LyricTimingSpan?>>([new(4000,7200),null,new(39000,44200)]);
         }
     }
 }

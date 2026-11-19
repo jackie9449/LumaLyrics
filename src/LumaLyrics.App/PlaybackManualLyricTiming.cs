@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
+using LumaLyrics.Windows;
 
 namespace LumaLyrics.App;
 
@@ -38,8 +39,12 @@ public sealed partial class PlaybackCoordinator
 
     internal void SaveManualLyricTiming(LibraryPreparationTarget target,ManualLyricTiming timing)
     {
-        var binding=repository.Save(target.Track,timing.MakeLrc(),"手动打轴",true,
+        var binding=repository.Save(target.Track,timing.MakeLrc(),timing.HasDraft?"离线打轴 · 已校对":"手动打轴",true,
+            providerJson:timing.HasDraft?"{\"source\":\"w2v-bert-2.0-music-lyrics-ctc\",\"modelRevision\":\"1be91455793f86de803ac0707303a0998e423ce1\",\"acceptedInTimingEditor\":true}":null,
             expectedLibrary:Member(target),expectedBindingId:target.BindingId);
         ApplyLibraryOriginal(target,binding);
     }
+
+    internal Task<LyricTimingAudio> CaptureTimingAudioAsync(Track target,IProgress<AppleMusicLyricCapture.Progress>? progress,CancellationToken token)
+        =>AppleMusicLyricCapture.CaptureAsync(target,()=>Source.Latest,progress,token);
 }

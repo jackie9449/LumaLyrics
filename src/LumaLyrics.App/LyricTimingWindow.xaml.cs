@@ -24,10 +24,13 @@ public partial class LyricTimingWindow : Window
     bool saved,updatingRows;
     sealed record DisplayedLine(string Number,string Text,string Times,string Gap);
 
-    internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain)
+    internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain,IOfflineLyricTiming? offline=null,
+        Func<CancellationToken,Task<LyricTimingAudio>>? capture=null)
     {
         this.coordinator=coordinator;
         this.target=target;
+        autoTiming=offline??new OfflineLyricTiming();
+        captureOverride=capture;
         InitializeComponent();
         Content=null;
         ApplicationWindowFrame.SetContent(this,Editor);
@@ -41,10 +44,11 @@ public partial class LyricTimingWindow : Window
         Feedback.Text=UiText.T("空行会跳过。");
         Loaded+=(_,_)=>{RefreshPlayback();playback.Start();if(plain.Length==0)SourceText.Focus();else BeginTiming.Focus();};
         playback.Tick+=(_,_)=>RefreshPlayback();
-        Closed+=(_,_)=>playback.Stop();
+        InitializeAutoTiming();
+        Closed+=(_,_)=>{playback.Stop();autoClosed=true;autoOperation?.Cancel();};
         Closing+=(_,e)=>
         {
-            if(!saved && timing?.CanUndo==true)
+            if(captureOverride is null && !saved && timing is { } draft && (draft.CanUndo || draft.HasDraft))
                 e.Cancel=MessageBox.Show(this,UiText.T("当前打轴尚未保存。要关闭编辑器吗？"),Title,MessageBoxButton.OKCancel,MessageBoxImage.Question)==MessageBoxResult.Cancel;
         };
         PreviewKeyDown+=TimingKeyDown;
@@ -66,9 +70,15 @@ public partial class LyricTimingWindow : Window
 
     void BeginClicked(object sender,RoutedEventArgs e)
     {
+        if(autoOperation is not null)return;
         try{timing=new ManualLyricTiming(SourceText.Text,target.Track.DurationMs);}
         catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);return;}
-        SourceText.Visibility=LoadText.Visibility=BeginTiming.Visibility=Visibility.Collapsed;
+        OpenTimingEditor();
+    }
+
+    void OpenTimingEditor()
+    {
+        SourceText.Visibility=LoadText.Visibility=BeginTiming.Visibility=AutoTimingPanel.Visibility=Visibility.Collapsed;
         TimedLines.Visibility=MarkActions.Visibility=Visibility.Visible;
         LyricsHeading.Text=UiText.T("逐行时间轴");
         RefreshSession(followActive:true);
@@ -138,7 +148,8 @@ public partial class LyricTimingWindow : Window
             for(int i=0;i<timing.Lines.Count;i++)
             {
                 var line=timing.Lines[i];
-                string times=line.StartMs is {} start?ManualLyricTiming.FormatTime(start)+"  →  "+(line.EndMs is {} end?ManualLyricTiming.FormatTime(end):"—"):"—";
+                string times=line.StartMs is {} start?ManualLyricTiming.FormatTime(start)+"  →  "+(line.EndMs is {} end?ManualLyricTiming.FormatTime(end):timing.HasDraft?UiText.T("待填写时间"):"—")
+                    :timing.HasDraft?UiText.T("待填写时间"):"—";
                 string gap="";
                 if(i+1<timing.Lines.Count && line.EndMs is {} boundary)
                 {
@@ -156,8 +167,9 @@ public partial class LyricTimingWindow : Window
         }
         finally{updatingRows=false;}
         Completion.Maximum=timing.Lines.Count;
-        Completion.Value=timing.ActiveIndex;
-        CountLabel.Text=UiText.F($"已标记 {timing.ActiveIndex}/{timing.Lines.Count} 句");
+        Completion.Value=timing.MarkedCount;
+        DraftShiftPanel.Visibility=timing.CanShiftDraft?Visibility.Visible:Visibility.Collapsed;
+        CountLabel.Text=UiText.F($"已标记 {timing.MarkedCount}/{timing.Lines.Count} 句");
         UndoMark.IsEnabled=timing.CanUndo;
         SaveTiming.IsEnabled=timing.Complete;
         SaveTiming.Visibility=timing.Complete?Visibility.Visible:Visibility.Collapsed;
@@ -173,7 +185,8 @@ public partial class LyricTimingWindow : Window
             :inGap?"听到下一句开唱时按 Enter，结束间奏。"
             :timing.WaitingForStart?"听到这句开唱时按 Enter。"
             :timing.CanInsertGap?"唱完按 Enter。听到间奏时按 G，留白从上一句结束时开始。":"这句唱完时按 Enter。");
-        Feedback.Text=UiText.T(timing.Complete?"确认后将以手动动态歌词保存。":"Backspace 撤销上一次标记或调整。");
+        Feedback.Text=UiText.T(timing.HasDraft?timing.Complete?"这是自动生成的草稿。试听确认后再保存。":"补齐待填写的时间，试听确认后再保存。"
+            :timing.Complete?"确认后将以手动动态歌词保存。":"Backspace 撤销上一次标记或调整。");
         RefreshSelectedTimes();
         RefreshPlayback();
     }
@@ -197,7 +210,7 @@ public partial class LyricTimingWindow : Window
     {
         int index=TimedLines.SelectedIndex;
         var line=timing is not null && index>=0?timing.Lines[index]:null;
-        Review.Visibility=line?.EndMs is not null?Visibility.Visible:Visibility.Collapsed;
+        Review.Visibility=line is not null && (line.EndMs is not null || timing?.HasDraft==true)?Visibility.Visible:Visibility.Collapsed;
         EditStart.Text=line?.StartMs is {} start?ManualLyricTiming.FormatTime(start):"";
         EditEnd.Text=line?.EndMs is {} end?ManualLyricTiming.FormatTime(end):"";
     }
@@ -208,6 +221,16 @@ public partial class LyricTimingWindow : Window
         if(!ManualLyricTiming.TryParseTime(EditStart.Text,out var start) || !ManualLyricTiming.TryParseTime(EditEnd.Text,out var end))
         {Feedback.Text=UiText.T("时间请输入分:秒.毫秒，或直接输入秒数。");return;}
         try{timing.Edit(TimedLines.SelectedIndex,start,end);RefreshSession(followActive:false);}
+        catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);}
+    }
+
+    void ShiftClicked(object sender,RoutedEventArgs e)
+    {
+        if(timing is null)return;
+        if(!double.TryParse(ShiftSeconds.Text,System.Globalization.NumberStyles.Float,UiText.Culture,out var seconds)
+            && !double.TryParse(ShiftSeconds.Text,System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out seconds))
+        {Feedback.Text=UiText.T("整体校准请输入 −5 到 5 秒。");return;}
+        try{timing.ShiftDraft(seconds*1000);ShiftSeconds.Text="0";RefreshSession(followActive:false);}
         catch(InvalidDataException ex){Feedback.Text=UiText.Status(ex.Message);}
     }
 
