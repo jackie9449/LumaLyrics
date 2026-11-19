@@ -110,7 +110,9 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                     var saved=System.Text.Json.JsonSerializer.Deserialize<NetEaseOriginal>(binding.ProviderJson);
                     if(saved is null || saved.Track is null || saved.Original!=binding.Raw || saved.Instrumental!=binding.Instrumental || binding.Plain)return false;
                     if(saved.Instrumental && !NetEaseRecording.IsExplicitInstrumental(saved.InstrumentalEvidence??""))return false;
-                    return NetEaseTranslationProvider.RecordingMatches(track,saved.Track) && AutomaticLyricsMatcher.Assess(new(saved.Id,saved.Track,saved.Instrumental?null:saved.Original,null,saved.Instrumental)).Accepted;
+                    var savedCandidate=NetEaseTranslationProvider.CatalogCandidate(saved.Id,saved.Track,saved.CatalogAlbumId)
+                        with{SyncedLyrics=saved.Instrumental?null:saved.Original,Instrumental=saved.Instrumental};
+                    return NetEaseTranslationProvider.RecordingMatches(track,savedCandidate) && AutomaticLyricsMatcher.Assess(savedCandidate).Accepted;
                 }
                 if(original.Instrumental!=binding.Instrumental)return false;
                 if(!AutomaticLyricsMatcher.Assess(original).Accepted)return false;

@@ -23,7 +23,7 @@ public sealed record AutomaticLyricsDecision(bool Accepted,double MatchScore,Lyr
 
 public static partial class AutomaticLyricsMatcher
 {
-    public const int PolicyVersion=4;
+    public const int PolicyVersion=5;
     [GeneratedRegex(@"(?im)^\s*\[(?:verse|chorus|bridge|intro|outro|instrumental|refrain)[^\]]*\]\s*$")]private static partial Regex Sections();
     [GeneratedRegex(@"(?i)<html|<!doctype|暂无歌词|暫無歌詞|仅供试听|僅供試聽|lyrics not available|lyrics unavailable|sample lyrics|preview only")]private static partial Regex Placeholder();
     [GeneratedRegex(@"(?i)\binstrumental\b|伴奏")]private static partial Regex InstrumentalTitle();
@@ -41,7 +41,7 @@ public static partial class AutomaticLyricsMatcher
         var plain=candidate.PlainLyrics??"";
         if(!document.IsSynced)
         {
-            return new(false,false,0,"只有静态文字，未提供可靠时间戳");
+            return new(false,false,0,document.Warnings.Count>0?"歌词时间标签无效，需手动确认":"只有静态文字，未提供可靠时间戳");
         }
         var vocal=document.Groups.Where(g=>Canonical(g.Text).Length>0).ToArray();
         if(vocal.Length<3||document.Warnings.Count>Math.Max(2,document.Groups.Count/10))return new(false,true,0,"有效时间点不足或格式损坏");

@@ -56,6 +56,11 @@ public static partial class MatchRules
     }
     public static ScoredCandidate Score(Track track, LyricsCandidate c)
     {
+        if(c.CatalogMatch?.Confirms(track,c)==true)
+        {
+            double seconds=Math.Abs(track.DurationMs!.Value-c.Track.DurationMs!.Value)/1000;
+            return new(c,1,true,$"发行曲目已核对 · 时长差 {seconds:0.0} 秒");
+        }
         bool titleExact = Normalize(track.Title) == Normalize(c.Track.Title) && !string.IsNullOrWhiteSpace(track.Title);
         bool artistExact = (Normalize(track.Artist) == Normalize(c.Track.Artist) ||
             string.Join("|",ArtistSeparator().Split(track.Artist).Select(Normalize).Where(x=>x.Length>0).Order())==string.Join("|",ArtistSeparator().Split(c.Track.Artist).Select(Normalize).Where(x=>x.Length>0).Order())) && !string.IsNullOrWhiteSpace(track.Artist);

@@ -2,11 +2,15 @@ using System.Collections;
 using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
 
-public sealed class LyricsLookupResult(IEnumerable<LyricsCandidate> candidates,IEnumerable<string>? unavailable=null,IReadOnlyList<TranslationCandidate>? translationCandidates=null):IReadOnlyList<LyricsCandidate>
+public enum LyricsCatalogStatus { None, Unconfirmed, MatchedWithoutLyrics }
+
+public sealed class LyricsLookupResult(IEnumerable<LyricsCandidate> candidates,IEnumerable<string>? unavailable=null,
+    IReadOnlyList<TranslationCandidate>? translationCandidates=null,LyricsCatalogStatus catalogStatus=LyricsCatalogStatus.None):IReadOnlyList<LyricsCandidate>
 {
     readonly LyricsCandidate[] entries=candidates.ToArray();
     public IReadOnlyList<string> UnavailableSources {get;}=(unavailable??[]).Distinct(StringComparer.Ordinal).ToArray();
     public IReadOnlyList<TranslationCandidate>? TranslationCandidates {get;}=translationCandidates;
+    public LyricsCatalogStatus CatalogStatus {get;}=catalogStatus;
     public int Count=>entries.Length;
     public LyricsCandidate this[int index]=>entries[index];
     public IEnumerator<LyricsCandidate> GetEnumerator()=>((IEnumerable<LyricsCandidate>)entries).GetEnumerator();
@@ -33,6 +37,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
         token.ThrowIfCancellationRequested();var found=new List<LyricsCandidate>();var unavailable=new List<string>();int reachable=0;
         bool primaryAvailable=false,secondaryAvailable=false;
         IReadOnlyList<TranslationCandidate>? translationCandidates=null;
+        var catalogStatus=LyricsCatalogStatus.None;
         try
         {
             var first=exact is not null && primary is LrclibProvider lrclib
@@ -46,10 +51,14 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
         token.ThrowIfCancellationRequested();
         try
         {
-            var next=await secondary.LookupAsync(track,token);token.ThrowIfCancellationRequested();reachable++;
+            var lookup=secondary is NetEaseTranslationProvider netease
+                ?await netease.LookupRecordingsAsync(track,token):null;
+            translationCandidates=lookup?.Candidates??await secondary.LookupAsync(track,token);
+            token.ThrowIfCancellationRequested();reachable++;
             secondaryAvailable=true;
-            translationCandidates=next;
-            found.AddRange(next.Where(c=>NetEaseTranslationProvider.RecordingMatches(track,c.Track)).Select(c=>c.OriginalCandidateFor(track)));
+            catalogStatus=lookup?.CatalogStatus??LyricsCatalogStatus.None;
+            found.AddRange(translationCandidates.Where(c=>NetEaseTranslationProvider.RecordingMatches(track,c))
+                .Select(c=>c.OriginalCandidateFor(track)));
         }
         catch(Exception ex) when(ex is LyricsProviderException or HttpRequestException){unavailable.Add(Diagnostic("NetEase",ex));}
         if(reachable==0)throw new LyricsProviderException("歌词来源均暂不可用："+string.Join("、",unavailable)+"；已保留本地歌词，请稍后重试。");
@@ -66,9 +75,13 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
             if(secondaryAvailable && secondary is IAutomaticLyricsSearch second)expansions.Add(ExpandAsync("NetEase",second));
             var expanded=await Task.WhenAll(expansions);token.ThrowIfCancellationRequested();
             found.AddRange(expanded.SelectMany(r=>r));
-            unavailable.AddRange(expanded.OfType<LyricsLookupResult>().SelectMany(r=>r.UnavailableSources));
+            foreach(var result in expanded.OfType<LyricsLookupResult>())
+            {
+                unavailable.AddRange(result.UnavailableSources);
+                if(result.CatalogStatus>catalogStatus)catalogStatus=result.CatalogStatus;
+            }
         }
-        return new LyricsLookupResult(found.DistinctBy(c=>(c.ProviderName,c.Id)),unavailable,translationCandidates);
+        return new LyricsLookupResult(found.DistinctBy(c=>(c.ProviderName,c.Id)),unavailable,translationCandidates,catalogStatus);
     }
     static string Diagnostic(string source,Exception error)=>error is LyricsProviderException{StatusCode:{ } code}?$"{source}（{code}）":source;
     public async Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)

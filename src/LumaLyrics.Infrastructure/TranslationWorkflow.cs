@@ -19,7 +19,7 @@ public sealed class TranslationWorkflow(string root,ITranslationProvider provide
                 var candidates=previousLookup??await provider.LookupAsync(track,token);token.ThrowIfCancellationRequested();
                 foreach(var candidate in candidates)
                 {
-                    if(!NetEaseTranslationProvider.RecordingMatches(track,candidate.Track)||!AutomaticLyricsMatcher.Assess(candidate.OriginalCandidate).Accepted)continue;
+                    if(!NetEaseTranslationProvider.RecordingMatches(track,candidate)||!AutomaticLyricsMatcher.Assess(candidate.OriginalCandidate).Accepted)continue;
                     var parser=new LrcParser();var aligned=TranslationAlignment.Align(doc,parser.Parse(candidate.Original),parser.Parse(candidate.Translated),"网易云音乐社区译文 #"+candidate.Id,candidate.SourceUrl);
                     if(aligned is null){state=TranslationLookupState.Mismatch;continue;}
                     token.ThrowIfCancellationRequested();var fresh=lyrics.FindReadOnly(track);if(fresh?.Id!=binding.Id||TranslationAlignment.Hash(fresh.Raw)!=TranslationAlignment.Hash(doc.Raw))throw new InvalidDataException("原词已变化，请重新准备。");

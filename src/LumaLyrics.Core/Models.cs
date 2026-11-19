@@ -29,9 +29,29 @@ public sealed record LyricsDocument(string Raw, IReadOnlyList<TimedLineGroup> Gr
 public sealed record LyricsCandidate(long Id, Track Track, string? SyncedLyrics, string? PlainLyrics, bool Instrumental, string RawJson = "")
 {
     public string ProviderName {get;init;}="LRCLIB";
+    public CatalogRecordingMatch? CatalogMatch {get;init;}
     public string SourceLabel=>$"{ProviderName} #{Id}";
     public string Content => !string.IsNullOrWhiteSpace(SyncedLyrics)?SyncedLyrics:PlainLyrics??"";
     public override string ToString() => $"{Track.Title} · {Track.Artist}\n{Track.Album} · {Track.DurationMs / 1000:0}s · {(Instrumental ? "纯音乐" : SyncedLyrics is not null ? "同步歌词" : "静态歌词")} · {SourceLabel}";
+}
+public sealed record CatalogRecordingMatch(string ProviderName,long Id,Track SourceTrack,Track PublishedTrack,
+    string LocalizedTitle,string LocalizedAlbum)
+{
+    public bool MatchesLocal(Track input)
+    {
+        var track=TrackMetadata.FromAppleSession(input);
+        return track.DurationMs is >0 && PublishedTrack.DurationMs is >0
+            && Math.Abs(track.DurationMs.Value-PublishedTrack.DurationMs.Value)<=1000
+            && SameName(track.Artist,PublishedTrack.Artist)
+            && (SameName(track.Title,PublishedTrack.Title) || SameName(track.Title,LocalizedTitle))
+            && (SameName(track.Album,PublishedTrack.Album) || SameName(track.Album,LocalizedAlbum));
+    }
+    public bool Confirms(Track track,LyricsCandidate candidate)
+        =>candidate.ProviderName==ProviderName && candidate.Id==Id && candidate.Track==SourceTrack
+            && MatchesLocal(track) && SourceTrack.DurationMs is >0
+            && Math.Abs(track.DurationMs!.Value-SourceTrack.DurationMs.Value)<=1000;
+
+    static bool SameName(string actual,string expected)=>MatchRules.Normalize(actual)==MatchRules.Normalize(expected);
 }
 public sealed record ScoredCandidate(LyricsCandidate Candidate, double Score, bool Eligible, string Reason)
 {

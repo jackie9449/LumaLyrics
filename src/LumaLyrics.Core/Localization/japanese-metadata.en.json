@@ -1,4 +1,8 @@
 {
   "假名读法相符，但专辑或时长不足以确认录音": "Japanese readings match. Album or duration does not confirm the recording",
-  "日文读法相符 · 时长差 {0:0.0} 秒": "Japanese readings match · Duration difference: {0:0.0} seconds"
+  "日文读法相符 · 时长差 {0:0.0} 秒": "Japanese readings match · Duration difference: {0:0.0} seconds",
+  "发行曲目已核对 · 时长差 {0:0.0} 秒": "Release recording verified · Duration difference: {0:0.0} seconds",
+  "来源返回了曲目，但未能确认相同录音": "The source returned tracks, but the recording could not be confirmed",
+  "已找到对应曲目，但来源未提供原词": "Recording matched, but the source did not provide lyrics",
+  "歌词时间标签无效，需手动确认": "Invalid lyric timestamp tags. Check the lyrics manually."
 }

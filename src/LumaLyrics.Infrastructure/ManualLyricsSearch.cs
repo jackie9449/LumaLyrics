@@ -64,7 +64,8 @@ public static partial class ManualLyricsSearch
             || MatchRules.Normalize(candidate.Title+" "+candidate.Album).Contains(artist,StringComparison.Ordinal)?1:0;
     }
     public static IEnumerable<LyricsCandidate> Rank(Track query,IEnumerable<LyricsCandidate> candidates)=>candidates
-        .OrderByDescending(c=>TitleRank(query,c.Track)).ThenByDescending(c=>ArtistRank(query,c.Track))
+        .OrderByDescending(c=>c.CatalogMatch?.Confirms(query,c)==true)
+        .ThenByDescending(c=>TitleRank(query,c.Track)).ThenByDescending(c=>ArtistRank(query,c.Track))
         .ThenByDescending(c=>MatchRules.Score(query,c).Score).ThenByDescending(c=>!string.IsNullOrWhiteSpace(c.SyncedLyrics));
     public static IReadOnlyList<LyricsCandidate> Candidates(Track query,IEnumerable<LyricsCandidate> candidates)=>Rank(query,candidates
         .Where(c=>c.Id>0 && (c.Instrumental || !string.IsNullOrWhiteSpace(c.Content)))

@@ -63,7 +63,7 @@ public sealed class TranslationPreparation(string root,ITranslationProvider prov
                             var cache=Path.Combine(root,"cache","translations");Directory.CreateDirectory(cache);
                             string candidatePath=Path.Combine(cache,candidate.Id+".json"),temp=candidatePath+".tmp";
                             File.WriteAllText(temp,JsonSerializer.Serialize(candidate));File.Move(temp,candidatePath,true);
-                            if(!NetEaseTranslationProvider.RecordingMatches(item.Track,candidate.Track))continue;
+                            if(!NetEaseTranslationProvider.RecordingMatches(item.Track,candidate))continue;
                             var original=parser.Parse(candidate.Original);
                             if(!AutomaticLyricsMatcher.Assess(candidate.OriginalCandidate).Accepted)continue;
                             if(TranslationAlignment.IsChinese(string.Join("\n",original.Groups.Where(g=>TranslationAlignment.IsLyricText(g.Text)).Select(g=>g.Text)))){chinese=true;continue;}
