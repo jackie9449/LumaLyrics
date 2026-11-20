@@ -57,6 +57,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
             token.ThrowIfCancellationRequested();reachable++;
             secondaryAvailable=true;
             catalogStatus=lookup?.CatalogStatus??LyricsCatalogStatus.None;
+            if(lookup?.CatalogUnavailable==true)unavailable.Add("Apple Music / NetEase");
             found.AddRange(translationCandidates.Where(c=>NetEaseTranslationProvider.RecordingMatches(track,c))
                 .Select(c=>c.OriginalCandidateFor(track)));
         }

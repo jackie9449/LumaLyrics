@@ -23,7 +23,7 @@ public sealed record AutomaticLyricsDecision(bool Accepted,double MatchScore,Lyr
 
 public static partial class AutomaticLyricsMatcher
 {
-    public const int PolicyVersion=5;
+    public const int PolicyVersion=6;
     [GeneratedRegex(@"(?im)^\s*\[(?:verse|chorus|bridge|intro|outro|instrumental|refrain)[^\]]*\]\s*$")]private static partial Regex Sections();
     [GeneratedRegex(@"(?i)<html|<!doctype|暂无歌词|暫無歌詞|仅供试听|僅供試聽|lyrics not available|lyrics unavailable|sample lyrics|preview only")]private static partial Regex Placeholder();
     [GeneratedRegex(@"(?i)\binstrumental\b|伴奏")]private static partial Regex InstrumentalTitle();

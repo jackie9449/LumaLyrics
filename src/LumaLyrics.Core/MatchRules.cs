@@ -32,6 +32,17 @@ public static partial class MatchRules
     }
     public static bool AlbumMatches(string left,string right)=>Normalize(left)==Normalize(right) || AlbumReadingMatches(left,right);
 
+    public static bool CatalogAlbumMatches(string left,string right)
+    {
+        if(string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))return false;
+        var first=ReleaseSuffix().Match(left);
+        var second=ReleaseSuffix().Match(right);
+        if(first.Success && second.Success && !first.Groups[1].Value.Equals(second.Groups[1].Value,StringComparison.OrdinalIgnoreCase))return false;
+        return CatalogRecordingMatch.SameName(ReleaseSuffix().Replace(left,""),ReleaseSuffix().Replace(right,""));
+    }
+    public static bool SameRecordingVersion(Track left,Track right)
+        =>Versions(left.Title+" "+left.Album)==Versions(right.Title+" "+right.Album);
+
     static bool ArtistReadingMatches(string left,string right)
         =>(JapaneseKana.HasKana(left) || JapaneseKana.HasKana(right)) && ArtistCreditsCover(left,right,0);
 
@@ -69,7 +80,7 @@ public static partial class MatchRules
         bool albumExact=Normalize(track.Album)==Normalize(c.Track.Album) && !string.IsNullOrWhiteSpace(track.Album);
         bool albumReading=!albumExact && AlbumReadingMatches(track.Album,c.Track.Album);
         bool title=titleExact || titleReading,artist=artistExact || artistReading,album=albumExact || albumReading;
-        bool version = Versions(track.Title+" "+track.Album) != Versions(c.Track.Title+" "+c.Track.Album);
+        bool version = !SameRecordingVersion(track,c.Track);
         double? delta = track.DurationMs.HasValue && c.Track.DurationMs.HasValue ? Math.Abs(track.DurationMs.Value - c.Track.DurationMs.Value) : null;
         double score = (title ? .4 : 0) + (artist ? .3 : 0) + (delta <= 2000 ? .2 : delta <= 5000 ? .1 : 0) + (album ? .1 : 0);
         bool readingIdentity=titleReading || artistReading;

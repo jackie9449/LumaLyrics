@@ -9,16 +9,18 @@ public sealed record TranslationCandidate(long Id,Track Track,string Original,st
     public bool Instrumental {get;init;}
     public string? InstrumentalEvidence {get;init;}
     public long? CatalogAlbumId {get;init;}
-    internal LyricsCandidate CatalogCandidate=>NetEaseTranslationProvider.CatalogCandidate(Id,Track,CatalogAlbumId);
+    public NetEaseReleaseEvidence? ReleaseEvidence {get;init;}
+    internal LyricsCandidate CatalogCandidate=>NetEaseTranslationProvider.CatalogCandidate(Id,Track,CatalogAlbumId,ReleaseEvidence);
     public LyricsCandidate OriginalCandidate=>CatalogCandidate with
     {
         SyncedLyrics=Instrumental?null:Original,
         Instrumental=Instrumental,
-        RawJson=JsonSerializer.Serialize(new NetEaseOriginal("NetEase",Id,Track,Original,SourceUrl,Instrumental,InstrumentalEvidence,CatalogAlbumId))
+        RawJson=JsonSerializer.Serialize(new NetEaseOriginal("NetEase",Id,Track,Original,SourceUrl,Instrumental,InstrumentalEvidence,CatalogAlbumId,ReleaseEvidence))
     };
     public LyricsCandidate OriginalCandidateFor(Track local)=>NetEaseTranslationProvider.ApplyCreditCompatibility(local,OriginalCandidate);
 }
-public sealed record NetEaseOriginal(string Provider,long Id,Track Track,string Original,string SourceUrl,bool Instrumental=false,string? InstrumentalEvidence=null,long? CatalogAlbumId=null);
+public sealed record NetEaseOriginal(string Provider,long Id,Track Track,string Original,string SourceUrl,bool Instrumental=false,
+    string? InstrumentalEvidence=null,long? CatalogAlbumId=null,NetEaseReleaseEvidence? ReleaseEvidence=null);
 public interface ITranslationProvider
 {
     Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track track,CancellationToken token);
@@ -26,15 +28,16 @@ public interface ITranslationProvider
 
 public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IManualLyricsSearch,IAutomaticLyricsSearch,IDisposable
 {
-    sealed record CatalogSong(LyricsCandidate Candidate,long? AlbumId);
-    internal sealed record RecordingLookup(IReadOnlyList<TranslationCandidate> Candidates,LyricsCatalogStatus CatalogStatus);
+    sealed record CatalogSong(LyricsCandidate Candidate,long? AlbumId,int Disc,int Number,NetEaseReleaseEvidence? ReleaseEvidence=null);
+    internal sealed record RecordingLookup(IReadOnlyList<TranslationCandidate> Candidates,LyricsCatalogStatus CatalogStatus,bool CatalogUnavailable=false);
     readonly HttpClient client;readonly SemaphoreSlim gate=new(1,1);readonly TimeSpan interval;DateTimeOffset next;
-    public NetEaseTranslationProvider(HttpMessageHandler? handler=null,TimeSpan? minimumInterval=null)
+    public NetEaseTranslationProvider(HttpMessageHandler? handler=null,TimeSpan? minimumInterval=null,HttpMessageHandler? appleCatalogHandler=null)
     {
         interval=minimumInterval??TimeSpan.FromSeconds(1);
         client=handler is null?new():new(handler);client.BaseAddress=new("https://music.163.com/");client.Timeout=TimeSpan.FromSeconds(20);
         client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/0.15.0 (https://github.com/jackie9449/LumaLyrics)");
         client.DefaultRequestHeaders.Referrer=client.BaseAddress;
+        if(handler is null || appleCatalogHandler is not null)appleCatalog=new(appleCatalogHandler);
     }
     async Task<string> GetAsync(string uri,CancellationToken token)
     {
@@ -69,14 +72,21 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         return local.DurationMs is >0 && candidate.Track.DurationMs is >0
             && (score.Eligible && score.Score>=.89 || NetEaseRecording.AdditionalCreditsMatch(local,candidate.Track));
     }
-    internal static LyricsCandidate CatalogCandidate(long id,Track track,long? albumId)
-        =>NetEaseVerifiedRelease.Attach(new(id,track,null,null,false){ProviderName="NetEase"},albumId);
+    internal static LyricsCandidate CatalogCandidate(long id,Track track,long? albumId,NetEaseReleaseEvidence? evidence)
+    {
+        var candidate=new LyricsCandidate(id,track,null,null,false){ProviderName="NetEase"};
+        return evidence?.Confirm(candidate,albumId) is {} match?candidate with{CatalogMatch=match}:candidate;
+    }
     // Existing extra-credit compatibility applies only when independently corroborated.
     internal static LyricsCandidate ApplyCreditCompatibility(Track local,LyricsCandidate candidate)
         =>!MatchRules.Score(local,candidate).Eligible && NetEaseRecording.AdditionalCreditsMatch(local,candidate.Track)
             ?candidate with{Track=candidate.Track with{Artist=local.Artist}}:candidate;
     public async Task<IReadOnlyList<TranslationCandidate>> LookupAsync(Track input,CancellationToken token)
-        =>(await LookupRecordingsAsync(input,token)).Candidates;
+    {
+        var lookup=await LookupRecordingsAsync(input,token);
+        if(lookup.CatalogUnavailable && lookup.Candidates.Count==0)throw new LyricsProviderException("发行目录暂不可用，稍后重试。");
+        return lookup.Candidates;
+    }
 
     internal async Task<RecordingLookup> LookupRecordingsAsync(Track input,CancellationToken token)
     {
@@ -85,37 +95,23 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
             return new([],LyricsCatalogStatus.None);
         try
         {
-            if(await FindVerifiedSongAsync(track,token) is {} verified)
-                return await ReadLyricsAsync(track,[verified],true,token);
-
             var catalog=await SearchSongsAsync(track.Title+" "+track.Artist,token);
-            bool discovered=catalog.Count>0;
             var matches=catalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
             if(matches.Length==0 && ManualLyricsSearch.KanaQuery(track) is {} kana)
             {
-                catalog=await SearchSongsAsync(kana.Text,token);
-                discovered|=catalog.Count>0;
-                matches=catalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
+                var kanaCatalog=await SearchSongsAsync(kana.Text,token);
+                matches=kanaCatalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
+                if(matches.Length==0)catalog=catalog.Concat(kanaCatalog).ToArray();
             }
-            return await ReadLyricsAsync(track,matches,discovered,token);
+            if(matches.Length>0)return await ReadLyricsAsync(track,matches,token);
+            var release=await FindLocalizedSongAsync(track,catalog,token);
+            if(release.Song is {} song)return await ReadLyricsAsync(track,[song],token);
+            return new([],catalog.Count>0?LyricsCatalogStatus.Unconfirmed:LyricsCatalogStatus.None,release.Unavailable);
         }
         catch(JsonException){throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");}
     }
 
-    async Task<CatalogSong?> FindVerifiedSongAsync(Track track,CancellationToken token)
-    {
-        if(NetEaseVerifiedRelease.FindId(track) is not {} id)return null;
-        try
-        {
-            using var json=JsonDocument.Parse(await GetAsync($"api/song/detail?ids=%5B{id}%5D",token));
-            CheckCode(json.RootElement);
-            return ParseSongs(json.RootElement).FirstOrDefault(song=>song.Candidate.Id==id
-                && song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true);
-        }
-        catch(LyricsProviderException ex) when(ex.StatusCode==404){return null;}
-    }
-
-    async Task<RecordingLookup> ReadLyricsAsync(Track track,IReadOnlyList<CatalogSong> matches,bool discovered,CancellationToken token)
+    async Task<RecordingLookup> ReadLyricsAsync(Track track,IReadOnlyList<CatalogSong> matches,CancellationToken token)
     {
         var found=new List<TranslationCandidate>();
         foreach(var song in matches.OrderByDescending(song=>song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true)
@@ -126,9 +122,7 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         {
             if(await FetchLyricsAsync(song,token) is {} lyrics)found.Add(lyrics);
         }
-        var missing=found.Count>0?LyricsCatalogStatus.None:matches.Count>0?LyricsCatalogStatus.MatchedWithoutLyrics
-            :discovered?LyricsCatalogStatus.Unconfirmed:LyricsCatalogStatus.None;
-        return new(found,missing);
+        return new(found,found.Count==0?LyricsCatalogStatus.MatchedWithoutLyrics:LyricsCatalogStatus.None);
     }
 
     async Task<TranslationCandidate?> FetchLyricsAsync(CatalogSong song,CancellationToken token)
@@ -145,7 +139,8 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
             {
                 Instrumental=instrumental,
                 InstrumentalEvidence=instrumental?original:null,
-                CatalogAlbumId=song.AlbumId
+                CatalogAlbumId=song.AlbumId,
+                ReleaseEvidence=song.ReleaseEvidence
             };
         }
         catch(LyricsProviderException ex) when(ex.StatusCode==404){return null;}
@@ -159,11 +154,11 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         return json.RootElement.TryGetProperty("result",out var result)?ParseSongs(result):[];
     }
 
-    static IReadOnlyList<CatalogSong> ParseSongs(JsonElement result)
+    static IReadOnlyList<CatalogSong> ParseSongs(JsonElement result,int limit=30)
     {
         if(result.ValueKind!=JsonValueKind.Object || !result.TryGetProperty("songs",out var songs) || songs.ValueKind!=JsonValueKind.Array)return [];
         var candidates=new List<CatalogSong>();
-        foreach(var song in songs.EnumerateArray().Take(30))
+        foreach(var song in songs.EnumerateArray().Take(limit))
         {
             if(Id(song) is not {} id)continue;
             string title=Text(song,"name");
@@ -172,12 +167,19 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
             song.TryGetProperty("album",out var album);
             double? duration=song.TryGetProperty("duration",out var d)&&d.ValueKind==JsonValueKind.Number&&d.TryGetDouble(out var ms)?ms:null;
             var albumId=Id(album);
-            candidates.Add(new(CatalogCandidate(id,new(title,artist,Text(album,"name"),duration),albumId),albumId));
+            var candidate=new LyricsCandidate(id,new(title,artist,Text(album,"name"),duration),null,null,false){ProviderName="NetEase"};
+            candidates.Add(new(candidate,albumId,Integer(song,"disc"),Integer(song,"position")));
         }
         return candidates;
     }
     static long? Id(JsonElement entry)=>entry.ValueKind==JsonValueKind.Object && entry.TryGetProperty("id",out var id)
         && id.ValueKind==JsonValueKind.Number && id.TryGetInt64(out var number) && number>0?number:null;
+    static int Integer(JsonElement entry,string key)
+    {
+        if(!entry.TryGetProperty(key,out var value))return 0;
+        if(value.ValueKind==JsonValueKind.Number && value.TryGetInt32(out int number))return number;
+        return value.ValueKind==JsonValueKind.String && int.TryParse(value.GetString(),out number)?number:0;
+    }
     static string Text(JsonElement e,string name)=>e.ValueKind==JsonValueKind.Object && e.TryGetProperty(name,out var v)&&v.ValueKind==JsonValueKind.String?v.GetString()??"":"";
     static string Nested(JsonElement e,string name)=>e.TryGetProperty(name,out var child)?Text(child,"lyric"):"";
     void CheckCode(JsonElement e)
@@ -185,5 +187,5 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         if(e.ValueKind!=JsonValueKind.Object || !e.TryGetProperty("code",out var code)||code.ValueKind!=JsonValueKind.Number||!code.TryGetInt32(out var n))throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");
         if(n!=200){if(n is 405 or 429)next=DateTimeOffset.UtcNow.AddMinutes(1);throw new LyricsProviderException($"歌词与译文来源未返回成功结果（{n}），未保存内容。",n);}
     }
-    public void Dispose(){client.Dispose();} // A cancelled request can still release its gate.
+    public void Dispose(){client.Dispose();appleCatalog?.Dispose();} // A cancelled request can still release its gate.
 }

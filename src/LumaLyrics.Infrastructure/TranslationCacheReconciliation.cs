@@ -16,11 +16,13 @@ public static class TranslationCacheReconciliation
             token.ThrowIfCancellationRequested();if(!long.TryParse(Path.GetFileNameWithoutExtension(file),out _) || new FileInfo(file).Length>2*1024*1024)continue;
             TranslationCandidate? candidate;try{candidate=JsonSerializer.Deserialize<TranslationCandidate>(File.ReadAllText(file));}catch(JsonException){continue;}
             if(candidate?.Track is null || candidate.Instrumental || string.IsNullOrWhiteSpace(candidate.Original) || string.IsNullOrWhiteSpace(candidate.Translated))continue;candidates++;
-            var titles=new[]{candidate.Track.Title,candidate.CatalogCandidate.CatalogMatch?.PublishedTrack.Title}
+            var catalog=candidate.CatalogCandidate;
+            if(candidate.ReleaseEvidence is null)catalog=LegacyNetEaseRelease.Attach(catalog,candidate.CatalogAlbumId);
+            var titles=new[]{candidate.Track.Title,catalog.CatalogMatch?.PublishedTrack.Title}
                 .OfType<string>().Select(MatchRules.Normalize).Distinct(StringComparer.Ordinal);
             foreach(var item in titles.SelectMany(title=>library.GetValueOrDefault(title)??[]))
             {
-                if(!NetEaseTranslationProvider.RecordingMatches(item.Track,candidate))continue;var bound=lyrics.Find(item.Track);
+                if(!NetEaseTranslationProvider.RecordingMatches(item.Track,catalog))continue;var bound=lyrics.Find(item.Track);
                 if(bound is null || bound.Instrumental || bound.Plain || !bound.Manual&&!LibraryPrefetcher.QualityOf(bound,item.Track))continue;
                 var document=parser.Parse(bound.Raw);if(translations.Find(item.Track,document) is not null || !document.Groups.Any(g=>TranslationAlignment.NeedsChineseTranslation(document,g.Text)))continue;checkedOriginals++;
                 if(!AutomaticLyricsMatcher.Assess(candidate.OriginalCandidate).Accepted){unaligned++;continue;}

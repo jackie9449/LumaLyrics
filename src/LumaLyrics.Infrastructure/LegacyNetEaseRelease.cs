@@ -2,7 +2,8 @@ using LumaLyrics.Core;
 
 namespace LumaLyrics.Infrastructure;
 
-internal static class NetEaseVerifiedRelease
+// Only read back evidence in personal data saved by policy 5.
+internal static class LegacyNetEaseRelease
 {
     const string Artist="Ariabl'eyeS";
     const string AppleAlbum="Kegarenaki Ruriiro No Rosenkreuz";
@@ -27,9 +28,7 @@ internal static class NetEaseVerifiedRelease
 
     static CatalogRecordingMatch Recording(long id,string title,string localizedTitle,string credits,int duration)
         =>new("NetEase",id,new(localizedTitle,credits,JapaneseAlbum,duration),
-            new(title,Artist,AppleAlbum,duration),localizedTitle,JapaneseAlbum);
-
-    internal static long? FindId(Track track)=>Recordings.FirstOrDefault(recording=>recording.MatchesLocal(track))?.Id;
+            new(title,Artist,AppleAlbum,duration),new(localizedTitle,Artist,JapaneseAlbum,duration));
 
     internal static LyricsCandidate Attach(LyricsCandidate candidate,long? albumId)
     {

@@ -34,24 +34,29 @@ public sealed record LyricsCandidate(long Id, Track Track, string? SyncedLyrics,
     public string Content => !string.IsNullOrWhiteSpace(SyncedLyrics)?SyncedLyrics:PlainLyrics??"";
     public override string ToString() => $"{Track.Title} · {Track.Artist}\n{Track.Album} · {Track.DurationMs / 1000:0}s · {(Instrumental ? "纯音乐" : SyncedLyrics is not null ? "同步歌词" : "静态歌词")} · {SourceLabel}";
 }
-public sealed record CatalogRecordingMatch(string ProviderName,long Id,Track SourceTrack,Track PublishedTrack,
-    string LocalizedTitle,string LocalizedAlbum)
+public sealed record CatalogRecordingMatch(string ProviderName,long Id,Track SourceTrack,Track PublishedTrack,Track LocalizedTrack)
 {
-    public bool MatchesLocal(Track input)
+    public static bool MatchesLocal(Track input,Track published,Track localized)
     {
         var track=TrackMetadata.FromAppleSession(input);
-        return track.DurationMs is >0 && PublishedTrack.DurationMs is >0
-            && Math.Abs(track.DurationMs.Value-PublishedTrack.DurationMs.Value)<=1000
-            && SameName(track.Artist,PublishedTrack.Artist)
-            && (SameName(track.Title,PublishedTrack.Title) || SameName(track.Title,LocalizedTitle))
-            && (SameName(track.Album,PublishedTrack.Album) || SameName(track.Album,LocalizedAlbum));
+        return PlausibleDuration(track.DurationMs,published.DurationMs)
+            && (MatchRules.ArtistCreditsCover(published.Artist,track.Artist,0) || MatchRules.ArtistCreditsCover(localized.Artist,track.Artist,0))
+            && (SameName(track.Title,published.Title) || SameName(track.Title,localized.Title))
+            && (MatchRules.CatalogAlbumMatches(track.Album,published.Album) || MatchRules.CatalogAlbumMatches(track.Album,localized.Album));
     }
     public bool Confirms(Track track,LyricsCandidate candidate)
         =>candidate.ProviderName==ProviderName && candidate.Id==Id && candidate.Track==SourceTrack
-            && MatchesLocal(track) && SourceTrack.DurationMs is >0
-            && Math.Abs(track.DurationMs!.Value-SourceTrack.DurationMs.Value)<=1000;
+            && MatchesLocal(track,PublishedTrack,LocalizedTrack)
+            && PlausibleDuration(track.DurationMs,SourceTrack.DurationMs);
 
-    static bool SameName(string actual,string expected)=>MatchRules.Normalize(actual)==MatchRules.Normalize(expected);
+    public static bool PlausibleDuration(double? first,double? second)
+        =>first is >0 && second is >0 && Math.Abs(first.Value-second.Value)<=1000;
+    public static bool SameName(string actual,string expected)
+    {
+        if(string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(expected))return false;
+        var name=MatchRules.Normalize(actual);
+        return name.Length>0 && name==MatchRules.Normalize(expected);
+    }
 }
 public sealed record ScoredCandidate(LyricsCandidate Candidate, double Score, bool Eligible, string Reason)
 {
