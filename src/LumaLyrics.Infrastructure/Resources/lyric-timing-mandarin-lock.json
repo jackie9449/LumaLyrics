@@ -1,0 +1,26 @@
+{
+  "Version": "lyrics-sofa-mandarin-v1.0.1-win64-v1",
+  "Components": [
+    {
+      "Name": "pypinyin-0.55.0-py2.py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/b9/7b/4cabc76fcc21c3c7d5c671d8783984d30ac9d3bb387c4ba784fca3cdfa3a/pypinyin-0.55.0-py2.py3-none-any.whl",
+      "Sha256": "d53b1e8ad2cdb815fb2cb604ed3123372f5a28c6f447571244aca36fc62a286f",
+      "Size": 840203,
+      "Target": "site"
+    },
+    {
+      "Name": "sofa-source-v1.0.3.zip",
+      "Url": "https://codeload.github.com/qiuqiao/SOFA/zip/refs/tags/v1.0.3",
+      "Sha256": "76af8466530936dce706ede2167b9303679fca684eb0bb0d9143a1dac78b96e8",
+      "Size": 640364,
+      "Target": "model-archive"
+    },
+    {
+      "Name": "pretrained_mandarin_singing.zip",
+      "Url": "https://github.com/qiuqiao/SOFA/releases/download/v1.0.1/pretrained_mandarin_singing.zip",
+      "Sha256": "63a8c6191fe6bdf29ac40af2955ef96816b8391596d94a4340e0f58dcf47f26e",
+      "Size": 376818394,
+      "Target": "model-archive"
+    }
+  ]
+}

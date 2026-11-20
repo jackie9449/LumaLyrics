@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -136,19 +137,38 @@ public partial class MainWindow
             repository.SyncLibrary(new("own-timing",3,[new("one",target),new("two",other),new("draft",draftTrack)],"own"));
             var originalDraft=repository.Save(draftTrack,plain,"Own draft fixture",true,plain:true);
             var draftTarget=new LibraryPreparationTarget(new("own-timing","draft"),draftTrack,originalDraft.Id,null,null);
-            var fixture=new TimingEngineFixture();
-            var draftWindow=new LyricTimingWindow(subject,draftTarget,plain,fixture,async token=>
+            var multilingual=new TimingEngineFixture(new("Multilingual fixture","v1"),[false,true,false]);
+            var mandarin=new TimingEngineFixture(new("SOFA Mandarin","Fixture v1"),[true,true,true]);
+            int captureCalls=0;
+            var draftWindow=new LyricTimingWindow(subject,draftTarget,plain,multilingual,async token=>
             {
+                captureCalls++;
                 await Task.Delay(55,token);
                 return new LyricTimingAudio(new short[16000],16000,0,0);
-            }){Owner=preferences,Width=680,Height=600};
+            },mandarin){Owner=preferences,Width=680,Height=600};
             var reviewFinished=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _=Dispatcher.BeginInvoke(async()=>
             {
                 try
                 {
                     Click(draftWindow.CaptureAutoTiming);
-                    checks["timing.autoCanCancelWhileManualActionsAreDisabled"]=draftWindow.CancelAutoTiming.IsVisible && !draftWindow.BeginTiming.IsEnabled;
+                    checks["timing.coverageStopsCaptureAndShowsUncoveredLines"]=captureCalls==0
+                        && draftWindow.AutoTimingCoverage.Text==UiText.F($"此模型可识别 {1}/{3} 行原词")
+                        && draftWindow.AutoTimingUncovered.Text==UiText.F($"未覆盖的行号：{"1, 3"}")
+                        && draftWindow.BeginTiming.IsEnabled && repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id;
+                    Click(draftWindow.OpenAutoAudio);
+                    checks["timing.coverageStopsWavePicker"]=draftWindow.AutoTimingCoverage.IsVisible
+                        && draftWindow.Feedback.Text==UiText.T("请选择覆盖全文的模型，或继续手动打轴。");
+                    await Task.Delay(180);
+                    if(UiText.Language=="zh-Hans")VisualVerification.Save(draftWindow,Path.Combine(directory,"timing-coverage.png"));
+                    draftWindow.AutoTimingModel.SelectedIndex=1;
+                    checks["timing.switchingModelClearsOldCoverage"]=draftWindow.AutoTimingCoverage.Text.Length==0
+                        && draftWindow.AutoTimingUncovered.Text.Length==0;
+                    checks["timing.mandarinShowsRecordingGuidance"]=draftWindow.AutoTimingModelInfo.IsVisible
+                        && draftWindow.AutoTimingModelInfo.Text==UiText.T("适合人声清晰的普通话录音。伴奏较重或原词漏写重复句时，部分时间可能需要手动补齐。");
+                    Click(draftWindow.CaptureAutoTiming);
+                    checks["timing.autoCanCancelWhileManualActionsAreDisabled"]=draftWindow.CancelAutoTiming.IsVisible
+                        && !draftWindow.BeginTiming.IsEnabled && !draftWindow.AutoTimingModel.IsEnabled && captureCalls==1;
                     Click(draftWindow.CancelAutoTiming);
                     await Until(()=>draftWindow.CaptureAutoTiming.IsEnabled);
                     checks["timing.cancelKeepsStaticOriginal"]=repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id;
@@ -180,6 +200,9 @@ public partial class MainWindow
             checks["timing.reviewedDraftPreservesRepeatedLinesAndGaps"]=reviewed is {Manual:true,Plain:false,Source:"离线打轴 · 已校对"}
                 && draftGroups?.Select(g=>g.TimeMs).SequenceEqual([4000d,7200d,9250d,14125d,39000d,44200d])==true
                 && draftGroups?.Select(g=>g.Text).SequenceEqual(["The quiet road","","We follow the light","","The quiet road",""])==true;
+            using var provenance=JsonDocument.Parse(reviewed?.ProviderJson??"{}");
+            checks["timing.reviewedDraftIdentifiesChosenModel"]=provenance.RootElement.TryGetProperty("source",out var source)
+                && source.GetString()==mandarin.Model.Source && provenance.RootElement.GetProperty("modelRevision").GetString()==mandarin.Model.ModelRevision;
         }
         finally{preferences.Close();SelectUiTheme(theme,false);}
 
@@ -203,11 +226,14 @@ public partial class MainWindow
         }
     }
 
-    sealed class TimingEngineFixture : IOfflineLyricTiming
+    sealed class TimingEngineFixture(LyricTimingModel model,bool[] coverage) : IOfflineLyricTiming
     {
+        public LyricTimingModel Model=>model;
         public bool Ready=>true;
         public long DownloadBytes=>1;
         public Task PrepareAsync(IProgress<(long Done,long Total)>? progress,CancellationToken token)=>Task.CompletedTask;
+        public Task<LyricTimingCoverage> CheckCoverageAsync(string[] lines,CancellationToken token)
+            =>Task.FromResult(new LyricTimingCoverage(coverage));
         public Task<IReadOnlyList<LyricTimingSpan?>> AlignAsync(LyricTimingAudio audio,string[] lines,CancellationToken token)
         {
             token.ThrowIfCancellationRequested();

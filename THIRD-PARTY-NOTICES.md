@@ -25,6 +25,8 @@
 
 离线自动打轴按需下载 [W2V-BERT Music Lyrics CTC 权重](https://huggingface.co/mrfakename/w2v-bert-2.0-music-lyrics-ctc)（模型卡标注 MIT；保留上游模型卡）、[Python 嵌入式运行时](https://www.python.org/downloads/release/python-31210/)（PSF）、[PyTorch CPU](https://pytorch.org/)（BSD-3-Clause）、[Transformers](https://github.com/huggingface/transformers)（Apache-2.0）、NumPy 和其他固定 wheels。许可按各下载件及其包含的许可原文执行。`lyric-timing-lock.json` 固定下载地址、长度与 SHA-256；不把运行时及权重附到软件包。
 
+普通话离线打轴按需下载 [SOFA v1.0.3](https://github.com/qiuqiao/SOFA/tree/v1.0.3) 的推理网络与 `opencpop-extension` 字典，保留 [MIT 许可](https://github.com/qiuqiao/SOFA/blob/v1.0.3/LICENSE)。权重来自 [SOFA 普通话歌声 v1.0.1 发布包](https://github.com/qiuqiao/SOFA/releases/tag/v1.0.1)。发布包中的模型说明和训练数据贡献者记录随模型存放。字音转换使用 [pypinyin 0.55.0](https://github.com/mozillazg/python-pinyin/tree/v0.55.0)（MIT）。`lyric-timing-mandarin-lock.json` 固定这些下载件的版本、长度与 SHA-256。
+
 歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。新增公开截图使用原创几何封面与自写歌词，不含个人资料库内容。
 
 图标为本项目用几何图形生成的原生资产；未使用外部照片或商业图标包。

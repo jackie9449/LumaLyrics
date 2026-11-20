@@ -13,7 +13,7 @@ try {
     $cases+=@('originals/source.json')
     $cases+=@('native-read-safety.json','native-memory-safety.json','native-hang.json')
     $cases+=@('instrument-audio-probe.json','instrument-corpus.json','instrument-review-dataset.json','instrument-stage.log','instrument-model-export.json','yamnet.h5','parity-inputs.f32','capture.pcm','private.wav','private.flac','private.m4a','private.mp3','instruments/timeline.json','instrument-models/profile.json')
-    $cases+=@('cnn6.pth','weights.pt','private.safetensors','embedding.pb')
+    $cases+=@('cnn6.pth','weights.pt','singing.ckpt','pretrained_mandarin_singing.zip.part','private.safetensors','embedding.pb')
     $cases+=@('matpac-gate.npz','instrument-features.npy')
     $cases+=@('offline-translation-queue.json','offline-translation.lock','own.argosmodel','own.whl')
     $cases+=@('source-models/metadata.json')

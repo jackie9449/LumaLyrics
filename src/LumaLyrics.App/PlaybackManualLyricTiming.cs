@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 using LumaLyrics.Windows;
@@ -37,10 +38,11 @@ public sealed partial class PlaybackCoordinator
             :Quality==PositionQuality.Estimated?"正在播放 · 插值位置":"正在播放 · 播放位置");
     }
 
-    internal void SaveManualLyricTiming(LibraryPreparationTarget target,ManualLyricTiming timing)
+    internal void SaveManualLyricTiming(LibraryPreparationTarget target,ManualLyricTiming timing,LyricTimingModel? model)
     {
         var binding=repository.Save(target.Track,timing.MakeLrc(),timing.HasDraft?"离线打轴 · 已校对":"手动打轴",true,
-            providerJson:timing.HasDraft?"{\"source\":\"w2v-bert-2.0-music-lyrics-ctc\",\"modelRevision\":\"1be91455793f86de803ac0707303a0998e423ce1\",\"acceptedInTimingEditor\":true}":null,
+            providerJson:timing.HasDraft && model is not null?JsonSerializer.Serialize(new
+            {source=model.Source,modelRevision=model.ModelRevision,acceptedInTimingEditor=true}):null,
             expectedLibrary:Member(target),expectedBindingId:target.BindingId);
         ApplyLibraryOriginal(target,binding);
     }

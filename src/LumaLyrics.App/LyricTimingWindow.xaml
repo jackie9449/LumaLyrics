@@ -17,6 +17,10 @@
    <Setter Property="FontSize" Value="12"/>
    <Setter Property="TextWrapping" Value="Wrap"/>
   </Style>
+  <Style x:Key="TimingCoverage" TargetType="TextBlock" BasedOn="{StaticResource TimingCaption}">
+   <Setter Property="Margin" Value="0,0,0,8"/>
+   <Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers>
+  </Style>
  </Window.Resources>
  <Grid x:Name="Editor" Margin="22,18,22,16" Focusable="True" KeyboardNavigation.TabNavigation="Continue">
   <Grid.RowDefinitions>
@@ -68,13 +72,22 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
      <StackPanel>
       <TextBlock x:Name="Step" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-      <TextBlock x:Name="FeaturedLine" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap"
+      <TextBlock x:Name="FeaturedLine" FontSize="23" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="Collapsed"
        Foreground="{DynamicResource TextBrush}" Margin="0,8,0,10"/>
       <TextBlock x:Name="Instruction" Style="{StaticResource TimingCaption}" Margin="0,0,0,8"/>
       <Border x:Name="AutoTimingPanel" Style="{StaticResource TimingCard}" Padding="10" Margin="0,4,0,8">
        <StackPanel>
         <TextBlock Text="{local:Loc Text='离线自动打轴'}" FontWeight="SemiBold" Margin="0,0,0,5"/>
-        <TextBlock x:Name="AutoTimingStatus" Style="{StaticResource TimingCaption}" Margin="0,0,0,8" AutomationProperties.LiveSetting="Polite"/>
+        <TextBlock Text="{local:Loc Text='对齐模型'}" Style="{StaticResource TimingCaption}" Margin="0,0,0,4"/>
+        <ComboBox x:Name="AutoTimingModel" HorizontalAlignment="Stretch" Margin="0,0,0,8"
+         AutomationProperties.Name="{local:Loc Text='对齐模型'}">
+         <ComboBoxItem Content="{local:Loc Text='多语言 · W2V-BERT'}"/>
+         <ComboBoxItem Content="{local:Loc Text='普通话歌声 · SOFA'}"/>
+        </ComboBox>
+        <TextBlock x:Name="AutoTimingModelInfo" Style="{StaticResource TimingCoverage}"/>
+        <TextBlock x:Name="AutoTimingStatus" Style="{StaticResource TimingCoverage}" AutomationProperties.LiveSetting="Polite"/>
+        <TextBlock x:Name="AutoTimingCoverage" Style="{StaticResource TimingCoverage}" AutomationProperties.LiveSetting="Polite"/>
+        <TextBlock x:Name="AutoTimingUncovered" Style="{StaticResource TimingCoverage}"/>
         <ProgressBar x:Name="AutoTimingProgress" Height="5" Margin="0,0,0,8" Visibility="Collapsed"/>
         <WrapPanel>
          <Button x:Name="PrepareAutoTiming" Click="PrepareAutoClicked" Margin="0,0,6,6"/>

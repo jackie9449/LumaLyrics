@@ -25,11 +25,12 @@ public partial class LyricTimingWindow : Window
     sealed record DisplayedLine(string Number,string Text,string Times,string Gap);
 
     internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain,IOfflineLyricTiming? offline=null,
-        Func<CancellationToken,Task<LyricTimingAudio>>? capture=null)
+        Func<CancellationToken,Task<LyricTimingAudio>>? capture=null,IOfflineLyricTiming? mandarin=null)
     {
         this.coordinator=coordinator;
         this.target=target;
-        autoTiming=offline??new OfflineLyricTiming();
+        multilingualTiming=offline??new OfflineLyricTiming();
+        mandarinTiming=mandarin??new OfflineLyricTiming(engine:LyricTimingEngine.Mandarin);
         captureOverride=capture;
         InitializeComponent();
         Content=null;
@@ -39,8 +40,7 @@ public partial class LyricTimingWindow : Window
         TimedLines.ItemsSource=rows;
         SourceText.Text=plain;
         Step.Text=UiText.T("准备原词");
-        FeaturedLine.Text=UiText.T("每行放一句歌词");
-        Instruction.Text=UiText.T("粘贴静态原词或打开文本。开始打轴后，在 Apple Music 播放这首歌。");
+        Instruction.Text=UiText.T("粘贴静态原词或打开文本，每行一句。手动打轴时请播放这首歌。");
         Feedback.Text=UiText.T("空行会跳过。");
         Loaded+=(_,_)=>{RefreshPlayback();playback.Start();if(plain.Length==0)SourceText.Focus();else BeginTiming.Focus();};
         playback.Tick+=(_,_)=>RefreshPlayback();
@@ -79,7 +79,7 @@ public partial class LyricTimingWindow : Window
     void OpenTimingEditor()
     {
         SourceText.Visibility=LoadText.Visibility=BeginTiming.Visibility=AutoTimingPanel.Visibility=Visibility.Collapsed;
-        TimedLines.Visibility=MarkActions.Visibility=Visibility.Visible;
+        TimedLines.Visibility=MarkActions.Visibility=FeaturedLine.Visibility=Visibility.Visible;
         LyricsHeading.Text=UiText.T("逐行时间轴");
         RefreshSession(followActive:true);
         Editor.Focus();
@@ -237,7 +237,7 @@ public partial class LyricTimingWindow : Window
     void SaveClicked(object sender,RoutedEventArgs e)
     {
         if(timing?.Complete!=true)return;
-        try{coordinator.SaveManualLyricTiming(target,timing);saved=true;DialogResult=true;}
+        try{coordinator.SaveManualLyricTiming(target,timing,draftModel);saved=true;DialogResult=true;}
         catch(Exception ex) when(ex is InvalidDataException or IOException or Microsoft.Data.Sqlite.SqliteException)
         {Feedback.Text=UiText.Status(ex.Message);}
     }
