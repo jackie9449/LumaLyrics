@@ -138,14 +138,25 @@ public partial class MainWindow
             var originalDraft=repository.Save(draftTrack,plain,"Own draft fixture",true,plain:true);
             var draftTarget=new LibraryPreparationTarget(new("own-timing","draft"),draftTrack,originalDraft.Id,null,null);
             var multilingual=new TimingEngineFixture(new("Multilingual fixture","v1"),[false,true,false]);
-            var mandarin=new TimingEngineFixture(new("SOFA Mandarin","Fixture v1"),[true,true,true]);
+            var mandarin=new TimingEngineFixture(new("SOFA Mandarin","Fixture v1","zh"),[true,true,true]);
+            var japanese=new TimingEngineFixture(new("MMS Japanese","Fixture v1","ja"),[true,true,true]);
+            var backends=new Dictionary<LyricTimingEngine,IOfflineLyricTiming>
+            {
+                [LyricTimingEngine.Multilingual]=multilingual,
+                [LyricTimingEngine.Mandarin]=mandarin,
+                [LyricTimingEngine.Japanese]=japanese,
+                [LyricTimingEngine.French]=new TimingEngineFixture(new("W2V-BERT","Fixture v1","fr"),[true,false,true]),
+                [LyricTimingEngine.German]=new TimingEngineFixture(new("W2V-BERT","Fixture v1","de"),[true,false,false])
+            };
             int captureCalls=0;
-            var draftWindow=new LyricTimingWindow(subject,draftTarget,plain,multilingual,async token=>
+            var draftWindow=new LyricTimingWindow(subject,draftTarget,plain,async token=>
             {
                 captureCalls++;
                 await Task.Delay(55,token);
                 return new LyricTimingAudio(new short[16000],16000,0,0);
-            },mandarin){Owner=preferences,Width=680,Height=600};
+            },backends){Owner=preferences,Width=680,Height=600};
+            void SelectEngine(LyricTimingEngine engine)=>draftWindow.AutoTimingModel.SelectedItem=
+                draftWindow.AutoTimingModel.Items.OfType<ComboBoxItem>().Single(item=>Equals(item.Tag,engine));
             var reviewFinished=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             _=Dispatcher.BeginInvoke(async()=>
             {
@@ -161,7 +172,16 @@ public partial class MainWindow
                         && draftWindow.Feedback.Text==UiText.T("请选择覆盖全文的模型，或继续手动打轴。");
                     await Task.Delay(180);
                     if(UiText.Language=="zh-Hans")VisualVerification.Save(draftWindow,Path.Combine(directory,"timing-coverage.png"));
-                    draftWindow.AutoTimingModel.SelectedIndex=1;
+                    SelectEngine(LyricTimingEngine.French);
+                    Click(draftWindow.CaptureAutoTiming);
+                    bool french=captureCalls==0 && draftWindow.AutoTimingUncovered.Text==UiText.F($"未覆盖的行号：{"2"}")
+                        && Equals((draftWindow.AutoTimingModel.SelectedItem as ComboBoxItem)?.Content,UiText.T("法语 · W2V-BERT"));
+                    SelectEngine(LyricTimingEngine.German);
+                    Click(draftWindow.CaptureAutoTiming);
+                    checks["timing.frenchAndGermanUseSelectedProfiles"]=french && captureCalls==0
+                        && draftWindow.AutoTimingUncovered.Text==UiText.F($"未覆盖的行号：{"2, 3"}")
+                        && Equals((draftWindow.AutoTimingModel.SelectedItem as ComboBoxItem)?.Content,UiText.T("德语 · W2V-BERT"));
+                    SelectEngine(LyricTimingEngine.Mandarin);
                     checks["timing.switchingModelClearsOldCoverage"]=draftWindow.AutoTimingCoverage.Text.Length==0
                         && draftWindow.AutoTimingUncovered.Text.Length==0;
                     checks["timing.mandarinShowsRecordingGuidance"]=draftWindow.AutoTimingModelInfo.IsVisible
@@ -172,6 +192,9 @@ public partial class MainWindow
                     Click(draftWindow.CancelAutoTiming);
                     await Until(()=>draftWindow.CaptureAutoTiming.IsEnabled);
                     checks["timing.cancelKeepsStaticOriginal"]=repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id;
+                    SelectEngine(LyricTimingEngine.Japanese);
+                    checks["timing.japaneseProfileExplainsReading"]=draftWindow.AutoTimingModelInfo.IsVisible
+                        && draftWindow.AutoTimingModelInfo.Text==UiText.T("按日语读音对齐汉字和假名，草稿保留原文。模型权重仅限非商业用途。");
                     Click(draftWindow.CaptureAutoTiming);
                     await Until(()=>draftWindow.TimedLines.Items.Count==3);
                     checks["timing.autoDraftDoesNotWriteBeforeReview"]=repository.FindReadOnly(draftTrack)?.Id==originalDraft.Id && !draftWindow.SaveTiming.IsEnabled;
@@ -202,7 +225,8 @@ public partial class MainWindow
                 && draftGroups?.Select(g=>g.Text).SequenceEqual(["The quiet road","","We follow the light","","The quiet road",""])==true;
             using var provenance=JsonDocument.Parse(reviewed?.ProviderJson??"{}");
             checks["timing.reviewedDraftIdentifiesChosenModel"]=provenance.RootElement.TryGetProperty("source",out var source)
-                && source.GetString()==mandarin.Model.Source && provenance.RootElement.GetProperty("modelRevision").GetString()==mandarin.Model.ModelRevision;
+                && source.GetString()==japanese.Model.Source && provenance.RootElement.GetProperty("modelRevision").GetString()==japanese.Model.ModelRevision
+                && provenance.RootElement.GetProperty("lyricsLanguage").GetString()==japanese.Model.LyricsLanguage;
         }
         finally{preferences.Close();SelectUiTheme(theme,false);}
 

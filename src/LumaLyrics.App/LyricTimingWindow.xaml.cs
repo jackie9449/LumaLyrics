@@ -24,13 +24,13 @@ public partial class LyricTimingWindow : Window
     bool saved,updatingRows;
     sealed record DisplayedLine(string Number,string Text,string Times,string Gap);
 
-    internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain,IOfflineLyricTiming? offline=null,
-        Func<CancellationToken,Task<LyricTimingAudio>>? capture=null,IOfflineLyricTiming? mandarin=null)
+    internal LyricTimingWindow(PlaybackCoordinator coordinator,LibraryPreparationTarget target,string plain,
+        Func<CancellationToken,Task<LyricTimingAudio>>? capture=null,IReadOnlyDictionary<LyricTimingEngine,IOfflineLyricTiming>? backends=null)
     {
         this.coordinator=coordinator;
         this.target=target;
-        multilingualTiming=offline??new OfflineLyricTiming();
-        mandarinTiming=mandarin??new OfflineLyricTiming(engine:LyricTimingEngine.Mandarin);
+        timingBackends=backends??Enum.GetValues<LyricTimingEngine>().ToDictionary(engine=>engine,
+            engine=>(IOfflineLyricTiming)new OfflineLyricTiming(engine:engine));
         captureOverride=capture;
         InitializeComponent();
         Content=null;

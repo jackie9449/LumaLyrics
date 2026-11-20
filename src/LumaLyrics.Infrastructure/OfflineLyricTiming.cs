@@ -19,8 +19,8 @@ public interface IOfflineLyricTiming
     Task<IReadOnlyList<LyricTimingSpan?>> AlignAsync(LyricTimingAudio audio,string[] lines,CancellationToken token);
 }
 
-public enum LyricTimingEngine { Multilingual, Mandarin }
-public sealed record LyricTimingModel(string Source,string ModelRevision);
+public enum LyricTimingEngine { Multilingual, Mandarin, Japanese, French, German }
+public sealed record LyricTimingModel(string Source,string ModelRevision,string? LyricsLanguage=null);
 
 public sealed record LyricTimingCoverage(IReadOnlyList<bool> Lines)
 {
@@ -36,6 +36,7 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
     const string SofaSourceArchive="sofa-source-v1.0.3.zip";
     static readonly ArgosLock multilingual=ReadManifest("lyric-timing-lock.json");
     static readonly ArgosLock mandarin=ReadMandarinManifest();
+    static readonly ArgosLock japanese=ReadJapaneseManifest();
     static readonly (string Path,long Size)[] mandarinFiles=
     [
         ("pretrained_mandarin_singing/v1.0.0_mandarin_singing.ckpt",406087984),
@@ -57,12 +58,22 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
     public OfflineLyricTiming(string? toolsDirectory=null,LyricTimingEngine engine=LyricTimingEngine.Multilingual)
     {
         this.engine=engine;
-        manifest=engine==LyricTimingEngine.Mandarin?mandarin:multilingual;
+        manifest=engine switch
+        {
+            LyricTimingEngine.Mandarin=>mandarin,
+            LyricTimingEngine.Japanese=>japanese,
+            _=>multilingual
+        };
         worker=engine==LyricTimingEngine.Mandarin?"lyric-timing-sofa.py":"lyric-timing-worker.py";
         root=Path.GetFullPath(toolsDirectory??Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"LumaLyricsTools","lyric-timing"));
         installed=Path.Combine(root,manifest.Version);
-        Model=engine==LyricTimingEngine.Mandarin?new("SOFA Mandarin","pretrained_mandarin_singing/v1.0.1 (inference v1.0.3)")
-            :new("w2v-bert-2.0-music-lyrics-ctc","1be91455793f86de803ac0707303a0998e423ce1");
+        Model=engine switch
+        {
+            LyricTimingEngine.Mandarin=>new("SOFA Mandarin","pretrained_mandarin_singing/v1.0.1 (inference v1.0.3)","zh"),
+            LyricTimingEngine.Japanese=>new("NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn","2ab2b5f46539ee284703c281f286b01d2410ee12","ja"),
+            _=>new("w2v-bert-2.0-music-lyrics-ctc","1be91455793f86de803ac0707303a0998e423ce1",engine switch
+            {LyricTimingEngine.French=>"fr",LyricTimingEngine.German=>"de",_=>null})
+        };
     }
     public LyricTimingModel Model {get;}
 
@@ -74,6 +85,11 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
             "numpy-","PyYAML-","sympy-","typing_extensions-"];
         return assets with{Components=[.. multilingual.Components.Where(c=>runtime.Any(prefix=>c.Name.StartsWith(prefix,StringComparison.OrdinalIgnoreCase))),
             .. assets.Components]};
+    }
+    static ArgosLock ReadJapaneseManifest()
+    {
+        var assets=ReadManifest("lyric-timing-japanese-lock.json");
+        return assets with{Components=[.. multilingual.Components.Where(c=>c.Target!="model"),.. assets.Components]};
     }
     public long DownloadBytes=>manifest.Components.Sum(p=>p.Size);
     public bool Ready
@@ -88,7 +104,9 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
                     && mandarinSourceFiles.All(c=>HasModelFile(c.Path,c.Size))
                     && File.Exists(Path.Combine(installed,"Lib","site-packages","pypinyin","__init__.py"))
                     && File.Exists(Path.Combine(installed,"Lib","site-packages","torch","__init__.py"))
-                    :manifest.Components.Where(c=>c.Target=="model").All(c=>HasModelFile(c.Name,c.Size));
+                    :manifest.Components.Where(c=>c.Target=="model").All(c=>HasModelFile(c.Name,c.Size))
+                    && (engine!=LyricTimingEngine.Japanese || File.Exists(Path.Combine(installed,"Lib","site-packages","sudachidict_small","resources","system.dic"))
+                        && File.Exists(Path.Combine(installed,"Lib","site-packages","sudachipy","sudachipy.pyd")));
             }
             catch(IOException){return false;}
             catch(UnauthorizedAccessException){return false;}
@@ -105,13 +123,16 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
         using var lease=new FileStream(Path.Combine(root,"prepare.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
         if(Ready)return;
         var drive=new DriveInfo(Path.GetPathRoot(root)!);
-        int freeGb=engine==LyricTimingEngine.Mandarin?2:6;
+        int freeGb=engine switch{LyricTimingEngine.Mandarin=>2,LyricTimingEngine.Japanese=>4,_=>6};
         if(drive.AvailableFreeSpace<freeGb*1_000_000_000L)throw new InvalidDataException($"请为此模型预留至少 {freeGb} GB 可用空间。");
         using var client=new HttpClient{Timeout=Timeout.InfiniteTimeSpan};
         client.DefaultRequestHeaders.UserAgent.ParseAdd("LumaLyrics/1.2.0");
         long progressDone=0,total=DownloadBytes;
         // A cancelled download can be resumed; completed assets are extracted only after SHA-256 verification.
-        string downloads=Path.Combine(root,"downloads"), staging=ArgosInstallation.SafePath(root,"setup-"+Guid.NewGuid().ToString("N"));
+        // The Japanese and multilingual models publish files with the same names.
+        // Separate their partial downloads and keep the existing models' resume paths.
+        string downloads=engine==LyricTimingEngine.Japanese?Path.Combine(root,"downloads",manifest.Version):Path.Combine(root,"downloads");
+        string staging=ArgosInstallation.SafePath(root,"setup-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(downloads);Directory.CreateDirectory(staging);
         try
         {
@@ -325,20 +346,32 @@ public sealed class OfflineLyricTiming : IOfflineLyricTiming
     async Task<WorkerReply> RunWorkerAsync(LyricTimingAudio? audio,string[] lines,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        var header=JsonSerializer.SerializeToUtf8Bytes(new{Count=audio?.Count??0,Lines=lines});
+        var header=JsonSerializer.SerializeToUtf8Bytes(new{Count=audio?.Count??0,Lines=lines,
+            KanaReadings=engine==LyricTimingEngine.Japanese?JapaneseKana.CanonicalReadings:null});
         if(header.Length>512*1024)throw new InvalidDataException("打轴原词超过 128 KB。");
         var info=new ProcessStartInfo(Path.Combine(installed,"python.exe"))
         {WorkingDirectory=installed,UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true,
             StandardInputEncoding=new UTF8Encoding(false),StandardOutputEncoding=Encoding.UTF8};
         info.ArgumentList.Add("-I");
         info.ArgumentList.Add("-B");
-        if(audio is null)
+        if(engine!=LyricTimingEngine.Mandarin)
         {
-            // Read the installed worker's original encoding rules without loading model weights.
             info.ArgumentList.Add("-c");
-            info.ArgumentList.Add(ArgosInstallation.Resource("lyric-timing-coverage.py"));
+            // Release-specific text encoding can update alongside the app while reusing installed weights.
+            info.ArgumentList.Add(ArgosInstallation.Resource(worker));
+            info.ArgumentList.Add(Path.Combine(installed,"model"));
+            info.ArgumentList.Add(Model.LyricsLanguage??"");
         }
-        info.ArgumentList.Add(Path.Combine(installed,worker));info.ArgumentList.Add(Path.Combine(installed,"model"));
+        else
+        {
+            if(audio is null)
+            {
+                info.ArgumentList.Add("-c");
+                info.ArgumentList.Add(ArgosInstallation.Resource("lyric-timing-coverage.py"));
+            }
+            info.ArgumentList.Add(Path.Combine(installed,worker));
+            info.ArgumentList.Add(Path.Combine(installed,"model"));
+        }
         info.Environment["HF_HUB_OFFLINE"]="1";info.Environment["TRANSFORMERS_OFFLINE"]="1";
         info.Environment["USE_TF"]="0";info.Environment["USE_FLAX"]="0";
         using var process=Process.Start(info)??throw new InvalidDataException(RuntimeError);

@@ -42,7 +42,7 @@ public sealed partial class PlaybackCoordinator
     {
         var binding=repository.Save(target.Track,timing.MakeLrc(),timing.HasDraft?"离线打轴 · 已校对":"手动打轴",true,
             providerJson:timing.HasDraft && model is not null?JsonSerializer.Serialize(new
-            {source=model.Source,modelRevision=model.ModelRevision,acceptedInTimingEditor=true}):null,
+            {source=model.Source,modelRevision=model.ModelRevision,lyricsLanguage=model.LyricsLanguage,acceptedInTimingEditor=true}):null,
             expectedLibrary:Member(target),expectedBindingId:target.BindingId);
         ApplyLibraryOriginal(target,binding);
     }

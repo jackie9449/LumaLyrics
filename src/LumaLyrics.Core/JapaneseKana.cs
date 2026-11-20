@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text;
 
 namespace LumaLyrics.Core;
@@ -10,6 +11,8 @@ public static class JapaneseKana
     const string PlainVowels="aiueoaiueo";
     static readonly Dictionary<string,string[]> Readings=BuildReadings();
     static readonly Dictionary<string,string> KanaByRoman=BuildReverse();
+    public static IReadOnlyDictionary<string,string> CanonicalReadings {get;}=
+        Readings.ToFrozenDictionary(pair=>pair.Key,pair=>pair.Value[0],StringComparer.Ordinal);
 
     static Dictionary<string,string[]> BuildReadings()
     {

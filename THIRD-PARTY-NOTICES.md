@@ -27,6 +27,10 @@
 
 普通话离线打轴按需下载 [SOFA v1.0.3](https://github.com/qiuqiao/SOFA/tree/v1.0.3) 的推理网络与 `opencpop-extension` 字典，保留 [MIT 许可](https://github.com/qiuqiao/SOFA/blob/v1.0.3/LICENSE)。权重来自 [SOFA 普通话歌声 v1.0.1 发布包](https://github.com/qiuqiao/SOFA/releases/tag/v1.0.1)。发布包中的模型说明和训练数据贡献者记录随模型存放。字音转换使用 [pypinyin 0.55.0](https://github.com/mozillazg/python-pinyin/tree/v0.55.0)（MIT）。`lyric-timing-mandarin-lock.json` 固定这些下载件的版本、长度与 SHA-256。
 
+日语离线打轴按需下载 NextFire 的歌声对齐权重。该模型基于 Meta MMS，使用 Karaoke Mugen 数据进行日语罗马音对齐训练。权重采用 CC BY-NC-SA 4.0，原模型说明随组件安装。[NextFire 模型卡](https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn) [模型许可](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+日语词典读音使用 SudachiPy 0.7.0 与 SudachiDict Small 20261015（Apache-2.0）。各下载件保留原许可与辞书数据归属说明。`lyric-timing-japanese-lock.json` 固定下载地址、长度与 SHA-256。[SudachiPy](https://pypi.org/project/SudachiPy/0.7.0/) [SudachiDict Small](https://pypi.org/project/SudachiDict-small/20261015/)
+
 歌词查询使用 [LRCLIB](https://lrclib.net/docs)，带 `LumaLyrics/0.1.0` 客户端标识。只调用查询接口，串行节流并遵守 Retry-After。歌词与封面按实际来源在用户本地获取；发布包不包含批量歌词库或音乐。新增公开截图使用原创几何封面与自写歌词，不含个人资料库内容。
 
 图标为本项目用几何图形生成的原生资产；未使用外部照片或商业图标包。

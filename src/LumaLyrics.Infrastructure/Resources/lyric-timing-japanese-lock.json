@@ -1,0 +1,54 @@
+{
+  "Version": "lyrics-mms-karaoke-ja-2ab2b5f-win64-v1",
+  "Components": [
+    {
+      "Name": "sudachipy-0.7.0-cp310-abi3-win_amd64.whl",
+      "Url": "https://files.pythonhosted.org/packages/e9/a1/03e40b0eadbdd48ed47aef7aaf27d4703f5cc225750872af1a26de08ec2b/sudachipy-0.7.0-cp310-abi3-win_amd64.whl",
+      "Size": 1515929,
+      "Sha256": "8d0429db2d02d408daa7dccd062a6d8c2984a07f8e448b49a3ea694377617658",
+      "Target": "site"
+    },
+    {
+      "Name": "sudachidict_small-20261015-py3-none-any.whl",
+      "Url": "https://files.pythonhosted.org/packages/a7/e3/b6e1c3869ed6278cdae6bb237b886bac92531a9081d0877e08ebaa2423d4/sudachidict_small-20261015-py3-none-any.whl",
+      "Size": 42482871,
+      "Sha256": "37e4b4c15e483d84dcdfe8fb05545c9dd8fcab806fd2146eaa8c2e804b31d403",
+      "Target": "site"
+    },
+    {
+      "Name": "README.md",
+      "Url": "https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn/resolve/2ab2b5f46539ee284703c281f286b01d2410ee12/README.md",
+      "Size": 597,
+      "Sha256": "3a23befdfce500c6da47026854b547698166f11d8567670344959d0fb4c1208d",
+      "Target": "model"
+    },
+    {
+      "Name": "config.json",
+      "Url": "https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn/resolve/2ab2b5f46539ee284703c281f286b01d2410ee12/config.json",
+      "Size": 2034,
+      "Sha256": "665dbd5be3a170d0b53f86e702a4f65f755471a2d81c1e0cf35ba566a72bf382",
+      "Target": "model"
+    },
+    {
+      "Name": "model.safetensors",
+      "Url": "https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn/resolve/2ab2b5f46539ee284703c281f286b01d2410ee12/model.safetensors",
+      "Size": 1261938632,
+      "Sha256": "4d1d6fbb543534ab32bcceac5f5a42052c7fde3d16a83cbbce858473d5735042",
+      "Target": "model"
+    },
+    {
+      "Name": "processor_config.json",
+      "Url": "https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn/resolve/2ab2b5f46539ee284703c281f286b01d2410ee12/processor_config.json",
+      "Size": 299,
+      "Sha256": "8bc3c8d6d97ea61524d5c15d8554b4baf072d2264c0bda1839bc7a822c200d66",
+      "Target": "model"
+    },
+    {
+      "Name": "vocab.json",
+      "Url": "https://huggingface.co/NextFire/mms-300m-ForcedAligner-karaoke-ja-Latn/resolve/2ab2b5f46539ee284703c281f286b01d2410ee12/vocab.json",
+      "Size": 331,
+      "Sha256": "26dc928520b2bde28e1c9e7fd425aae6b4eb40cd992bcb0bcc16ca6fada46491",
+      "Target": "model"
+    }
+  ]
+}

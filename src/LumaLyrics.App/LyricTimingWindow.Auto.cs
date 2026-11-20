@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Http;
 using System.Windows;
+using System.Windows.Controls;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
 using LumaLyrics.Windows;
@@ -10,8 +11,10 @@ namespace LumaLyrics.App;
 
 public partial class LyricTimingWindow
 {
-    readonly IOfflineLyricTiming multilingualTiming,mandarinTiming;
-    IOfflineLyricTiming SelectedTiming=>AutoTimingModel.SelectedIndex==1?mandarinTiming:multilingualTiming;
+    readonly IReadOnlyDictionary<LyricTimingEngine,IOfflineLyricTiming> timingBackends;
+    LyricTimingEngine SelectedEngine=>(AutoTimingModel.SelectedItem as ComboBoxItem)?.Tag is LyricTimingEngine engine
+        ?engine:LyricTimingEngine.Multilingual;
+    IOfflineLyricTiming SelectedTiming=>timingBackends[SelectedEngine];
     LyricTimingModel? draftModel;
     readonly Func<CancellationToken,Task<LyricTimingAudio>>? captureOverride;
     CancellationTokenSource? autoOperation;
@@ -48,8 +51,12 @@ public partial class LyricTimingWindow
         bool busy=autoOperation is not null,ready=SelectedTiming.Ready;
         string size=(Math.Ceiling(SelectedTiming.DownloadBytes/100_000_000d)/10).ToString("0.0",UiText.Culture);
         PrepareAutoTiming.Content=UiText.F($"下载组件（约 {size} GB）");
-        AutoTimingModelInfo.Text=AutoTimingModel.SelectedIndex==1
-            ?UiText.T("适合人声清晰的普通话录音。伴奏较重或原词漏写重复句时，部分时间可能需要手动补齐。"):"";
+        AutoTimingModelInfo.Text=UiText.T(SelectedEngine switch
+        {
+            LyricTimingEngine.Mandarin=>"适合人声清晰的普通话录音。伴奏较重或原词漏写重复句时，部分时间可能需要手动补齐。",
+            LyricTimingEngine.Japanese=>"按日语读音对齐汉字和假名，草稿保留原文。模型权重仅限非商业用途。",
+            _=>""
+        });
         PrepareAutoTiming.Visibility=ready?Visibility.Collapsed:Visibility.Visible;
         PrepareAutoTiming.IsEnabled=AutoTimingModel.IsEnabled=!busy;
         CaptureAutoTiming.IsEnabled=OpenAutoAudio.IsEnabled=ready&&!busy;
