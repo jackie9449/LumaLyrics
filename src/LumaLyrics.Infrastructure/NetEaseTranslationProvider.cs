@@ -27,9 +27,21 @@ public interface ITranslationProvider
 
 public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IManualLyricsSearch,IAutomaticLyricsSearch,IDisposable
 {
+    const int AlbumHintCapacity=128;
+    const int AlbumDirectoryCapacity=64;
     sealed record CatalogSong(LyricsCandidate Candidate,long? AlbumId,int Disc,int Number,NetEaseReleaseEvidence? ReleaseEvidence=null);
     internal sealed record RecordingLookup(IReadOnlyList<TranslationCandidate> Candidates,LyricsCatalogStatus CatalogStatus,bool CatalogUnavailable=false);
+    sealed class SessionCache
+    {
+        public readonly Dictionary<(string Artist,string Album),(long AlbumId,DateTimeOffset Expires)> AlbumHints=new();
+        public readonly Dictionary<(string Artist,string Album),(IReadOnlyList<CatalogSong> Songs,DateTimeOffset Expires)> AlbumDirectory=new();
+        public readonly Dictionary<AppleLocalizedRelease,CachedRelease> CheckedReleases=new();
+    }
+    SessionCache sessionCache=new();
+    readonly SemaphoreSlim albumGate=new(1,1);
     readonly HttpClient client;readonly SemaphoreSlim gate=new(1,1);readonly TimeSpan interval;DateTimeOffset next;
+    long rateRetryTicks;
+    internal bool IsRateLimited=>DateTimeOffset.UtcNow.UtcTicks<Interlocked.Read(ref rateRetryTicks);
     public NetEaseTranslationProvider(HttpMessageHandler? handler=null,TimeSpan? minimumInterval=null,HttpMessageHandler? appleCatalogHandler=null)
     {
         interval=minimumInterval??TimeSpan.FromSeconds(1);
@@ -43,12 +55,18 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         await gate.WaitAsync(token);
         try
         {
+            token.ThrowIfCancellationRequested();
+            if(IsRateLimited)throw new LyricsProviderException("中文译文来源仍处于限流等待期，继续查询其他来源。",429);
             var delay=next-DateTimeOffset.UtcNow;if(delay>TimeSpan.Zero)await Task.Delay(delay,token);
             var started=DateTimeOffset.UtcNow;
             next=started+interval;
             using var response=await client.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead,token);
             if(response.StatusCode==HttpStatusCode.TooManyRequests)
-            {next=response.Headers.RetryAfter?.Date??DateTimeOffset.UtcNow+(response.Headers.RetryAfter?.Delta??TimeSpan.FromMinutes(1));throw new LyricsProviderException("中文译文来源暂时限流，稍后重试。",429);}
+            {
+                next=response.Headers.RetryAfter?.Date??DateTimeOffset.UtcNow+(response.Headers.RetryAfter?.Delta??TimeSpan.FromMinutes(1));
+                Interlocked.Exchange(ref rateRetryTicks,next.UtcTicks);
+                throw new LyricsProviderException("中文译文来源暂时限流，稍后重试。",429);
+            }
             if(!response.IsSuccessStatusCode)throw new LyricsProviderException($"中文译文来源暂不可用（{(int)response.StatusCode}）。",(int)response.StatusCode);
             if(response.Content.Headers.ContentLength>2*1024*1024)throw new LyricsProviderException("译文响应超过 2 MB。");
             using var input=await response.Content.ReadAsStreamAsync(token);using var output=new MemoryStream();var buffer=new byte[8192];int count;
@@ -94,10 +112,19 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
     internal async Task<RecordingLookup> LookupRecordingsAsync(Track input,CancellationToken token,bool preferTranslation=true)
     {
         var track=TrackMetadata.FromAppleSession(input);
+        token.ThrowIfCancellationRequested();
         if(track.DurationMs is not >0 || string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))
             return new([],LyricsCatalogStatus.None);
+        var cache=Volatile.Read(ref sessionCache);
+        bool hasAlbum=!string.IsNullOrWhiteSpace(track.Album);
+        var albumKey=hasAlbum?AppleReleaseCatalog.AlbumKey(track.Artist,track.Album):default;
         try
         {
+            if(hasAlbum && await ReadAlbumDirectoryAsync(cache,albumKey,track,token) is {} directory)
+            {
+                var albumMatches=directory.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
+                if(albumMatches.Length>0)return await ReadLyricsAsync(track,albumMatches,token,preferTranslation);
+            }
             var catalog=await SearchSongsAsync(track.Title+" "+track.Artist,token);
             var matches=catalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
             if(matches.Length==0 && ManualLyricsSearch.KanaQuery(track) is {} kana)
@@ -106,7 +133,11 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
                 matches=kanaCatalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
                 if(matches.Length==0)catalog=catalog.Concat(kanaCatalog).ToArray();
             }
-            if(matches.Length>0)return await ReadLyricsAsync(track,matches,token,preferTranslation);
+            if(matches.Length>0)
+            {
+                if(hasAlbum)await RememberAlbumHintAsync(cache,albumKey,track,matches,token);
+                return await ReadLyricsAsync(track,matches,token,preferTranslation);
+            }
             var release=await FindLocalizedSongAsync(track,catalog,token);
             if(release.Song is {} song)return await ReadLyricsAsync(track,[song],token,preferTranslation);
             return new([],catalog.Count>0?LyricsCatalogStatus.Unconfirmed:LyricsCatalogStatus.None,release.Unavailable);
@@ -114,14 +145,76 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         catch(JsonException){throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");}
     }
 
+    async Task<IReadOnlyList<CatalogSong>?> ReadAlbumDirectoryAsync(SessionCache cache,(string Artist,string Album) key,Track track,CancellationToken token)
+    {
+        await albumGate.WaitAsync(token);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            var now=DateTimeOffset.UtcNow;
+            if(cache.AlbumDirectory.TryGetValue(key,out var directory) && directory.Expires>now)return directory.Songs;
+            cache.AlbumDirectory.Remove(key);
+            if(!cache.AlbumHints.TryGetValue(key,out var hint))return null;
+
+            // Hold the gate through promotion so concurrent tracks share this request.
+            var songs=hint.Expires>now?await FetchAlbumDirectoryAsync(hint.AlbumId,track,token):null;
+            token.ThrowIfCancellationRequested();
+            cache.AlbumHints.Remove(key);
+            if(songs is null)return null;
+            if(cache.AlbumDirectory.Count>=AlbumDirectoryCapacity)
+                cache.AlbumDirectory.Remove(cache.AlbumDirectory.MinBy(pair=>pair.Value.Expires).Key);
+            cache.AlbumDirectory[key]=(songs,DateTimeOffset.UtcNow.AddHours(1));
+            return songs;
+        }
+        finally{albumGate.Release();}
+    }
+
+    async Task<IReadOnlyList<CatalogSong>?> FetchAlbumDirectoryAsync(long albumId,Track track,CancellationToken token)
+    {
+        try
+        {
+            using var detail=await GetAsync($"api/album/{albumId}",token);
+            if(!detail.RootElement.TryGetProperty("album",out var node) || ReadAlbum(node) is not {Count:>=2} album
+                || album.Id!=albumId || !MatchRules.CatalogAlbumMatches(track.Album,album.Name))return null;
+            var songs=ParseSongs(AlbumSongsParent(detail.RootElement,node),Math.Max(30,album.Count))
+                .Where(song=>song.AlbumId is null || song.AlbumId==album.Id).ToArray();
+            return songs.Length>=2?songs:null;
+        }
+        catch(LyricsProviderException ex) when(ex.StatusCode is not (429 or 405)){return null;}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){return null;}
+        catch(Exception ex) when(ex is JsonException or IOException){return null;}
+    }
+
+    async Task RememberAlbumHintAsync(SessionCache cache,(string Artist,string Album) key,Track track,IReadOnlyList<CatalogSong> matches,CancellationToken token)
+    {
+        var hint=RankSongs(track,matches).FirstOrDefault(song=>song.AlbumId is >0
+            && MatchRules.AlbumMatches(song.Candidate.Track.Album,track.Album));
+        if(hint?.AlbumId is not {} albumId)return;
+        await albumGate.WaitAsync(token);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            var now=DateTimeOffset.UtcNow;
+            if(cache.AlbumDirectory.TryGetValue(key,out var directory) && directory.Expires>now
+                || cache.AlbumHints.TryGetValue(key,out var existing) && existing.Expires>now)return;
+            if(cache.AlbumHints.Count>=AlbumHintCapacity && !cache.AlbumHints.ContainsKey(key))
+                cache.AlbumHints.Remove(cache.AlbumHints.MinBy(pair=>pair.Value.Expires).Key);
+            // The first verified keyword hit only remembers the ID for a later lookup.
+            cache.AlbumHints[key]=(albumId,now.AddHours(1));
+        }
+        finally{albumGate.Release();}
+    }
+
+    static IOrderedEnumerable<CatalogSong> RankSongs(Track track,IReadOnlyList<CatalogSong> songs)
+        =>songs.OrderByDescending(song=>song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true)
+            .ThenByDescending(song=>MatchRules.AlbumMatches(song.Candidate.Track.Album,track.Album))
+            .ThenBy(song=>MatchRules.Score(track,song.Candidate).UsesJapaneseReading)
+            .ThenBy(song=>Math.Abs(song.Candidate.Track.DurationMs!.Value-track.DurationMs!.Value));
+
     async Task<RecordingLookup> ReadLyricsAsync(Track track,IReadOnlyList<CatalogSong> matches,CancellationToken token,bool preferTranslation=true)
     {
         var found=new List<TranslationCandidate>();
-        foreach(var song in matches.OrderByDescending(song=>song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true)
-            .ThenByDescending(song=>MatchRules.AlbumMatches(song.Candidate.Track.Album,track.Album))
-            .ThenBy(song=>MatchRules.Score(track,song.Candidate).UsesJapaneseReading)
-            .ThenBy(song=>Math.Abs(song.Candidate.Track.DurationMs!.Value-track.DurationMs!.Value))
-            .DistinctBy(song=>song.Candidate.Id).Take(3))
+        foreach(var song in RankSongs(track,matches).DistinctBy(song=>song.Candidate.Id).Take(3))
         {
             if(await FetchLyricsAsync(song,token) is not {} lyrics)continue;
             found.Add(lyrics);
@@ -195,7 +288,18 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
     void CheckCode(JsonElement e)
     {
         if(e.ValueKind!=JsonValueKind.Object || !e.TryGetProperty("code",out var code)||code.ValueKind!=JsonValueKind.Number||!code.TryGetInt32(out var n))throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");
-        if(n!=200){if(n is 405 or 429)next=DateTimeOffset.UtcNow.AddMinutes(1);throw new LyricsProviderException($"歌词与译文来源未返回成功结果（{n}），未保存内容。",n);}
+        if(n is 405 or 429)
+        {
+            next=DateTimeOffset.UtcNow.AddMinutes(1);
+            Interlocked.Exchange(ref rateRetryTicks,next.UtcTicks);
+        }
+        if(n!=200)throw new LyricsProviderException($"歌词与译文来源未返回成功结果（{n}），未保存内容。",n);
+    }
+    internal void ClearSessionCache()
+    {
+        // Swap the state so a UI clear can finish while a request owns a gate.
+        Interlocked.Exchange(ref sessionCache,new());
+        appleCatalog?.ClearCache();
     }
     public void Dispose(){client.Dispose();appleCatalog?.Dispose();} // A cancelled request can still release its gate.
 }

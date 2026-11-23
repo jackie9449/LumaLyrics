@@ -14,9 +14,19 @@ internal sealed class AppleReleaseCatalog : IDisposable
 {
     const int SearchLimit=24;
     const int MaximumTracks=200;
+    const int ReleaseCacheCapacity=64;
+    const int MissCacheCapacity=128;
     static readonly RequestLimiter LiveRequests=new(TimeSpan.FromSeconds(3.2));
     readonly RequestLimiter requests;
     readonly HttpClient client;
+    readonly SemaphoreSlim cacheGate=new(1,1);
+    Cache cache=new();
+
+    sealed class Cache
+    {
+        public readonly Dictionary<(string Artist,string Album),(AppleLocalizedRelease Release,DateTimeOffset Expires)> Releases=new();
+        public readonly Dictionary<(string Fingerprint,double? DurationMs),DateTimeOffset> Misses=new();
+    }
 
     internal AppleReleaseCatalog(HttpMessageHandler? handler)
     {
@@ -28,6 +38,54 @@ internal sealed class AppleReleaseCatalog : IDisposable
     }
 
     internal async Task<AppleLocalizedRelease?> FindAsync(Track track,CancellationToken token)
+    {
+        track=TrackMetadata.FromAppleSession(track);
+        var current=Volatile.Read(ref cache);
+        var songKey=(track.Fingerprint,track.DurationMs);
+        var albumKey=AlbumKey(track.Artist,track.Album);
+        await cacheGate.WaitAsync(token);
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            var now=DateTimeOffset.UtcNow;
+            if(current.Misses.TryGetValue(songKey,out var missUntil) && missUntil>now)return null;
+            current.Misses.Remove(songKey);
+            if(current.Releases.TryGetValue(albumKey,out var cached) && cached.Expires>now)
+            {
+                int matched=cached.Release.Published.Songs.Zip(cached.Release.Japanese.Songs)
+                    .Where(pair=>CatalogRecordingMatch.MatchesLocal(track,pair.First.Track,pair.Second.Track)).Take(2).Count();
+                if(matched==1)return cached.Release;
+                if(matched>1)return null;
+            }
+
+            var release=await SearchAsync(track,token);
+            token.ThrowIfCancellationRequested();
+            if(release is null)
+            {
+                if(current.Misses.Count>=MissCacheCapacity)current.Misses.Remove(current.Misses.MinBy(pair=>pair.Value).Key);
+                current.Misses[songKey]=DateTimeOffset.UtcNow.AddMinutes(5);
+                return null;
+            }
+
+            var expires=DateTimeOffset.UtcNow.AddHours(1);
+            foreach(var key in new[]{albumKey,AlbumKey(release.Published.Artist,release.Published.Name),
+                AlbumKey(release.Japanese.Artist,release.Japanese.Name)}.Distinct())
+            {
+                if(current.Releases.Count>=ReleaseCacheCapacity && !current.Releases.ContainsKey(key))
+                    current.Releases.Remove(current.Releases.MinBy(pair=>pair.Value.Expires).Key);
+                current.Releases[key]=(release,expires);
+            }
+            return release;
+        }
+        finally{cacheGate.Release();}
+    }
+
+    internal void ClearCache()=>Interlocked.Exchange(ref cache,new());
+
+    internal static (string Artist,string Album) AlbumKey(string artist,string album)
+        =>(MatchRules.Normalize(artist),MatchRules.Normalize(album));
+
+    async Task<AppleLocalizedRelease?> SearchAsync(Track track,CancellationToken token)
     {
         bool japanese=HasJapaneseText(track.Title) || HasJapaneseText(track.Album) || HasJapaneseText(track.Artist);
         string storefront=japanese?"country=jp&lang=ja_jp":"country=us";

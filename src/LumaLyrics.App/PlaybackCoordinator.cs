@@ -250,7 +250,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
             Updated?.Invoke();
             foregroundLookupActive=true;
             await Task.Delay(300,token);
-            var results = await provider.LookupAsync(s.Track,token);
+            var results = await provider.LookupAsync(s.Track,token,bypassSessionCache:force);
             if (!Current() || !Settings.OnlineLookup) return;
             ApplyAutomaticLookupResult(s.Track,results);
         }
@@ -328,6 +328,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     }
     public void ClearCache()
     {
+        provider.ClearSessionCache();
         repository.ClearNetworkCache();var dir=Path.Combine(store.Root,"cache","responses");if(Directory.Exists(dir))foreach(var f in Directory.GetFiles(dir))File.Delete(f);
         LyricsStatus="查词响应缓存已清理，个人歌词与封面已保留";Updated?.Invoke();
     }

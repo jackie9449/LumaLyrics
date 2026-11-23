@@ -231,6 +231,47 @@ public class LibraryTests : IDisposable
         Assert.StartsWith("NetEase #1",original?.Source);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrefetchStopsWithoutRecordingTrackErrorsWhenBothSourcesAreRateLimited(bool alreadyLimited)
+    {
+        var (path,database)=BatchLibrary(8);
+        var primaryRequests=new ConcurrentQueue<Uri>();
+        var secondaryRequests=new ConcurrentQueue<Uri>();
+        using var provider=new ResilientLyricsProvider(
+            new LrclibProvider(new BatchHandler((uri,_)=>
+            {
+                primaryRequests.Enqueue(uri);
+                return Task.FromResult(RateLimited());
+            }),minimumInterval:TimeSpan.Zero),
+            new NetEaseTranslationProvider(new BatchHandler((uri,_)=>
+            {
+                secondaryRequests.Enqueue(uri);
+                return Task.FromResult(RateLimited());
+            }),TimeSpan.Zero));
+        using var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        if(alreadyLimited)
+            await Assert.ThrowsAsync<LyricsProviderException>(()=>provider.LookupAsync(new("Probe","Artist","Album",10000),cancel.Token));
+        var worker=new LibraryPrefetcher(database,provider);
+        var reports=new ConcurrentQueue<LibraryProgress>();
+        worker.Progress+=reports.Enqueue;
+
+        await worker.RunAsync(path,cancel.Token);
+
+        Assert.Single(primaryRequests);
+        Assert.Single(secondaryRequests);
+        var final=reports.Last();
+        Assert.False(final.Running);
+        Assert.Equal("歌词来源均暂时限流，稍后自动重试",final.Message);
+        Assert.Equal(0,final.Errors);
+        Assert.Equal(8,final.Pending);
+        Assert.Equal(final,JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(LibraryPrefetcher.ProgressPath(database))));
+
+        static HttpResponseMessage RateLimited()
+            =>new(HttpStatusCode.TooManyRequests){Headers={RetryAfter=new(TimeSpan.FromMinutes(1))}};
+    }
+
     [Fact] public async Task PrefetchWithOneSlotRunsTheCompleteChainForTheFirstRecording()
     {
         var (path,database)=BatchLibrary(3);

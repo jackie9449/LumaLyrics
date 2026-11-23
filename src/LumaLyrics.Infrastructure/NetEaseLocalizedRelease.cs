@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using LumaLyrics.Core;
@@ -48,7 +47,6 @@ public sealed partial class NetEaseTranslationProvider
     const int ReleaseCacheCapacity=64;
     readonly AppleReleaseCatalog? appleCatalog;
     readonly SemaphoreSlim releaseGate=new(1,1);
-    readonly Dictionary<string,CachedRelease> checkedReleases=new(StringComparer.Ordinal);
 
     sealed record CachedRelease(DateTimeOffset Expires,IReadOnlyList<CatalogSong> Songs);
     sealed record CatalogAlbum(long Id,string Name,string Artist,int Count,DateOnly? Released);
@@ -57,29 +55,33 @@ public sealed partial class NetEaseTranslationProvider
     async Task<ReleaseLookup> FindLocalizedSongAsync(Track track,IReadOnlyList<CatalogSong> hints,CancellationToken token)
     {
         if(appleCatalog is null || !MayNeedLocalizedRelease(track,hints))return default;
-        using var budget=CancellationTokenSource.CreateLinkedTokenSource(token);
-        budget.CancelAfter(TimeSpan.FromSeconds(20));
-        string albumKey=AlbumKey(track.Artist,track.Album);
-        string songKey="song|"+track.Fingerprint+"|"+track.DurationMs!.Value.ToString(CultureInfo.InvariantCulture);
+        var checkedReleases=Volatile.Read(ref sessionCache).CheckedReleases;
         try
         {
-            await releaseGate.WaitAsync(budget.Token);
+            await releaseGate.WaitAsync(token);
             try
             {
-                if(TryReadRelease(albumKey,out var cached))return new(FindSong(track,cached),false);
-                if(TryReadRelease(songKey,out _))return default;
-                var apple=await appleCatalog.FindAsync(track,budget.Token);
-                budget.Token.ThrowIfCancellationRequested();
-                if(apple is null)
+                AppleLocalizedRelease? apple;
+                using(var appleBudget=CancellationTokenSource.CreateLinkedTokenSource(token))
                 {
-                    RememberRelease(songKey,[]);
-                    return default;
+                    appleBudget.CancelAfter(TimeSpan.FromSeconds(25));
+                    apple=await appleCatalog.FindAsync(track,appleBudget.Token);
+                    appleBudget.Token.ThrowIfCancellationRequested();
                 }
-                var songs=await MatchReleaseAsync(apple,budget.Token);
-                budget.Token.ThrowIfCancellationRequested();
-                RememberRelease(albumKey,songs);
-                foreach(var view in new[]{apple.Published,apple.Japanese})
-                    RememberRelease(AlbumKey(view.Artist,view.Songs[0].Track.Album),songs);
+                if(apple is null)return default;
+
+                // Reuse evidence for the verified Apple edition. A track absent from the
+                // cached Apple album can still resolve through the normal catalog search.
+                if(checkedReleases.TryGetValue(apple,out var cached) && cached.Expires>DateTimeOffset.UtcNow)
+                    return new(FindSong(track,cached.Songs),false);
+
+                using var neteaseBudget=CancellationTokenSource.CreateLinkedTokenSource(token);
+                neteaseBudget.CancelAfter(TimeSpan.FromSeconds(20));
+                var songs=await MatchReleaseAsync(apple,neteaseBudget.Token);
+                neteaseBudget.Token.ThrowIfCancellationRequested();
+                if(!checkedReleases.ContainsKey(apple) && checkedReleases.Count>=ReleaseCacheCapacity)
+                    checkedReleases.Remove(checkedReleases.MinBy(pair=>pair.Value.Expires).Key);
+                checkedReleases[apple]=new(DateTimeOffset.UtcNow+(songs.Count>0?TimeSpan.FromHours(1):TimeSpan.FromMinutes(5)),songs);
                 return new(FindSong(track,songs),false);
             }
             finally{releaseGate.Release();}
@@ -108,27 +110,6 @@ public sealed partial class NetEaseTranslationProvider
             || value.Split([' ','-','\t','/','(',')'],StringSplitOptions.RemoveEmptyEntries)
                 .Any(word=>word.Length>=5 && JapaneseKana.SearchKatakana(word) is not null);
 
-    static string AlbumKey(string artist,string album)=>"album|"+MatchRules.Normalize(artist)+"|"+MatchRules.Normalize(album);
-
-    bool TryReadRelease(string key,out IReadOnlyList<CatalogSong> songs)
-    {
-        if(checkedReleases.TryGetValue(key,out var item) && item.Expires>DateTimeOffset.UtcNow)
-        {
-            songs=item.Songs;
-            return true;
-        }
-        checkedReleases.Remove(key);
-        songs=[];
-        return false;
-    }
-
-    void RememberRelease(string key,IReadOnlyList<CatalogSong> songs)
-    {
-        if(!checkedReleases.ContainsKey(key) && checkedReleases.Count>=ReleaseCacheCapacity)
-            checkedReleases.Remove(checkedReleases.MinBy(pair=>pair.Value.Expires).Key);
-        checkedReleases[key]=new(DateTimeOffset.UtcNow+(songs.Count>0?TimeSpan.FromHours(1):TimeSpan.FromMinutes(5)),songs);
-    }
-
     static CatalogSong? FindSong(Track track,IReadOnlyList<CatalogSong> songs)
     {
         var matches=songs.Where(song=>song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true).Take(2).ToArray();
@@ -148,8 +129,7 @@ public sealed partial class NetEaseTranslationProvider
             using var detail=await GetAsync($"api/album/{choice.Id}",token);
             if(!detail.RootElement.TryGetProperty("album",out var node) || ReadAlbum(node) is not {} album
                 || album.Id!=choice.Id || !SameRelease(apple,album))continue;
-            var parent=node.TryGetProperty("songs",out var nestedSongs) && nestedSongs.ValueKind==JsonValueKind.Array
-                ?node:detail.RootElement;
+            var parent=AlbumSongsParent(detail.RootElement,node);
             if(!parent.TryGetProperty("songs",out var rows) || rows.ValueKind!=JsonValueKind.Array || rows.GetArrayLength()!=japanese.Count)
                 continue;
             var songs=ParseSongs(parent,japanese.Count);
@@ -200,6 +180,9 @@ public sealed partial class NetEaseTranslationProvider
         }
         return verified;
     }
+
+    static JsonElement AlbumSongsParent(JsonElement root,JsonElement album)
+        =>album.TryGetProperty("songs",out var songs) && songs.ValueKind==JsonValueKind.Array?album:root;
 
     static CatalogAlbum? ReadAlbum(JsonElement node)
     {

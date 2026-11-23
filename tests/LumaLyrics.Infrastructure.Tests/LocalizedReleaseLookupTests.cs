@@ -170,10 +170,118 @@ public sealed class LocalizedReleaseLookupTests
         var unconfirmed=await provider.LookupAsync(Published[0],default);
         Assert.Empty(unconfirmed);
         Assert.True(LyricsLookupDiagnosis.Unavailable(unconfirmed));
+        Assert.Single(fixture.AppleRequests);
 
         fixture.AppleUnavailable=false;
         var recovered=await provider.LookupAsync(Published[0],default);
         Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],recovered)?.Candidate.Id);
+        Assert.Equal(4,fixture.AppleRequests.Count);
+    }
+
+    [Theory]
+    [InlineData("timeout")]
+    [InlineData("rate limit")]
+    [InlineData("invalid JSON")]
+    public async Task AppleFailuresDoNotBecomeCachedMisses(string failure)
+    {
+        var fixture=new Fixture
+        {
+            AppleOverride=_=>failure switch
+            {
+                "timeout"=>throw new TaskCanceledException("Simulated Apple catalogue timeout."),
+                "rate limit"=>new(HttpStatusCode.TooManyRequests){Headers={RetryAfter=new(TimeSpan.Zero)}},
+                _=>new(HttpStatusCode.OK){Content=new StringContent("{")}
+            }
+        };
+        using var provider=fixture.Provider();
+        var unavailable=await provider.LookupAsync(Published[0],default);
+        Assert.Empty(unavailable);
+        Assert.True(LyricsLookupDiagnosis.Unavailable(unavailable));
+        Assert.Single(fixture.AppleRequests);
+
+        fixture.AppleOverride=null;
+        var recovered=await provider.LookupAsync(Published[0],default);
+        Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],recovered)?.Candidate.Id);
+        Assert.Equal(4,fixture.AppleRequests.Count);
+    }
+
+    [Fact]
+    public async Task AppleCleanMissIsRememberedForTheExactDurationAndCanBeCleared()
+    {
+        var fixture=new Fixture{AppleOverride=_=>Json(new{results=Array.Empty<object>()})};
+        using var provider=fixture.Provider();
+        var miss=await provider.LookupAsync(Published[0],default);
+        Assert.Empty(miss);
+        Assert.False(LyricsLookupDiagnosis.Unavailable(miss));
+        Assert.Equal(2,fixture.AppleRequests.Count);
+        Assert.Empty(await provider.LookupAsync(Published[0],default));
+        Assert.Equal(2,fixture.AppleRequests.Count);
+
+        Assert.Empty(await provider.LookupAsync(Published[0] with{DurationMs=180401},default));
+        Assert.Equal(4,fixture.AppleRequests.Count);
+
+        fixture.AppleOverride=null;
+        provider.ClearSessionCache();
+        var recovered=await provider.LookupAsync(Published[0],default);
+        Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],recovered)?.Candidate.Id);
+        Assert.Equal(7,fixture.AppleRequests.Count);
+    }
+
+    [Fact]
+    public async Task NetEaseTimeoutLeavesAppleReleaseAvailableForRetryAndForLocalizedAliases()
+    {
+        var fixture=new Fixture
+        {
+            NetEaseOverride=uri=>uri.Query.Contains("type=10",StringComparison.Ordinal)
+                ?throw new TaskCanceledException("Simulated NetEase release search timeout."):null
+        };
+        using var provider=fixture.Provider();
+        var unavailable=await provider.LookupAsync(Published[0],default);
+        Assert.Empty(unavailable);
+        Assert.True(LyricsLookupDiagnosis.Unavailable(unavailable));
+        Assert.Equal(3,fixture.AppleRequests.Count);
+        Assert.DoesNotContain(fixture.NetEaseRequests,path=>path.StartsWith("/api/album/",StringComparison.Ordinal));
+
+        fixture.NetEaseOverride=null;
+        var recovered=await provider.LookupAsync(Japanese[1],default);
+        Assert.Equal(SourceSongId+1,AutomaticLyricsMatcher.Select(Japanese[1],recovered)?.Candidate.Id);
+        Assert.Equal(3,fixture.AppleRequests.Count);
+        Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],await provider.LookupAsync(Published[0],default))?.Candidate.Id);
+        Assert.Equal(3,fixture.AppleRequests.Count);
+        Assert.Single(fixture.NetEaseRequests,path=>path.Equals($"/api/album/{SourceAlbumId}",StringComparison.Ordinal));
+
+        provider.ClearSessionCache();
+        Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],await provider.LookupAsync(Published[0],default))?.Candidate.Id);
+        Assert.Equal(6,fixture.AppleRequests.Count);
+        Assert.Equal(2,fixture.NetEaseRequests.Count(path=>path.Equals($"/api/album/{SourceAlbumId}",StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task NetEaseStageHasItsOwnBudgetAfterSlowAppleSearch()
+    {
+        var fixture=new Fixture();
+        using var provider=fixture.Provider(appleSearchDelay:TimeSpan.FromSeconds(7),netEaseReleaseSearchDelay:TimeSpan.FromSeconds(15));
+        using var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(40));
+
+        var result=await provider.LookupAsync(Published[0],cancel.Token);
+
+        Assert.Equal(SourceSongId,AutomaticLyricsMatcher.Select(Published[0],result)?.Candidate.Id);
+        Assert.Equal(3,fixture.AppleRequests.Count);
+        Assert.Single(fixture.NetEaseRequests,path=>path.Equals($"/api/album/{SourceAlbumId}",StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TrackMissingFromTheCachedAppleEditionCanStillSearchItsOwnRelease()
+    {
+        var fixture=new Fixture();
+        using var provider=fixture.Provider();
+        Assert.Single(await provider.LookupAsync(Published[0],default));
+        Assert.Equal(3,fixture.AppleRequests.Count);
+
+        var bonus=Published[0] with{Title="Additional Recording"};
+        Assert.Empty(await provider.LookupAsync(bonus,default));
+        Assert.Contains(fixture.AppleRequests.Skip(3),path=>Uri.UnescapeDataString(path).Contains(bonus.Title,StringComparison.Ordinal));
+        Assert.Single(fixture.NetEaseRequests,path=>path.Equals($"/api/album/{SourceAlbumId}",StringComparison.Ordinal));
     }
 
     [Fact]
@@ -223,17 +331,30 @@ public sealed class LocalizedReleaseLookupTests
         internal List<string> AppleRequests {get;}=[];
         internal List<string> NetEaseRequests {get;}=[];
         internal bool AppleUnavailable {get;set;}
+        internal Func<Uri,HttpResponseMessage?>? AppleOverride {get;set;}
+        internal Func<Uri,HttpResponseMessage?>? NetEaseOverride {get;set;}
         int Count=>change=="single-different-artist"?1:2;
 
-        internal ResilientLyricsProvider Provider(HttpMessageHandler? apple=null)
+        internal ResilientLyricsProvider Provider(HttpMessageHandler? apple=null,TimeSpan? appleSearchDelay=null,TimeSpan? netEaseReleaseSearchDelay=null)
             =>new(new EmptyOriginalProvider(),new NetEaseTranslationProvider(
-                new Handler((uri,_)=>Task.FromResult(NetEase(uri))),TimeSpan.Zero,
-                apple??new Handler((uri,_)=>Task.FromResult(Apple(uri)))));
+                new Handler(async (uri,token)=>
+                {
+                    if(netEaseReleaseSearchDelay is {} delay && uri.Query.Contains("type=10",StringComparison.Ordinal))
+                        await Task.Delay(delay,token);
+                    return NetEase(uri);
+                }),TimeSpan.Zero,
+                apple??new Handler(async (uri,token)=>
+                {
+                    if(appleSearchDelay is {} delay && uri.Query.Contains("entity=song&limit=24",StringComparison.Ordinal))
+                        await Task.Delay(delay,token);
+                    return Apple(uri);
+                })));
 
         HttpResponseMessage Apple(Uri uri)
         {
             AppleRequests.Add(uri.PathAndQuery);
             if(AppleUnavailable)return new(HttpStatusCode.ServiceUnavailable);
+            if(AppleOverride?.Invoke(uri) is {} overridden)return overridden;
             bool jp=uri.Query.Contains("country=jp",StringComparison.Ordinal);
             var tracks=jp?Japanese:Published;
             object header=new{wrapperType="collection",collectionId=AppleAlbumId,artistId=3321,
@@ -255,6 +376,7 @@ public sealed class LocalizedReleaseLookupTests
         HttpResponseMessage NetEase(Uri uri)
         {
             NetEaseRequests.Add(uri.PathAndQuery);
+            if(NetEaseOverride?.Invoke(uri) is {} overridden)return overridden;
             if(uri.AbsolutePath.StartsWith("/api/album/",StringComparison.Ordinal))
             {
                 long albumId=long.Parse(uri.Segments[^1]);

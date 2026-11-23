@@ -60,9 +60,16 @@ public class TranslationProviderTests
     {int count=0;using var p=new NetEaseTranslationProvider(new Handler((r,c)=>{count++;return Task.FromResult(Response(json));}),TimeSpan.Zero);Assert.Empty(await p.LookupAsync(Track,default));Assert.Equal(1,count);}
     [Fact] public async Task PropagatesCancellationAndRateLimiting()
     {
-        using var p=new NetEaseTranslationProvider(new Handler((r,c)=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests))),TimeSpan.Zero);
+        int requests=0;
+        using var p=new NetEaseTranslationProvider(new Handler((r,c)=>
+        {
+            requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        }),TimeSpan.Zero);
         Assert.Equal(429,(await Assert.ThrowsAsync<LyricsProviderException>(()=>p.LookupAsync(Track,default))).StatusCode);
+        Assert.Equal(429,(await Assert.ThrowsAsync<LyricsProviderException>(()=>p.LookupAsync(Track,default).WaitAsync(TimeSpan.FromSeconds(1)))).StatusCode);
         using var cancel=new CancellationTokenSource();cancel.Cancel();await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>p.LookupAsync(Track,cancel.Token));
+        Assert.Equal(1,requests);
     }
     [Theory]
     [InlineData(405)]
@@ -76,7 +83,11 @@ public class TranslationProviderTests
             return Task.FromResult(Response(JsonSerializer.Serialize(new{code})));
         }),TimeSpan.Zero);
         Assert.Equal(code,(await Assert.ThrowsAsync<LyricsProviderException>(()=>provider.LookupAsync(Track,default))).StatusCode);
-        using var cancel=new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var cooldown=await Assert.ThrowsAsync<LyricsProviderException>(()=>provider.LookupAsync(Track,default).WaitAsync(TimeSpan.FromSeconds(1)));
+        Assert.Equal(429,cooldown.StatusCode);
+        Assert.Equal(1,requests);
+        using var cancel=new CancellationTokenSource();
+        cancel.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(()=>provider.LookupAsync(Track,cancel.Token));
         Assert.Equal(1,requests);
     }

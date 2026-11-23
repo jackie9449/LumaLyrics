@@ -95,11 +95,12 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
             using var dbGate=new SemaphoreSlim(1,1);
             using var startGate=new SemaphoreSlim(1,1);
             int next=0;
-            bool pausedByFile=false,tooManyErrors=false;
+            bool pausedByFile=false,tooManyErrors=false,rateLimitedAllSources=false;
             await Task.WhenAll(Enumerable.Range(0,workerCount).Select(_=>CompleteAsync()));
             token.ThrowIfCancellationRequested();
             Report(repository.GetLibraryProgress(pausedByFile || runToken.IsCancellationRequested || File.Exists(pausePath)
                 ?"已暂停，下次从本地记录继续"
+                :rateLimitedAllSources?"歌词来源均暂时限流，稍后自动重试"
                 :tooManyErrors?"歌词服务连续失败，暂停本轮并稍后自动重试":"本轮完成；未找到及网络失败项目稍后自动重试",false));
 
             async Task CompleteAsync()
@@ -113,10 +114,10 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                         await startGate.WaitAsync(batchToken);
                         try
                         {
-                            if(next==slots || StopForPause())return;
+                            if(next==slots || StopForPause() || StopForRateLimits())return;
                             if(workerCount>1 && next>0)await Task.Delay(interval,batchToken);
                             await WaitForPlaybackAsync(batchToken);
-                            if(StopForPause())return;
+                            if(StopForPause() || StopForRateLimits())return;
                             slot=next++;
                         }
                         finally{startGate.Release();}
@@ -137,7 +138,7 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                         await dbGate.WaitAsync(batchToken);
                         try
                         {
-                            if(StopForPause())return;
+                            if(StopForPause() || StopForRateLimits())return;
                             batchToken.ThrowIfCancellationRequested();
                             if(error is null)
                             {
@@ -172,6 +173,13 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
             {
                 if(!File.Exists(pausePath))return false;
                 Volatile.Write(ref pausedByFile,true);
+                batchCts.Cancel();
+                return true;
+            }
+            bool StopForRateLimits()
+            {
+                if(staged is not {IsPrimaryRateLimited:true,IsSecondaryRateLimited:true})return false;
+                Volatile.Write(ref rateLimitedAllSources,true);
                 batchCts.Cancel();
                 return true;
             }
