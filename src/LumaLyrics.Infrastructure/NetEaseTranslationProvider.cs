@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using LumaLyrics.Core;
 namespace LumaLyrics.Infrastructure;
@@ -39,21 +38,25 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         client.DefaultRequestHeaders.Referrer=client.BaseAddress;
         if(handler is null || appleCatalogHandler is not null)appleCatalog=new(appleCatalogHandler);
     }
-    async Task<string> GetAsync(string uri,CancellationToken token)
+    async Task<JsonDocument> GetAsync(string uri,CancellationToken token)
     {
         await gate.WaitAsync(token);
         try
         {
             var delay=next-DateTimeOffset.UtcNow;if(delay>TimeSpan.Zero)await Task.Delay(delay,token);
+            var started=DateTimeOffset.UtcNow;
+            next=started+interval;
             using var response=await client.GetAsync(uri,HttpCompletionOption.ResponseHeadersRead,token);
-            next=DateTimeOffset.UtcNow+interval;
             if(response.StatusCode==HttpStatusCode.TooManyRequests)
             {next=response.Headers.RetryAfter?.Date??DateTimeOffset.UtcNow+(response.Headers.RetryAfter?.Delta??TimeSpan.FromMinutes(1));throw new LyricsProviderException("中文译文来源暂时限流，稍后重试。",429);}
             if(!response.IsSuccessStatusCode)throw new LyricsProviderException($"中文译文来源暂不可用（{(int)response.StatusCode}）。",(int)response.StatusCode);
             if(response.Content.Headers.ContentLength>2*1024*1024)throw new LyricsProviderException("译文响应超过 2 MB。");
             using var input=await response.Content.ReadAsStreamAsync(token);using var output=new MemoryStream();var buffer=new byte[8192];int count;
             while((count=await input.ReadAsync(buffer,token))>0){if(output.Length+count>2*1024*1024)throw new LyricsProviderException("译文响应超过 2 MB。");await output.WriteAsync(buffer.AsMemory(0,count),token);}
-            return Encoding.UTF8.GetString(output.ToArray());
+            var document=JsonDocument.Parse(output.GetBuffer().AsMemory(0,(int)output.Length));
+            // Apply JSON rate limits before the next request can enter the gate.
+            try{CheckCode(document.RootElement);return document;}
+            catch{document.Dispose();throw;}
         }
         catch(TaskCanceledException) when(!token.IsCancellationRequested){throw new LyricsProviderException("中文译文查询超时，稍后重试。");}
         catch(HttpRequestException){throw new LyricsProviderException("无法连接中文译文来源，稍后重试。");}
@@ -88,7 +91,7 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         return lookup.Candidates;
     }
 
-    internal async Task<RecordingLookup> LookupRecordingsAsync(Track input,CancellationToken token)
+    internal async Task<RecordingLookup> LookupRecordingsAsync(Track input,CancellationToken token,bool preferTranslation=true)
     {
         var track=TrackMetadata.FromAppleSession(input);
         if(track.DurationMs is not >0 || string.IsNullOrWhiteSpace(track.Title) || string.IsNullOrWhiteSpace(track.Artist))
@@ -103,15 +106,15 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
                 matches=kanaCatalog.Where(song=>RecordingMatches(track,song.Candidate)).ToArray();
                 if(matches.Length==0)catalog=catalog.Concat(kanaCatalog).ToArray();
             }
-            if(matches.Length>0)return await ReadLyricsAsync(track,matches,token);
+            if(matches.Length>0)return await ReadLyricsAsync(track,matches,token,preferTranslation);
             var release=await FindLocalizedSongAsync(track,catalog,token);
-            if(release.Song is {} song)return await ReadLyricsAsync(track,[song],token);
+            if(release.Song is {} song)return await ReadLyricsAsync(track,[song],token,preferTranslation);
             return new([],catalog.Count>0?LyricsCatalogStatus.Unconfirmed:LyricsCatalogStatus.None,release.Unavailable);
         }
         catch(JsonException){throw new LyricsProviderException("中文译文来源返回格式异常，未保存内容。");}
     }
 
-    async Task<RecordingLookup> ReadLyricsAsync(Track track,IReadOnlyList<CatalogSong> matches,CancellationToken token)
+    async Task<RecordingLookup> ReadLyricsAsync(Track track,IReadOnlyList<CatalogSong> matches,CancellationToken token,bool preferTranslation=true)
     {
         var found=new List<TranslationCandidate>();
         foreach(var song in matches.OrderByDescending(song=>song.Candidate.CatalogMatch?.Confirms(track,song.Candidate)==true)
@@ -120,9 +123,19 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
             .ThenBy(song=>Math.Abs(song.Candidate.Track.DurationMs!.Value-track.DurationMs!.Value))
             .DistinctBy(song=>song.Candidate.Id).Take(3))
         {
-            if(await FetchLyricsAsync(song,token) is {} lyrics)found.Add(lyrics);
+            if(await FetchLyricsAsync(song,token) is not {} lyrics)continue;
+            found.Add(lyrics);
+            var originalCandidate=lyrics.OriginalCandidateFor(track);
+            if(AutomaticLyricsMatcher.Select(track,[originalCandidate]) is {Candidate.Instrumental:false}
+                && (!preferTranslation || !string.IsNullOrWhiteSpace(lyrics.Translated) || IsChineseOriginal(lyrics.Original)))break;
         }
         return new(found,found.Count==0?LyricsCatalogStatus.MatchedWithoutLyrics:LyricsCatalogStatus.None);
+    }
+
+    static bool IsChineseOriginal(string raw)
+    {
+        var doc=new LrcParser().Parse(raw);
+        return TranslationAlignment.IsChinese(string.Join("\n",doc.Groups.Where(g=>TranslationAlignment.IsLyricText(g.Text)).Select(g=>g.Text)));
     }
 
     async Task<TranslationCandidate?> FetchLyricsAsync(CatalogSong song,CancellationToken token)
@@ -130,8 +143,7 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
         var item=song.Candidate;
         try
         {
-            using var json=JsonDocument.Parse(await GetAsync($"api/song/lyric?id={item.Id}&lv=-1&kv=-1&tv=-1",token));
-            CheckCode(json.RootElement);
+            using var json=await GetAsync($"api/song/lyric?id={item.Id}&lv=-1&kv=-1&tv=-1",token);
             string original=Nested(json.RootElement,"lrc");
             if(string.IsNullOrWhiteSpace(original))return null;
             bool instrumental=NetEaseRecording.IsExplicitInstrumental(original);
@@ -148,9 +160,7 @@ public sealed partial class NetEaseTranslationProvider : ITranslationProvider,IM
 
     async Task<IReadOnlyList<CatalogSong>> SearchSongsAsync(string query,CancellationToken token)
     {
-        var raw=await GetAsync("api/search/get?s="+Uri.EscapeDataString(query)+"&type=1&limit=30",token);
-        using var json=JsonDocument.Parse(raw);
-        CheckCode(json.RootElement);
+        using var json=await GetAsync("api/search/get?s="+Uri.EscapeDataString(query)+"&type=1&limit=30",token);
         return json.RootElement.TryGetProperty("result",out var result)?ParseSongs(result):[];
     }
 

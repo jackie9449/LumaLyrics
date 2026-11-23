@@ -178,7 +178,7 @@ public sealed class AutomaticLyricsSearchTests
             found=await provider.CompleteLookupAsync(track,exact,default);
         }
         else found=await provider.LookupAsync(track,default);
-        Assert.Equal(4,paths.Count);Assert.Contains(paths,p=>p.Contains("search?q="));
+        Assert.Equal(3,paths.Count);Assert.Contains("search?q=",paths[2]);
         Assert.DoesNotContain(paths.Skip(2),p=>p.Contains("artist_name="));
         var selected=AutomaticLyricsMatcher.Select(track,found)!;Assert.NotNull(selected);
         var root=Path.Combine(Path.GetTempPath(),"LumaAutomaticSearch-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
@@ -193,8 +193,34 @@ public sealed class AutomaticLyricsSearchTests
         finally{Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();Directory.Delete(root,true);}
     }
 
-    [Fact]
-    public async Task SecondaryFiltersRecordingMetadataBeforeFetchingAtMostThreeUnseenLyrics()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrimarySupplementarySearchTriesTitleOnlyWhenKeywordsMiss(bool keywordResultHasNoSourceId)
+    {
+        var paths=new List<string>();
+        using var provider=new ResilientLyricsProvider(new LrclibProvider(new Handler(request=>
+        {
+            var uri=request.RequestUri!;
+            paths.Add(uri.PathAndQuery);
+            if(uri.AbsolutePath.EndsWith("/get"))return new HttpResponseMessage(HttpStatusCode.NotFound);
+            if(uri.Query.Contains("artist_name="))return Json(Array.Empty<object>());
+            if(uri.Query.StartsWith("?q="))return keywordResultHasNoSourceId
+                ?Json(new[]{new{trackName=track.Title,artistName=track.Artist,albumName=track.Album,duration=120,syncedLyrics=original}})
+                :Json(Array.Empty<object>());
+            return Json(new[]{new{id=5,trackName=track.Title,artistName=track.Artist,albumName=track.Album,duration=120,syncedLyrics=original}});
+        }),minimumInterval:TimeSpan.Zero),new Secondary());
+        var found=await provider.LookupAsync(track,default);
+        Assert.Equal(4,paths.Count);
+        Assert.Contains("/search?q=",paths[2]);
+        Assert.Contains("/search?track_name=",paths[3]);
+        Assert.Equal(5,AutomaticLyricsMatcher.Select(track,found)?.Candidate.Id);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SecondaryFiltersRecordingMetadataBeforeFetchingAtMostThreeUnseenLyrics(bool accepted)
     {
         var requested=new List<long>();int searches=0;
         using var secondary=new NetEaseTranslationProvider(new Handler(request=>
@@ -211,12 +237,13 @@ public sealed class AutomaticLyricsSearchTests
                 }.Concat(Enumerable.Range(1,6).Select(id=>(object)new{id,name=track.Title,artists=new[]{new{name=track.Artist}},album=new{name=track.Album},duration=120000})).ToArray()}});
             }
             long id=long.Parse(request.RequestUri.Query.Split('&')[0].Split('=')[1]);requested.Add(id);
-            return Json(new{code=200,lrc=new{lyric=original}});
+            return Json(new{code=200,lrc=new{lyric=accepted?original:"[00:00]时间点过短\n[00:01]仅为结构测试\n[00:02]还有余下全文"}});
         }),TimeSpan.Zero);
         var found=await secondary.SearchAutomaticAsync(track,[Candidate() with{ProviderName="NetEase"}],default);
-        Assert.Equal(3,found.Count);Assert.Equal(new long[]{2,3,4},requested);Assert.InRange(searches,1,2);
+        Assert.Equal(accepted?new long[]{2}:new long[]{2,3,4},requested);Assert.InRange(searches,1,2);
+        Assert.Equal(requested,found.Select(c=>c.Id));
         Assert.All(found,c=>Assert.Equal(track.Artist,c.Track.Artist));
-        Assert.All(found,c=>Assert.True(LibraryPrefetcher.QualityOf(new("b","t",c.Content,c.SourceLabel,false,0,false,false,c.RawJson),track)));
+        Assert.All(found,c=>Assert.Equal(accepted,LibraryPrefetcher.QualityOf(new("b","t",c.Content,c.SourceLabel,false,0,false,false,c.RawJson),track)));
     }
 
     [Fact]

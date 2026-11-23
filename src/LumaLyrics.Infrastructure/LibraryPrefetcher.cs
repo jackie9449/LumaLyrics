@@ -34,39 +34,53 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
         catch(IOException){Progress?.Invoke(repository.GetLibraryProgress("其他实例正在后台预缓存，本实例避免重复请求",true));return;}
         using var heldLease=lease;
         using var pause=new LibraryPauseMonitor(databasePath,token);token=pause.Token;
+        string pausePath=PausePath(databasePath);
         try
         {
             var snapshot=await Task.Run(()=>new AppleMusicLibraryReader().Read(libraryPath),token);
-            repository.SyncLibrary(snapshot);
+            repository.SyncLibrary(snapshot,token);
             foreach(var item in repository.GetLibraryQueue(cachedOnly:true))
             {
-                token.ThrowIfCancellationRequested();var binding=repository.Find(item.Track);
+                token.ThrowIfCancellationRequested();var binding=repository.FindReadOnly(item.Track);
                 if(binding?.Manual==true)repository.SetLibraryState(item,"Manual","已保留手动锁定的歌词");
                 else if(binding is null || !QualityOf(binding,item.Track))repository.SetLibraryState(item,"Pending","本地自动缓存需重新验证");
             }
             Report(repository.GetLibraryProgress("已读取完整资料库并复查自动缓存，后台开始预缓存",true));
             int processed=0,consecutiveErrors=0;
+            long lastProgress=Environment.TickCount64;
+            // The fingerprint omits duration. Keep different lengths eligible for their own lookup.
+            var attemptedFingerprints=new Dictionary<(string Fingerprint,double? DurationMs), (string Reason,bool Unavailable,bool NoCandidates,bool TransportError)>();
             foreach(var item in repository.GetLibraryQueue())
             {
                 token.ThrowIfCancellationRequested();if(maximum.HasValue && processed>=maximum)break;
-                if(File.Exists(PausePath(databasePath))){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
-                var cached=repository.Find(item.Track);
+                if(File.Exists(pausePath)){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
+                var cached=repository.FindReadOnly(item.Track);
                 if(cached?.Manual==true){repository.SetLibraryState(item,"Manual","已保留手动锁定的歌词");continue;}
                 if(cached is not null && QualityOf(cached,item.Track))
                 {repository.SetLibraryState(item,"Cached","已有通过检查的本地缓存",cached.Instrumental?"Instrumental":"Synced");continue;}
+                var key=(item.Track.Fingerprint,item.Track.DurationMs);
+                if(attemptedFingerprints.TryGetValue(key,out var failure))
+                {
+                    RecordFailure(item,failure);
+                    processed++;
+                    ReportProgress();
+                    continue;
+                }
                 while(foregroundBusy?.Invoke()==true){token.ThrowIfCancellationRequested();await Task.Delay(250,token);}
                 try
                 {
-                    var candidates=await provider.LookupAsync(item.Track,token);
+                    var candidates=provider is ResilientLyricsProvider resilient
+                        ?await resilient.LookupAsync(item.Track,token,preferTranslation:false)
+                        :await provider.LookupAsync(item.Track,token);
                     consecutiveErrors=0;
                     var selected=AutomaticLyricsMatcher.Select(item.Track,candidates);
                     token.ThrowIfCancellationRequested();
-                    if(File.Exists(PausePath(databasePath))){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
+                    if(File.Exists(pausePath)){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));return;}
                     if(selected is not null)
                     {
                         var saved=repository.Save(item.Track,selected.Candidate.Content,selected.Candidate.SourceLabel+" · 自动检查",false,selected.Candidate.Instrumental,providerJson:selected.Candidate.RawJson,expectedLibrary:item);
                         if(saved.StaticFallback)
-                            repository.RecordLookupFailure(item.Track,"已保留静态歌词，可重新查找动态原词。",false,false,expectedLibrary:item);
+                            RecordFailure(item,("已保留静态歌词，可重新查找动态原词。",false,false,false));
                         else
                             repository.SetLibraryState(item,saved.Manual?"Manual":"Cached",selected.Assessment.Reason,saved.Instrumental?"Instrumental":"Synced");
                         Cached?.Invoke(item.Track);
@@ -74,17 +88,37 @@ public sealed class LibraryPrefetcher(string databasePath,ILyricsProvider provid
                     else
                     {
                         var fallback=repository.SaveStaticFallback(item.Track,candidates,item);
-                        repository.RecordLookupFailure(item.Track,LyricsLookupDiagnosis.Describe(item.Track,candidates),LyricsLookupDiagnosis.Unavailable(candidates),candidates.Count==0,expectedLibrary:item);
+                        RecordFailure(item,(LyricsLookupDiagnosis.Describe(item.Track,candidates),LyricsLookupDiagnosis.Unavailable(candidates),candidates.Count==0,false));
                         if(fallback?.StaticFallback==true)Cached?.Invoke(item.Track);
                     }
                 }
                 catch(OperationCanceledException){throw;}
-                catch(Exception e) when(e is LyricsProviderException or HttpRequestException){repository.SetLibraryState(item,"Error",e.Message);consecutiveErrors++;}
-                processed++;Report(repository.GetLibraryProgress($"本轮已处理 {processed} 首；播放查词优先",true));
+                catch(Exception e) when(e is LyricsProviderException or HttpRequestException)
+                {
+                    token.ThrowIfCancellationRequested();
+                    RecordFailure(item,(e.Message,true,false,true));
+                    consecutiveErrors++;
+                }
+                processed++;
                 if(consecutiveErrors>=4){Report(repository.GetLibraryProgress("歌词服务连续失败，暂停本轮并稍后自动重试",false));return;}
+                ReportProgress();
                 await Task.Delay(pacing??TimeSpan.FromMilliseconds(200),token);
             }
+            token.ThrowIfCancellationRequested();
             Report(repository.GetLibraryProgress("本轮完成；未找到及网络失败项目稍后自动重试",false));
+
+            void RecordFailure(LibraryQueueItem item,(string Reason,bool Unavailable,bool NoCandidates,bool TransportError) failure)
+            {
+                if(failure.TransportError)repository.SetLibraryState(item,"Error",failure.Reason);
+                else repository.RecordLookupFailure(item.Track,failure.Reason,failure.Unavailable,failure.NoCandidates,expectedLibrary:item);
+                attemptedFingerprints[(item.Track.Fingerprint,item.Track.DurationMs)]=failure;
+            }
+            void ReportProgress()
+            {
+                if(Environment.TickCount64-lastProgress<500)return;
+                Report(repository.GetLibraryProgress($"本轮已处理 {processed} 首；播放查词优先",true));
+                lastProgress=Environment.TickCount64;
+            }
         }
         catch(OperationCanceledException){Report(repository.GetLibraryProgress("已暂停，下次从本地记录继续",false));}
     }

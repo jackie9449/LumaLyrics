@@ -30,8 +30,10 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
         catch(Exception e) when(e is LyricsProviderException or HttpRequestException){return null;}
     }
     Task<IReadOnlyList<TranslationCandidate>> ITranslationProvider.LookupAsync(Track track,CancellationToken token)=>secondary.LookupAsync(track,token);
-    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>await CompleteLookupAsync(track,null,token);
-    public async Task<LyricsLookupResult> CompleteLookupAsync(Track track,LyricsLookupResult? exact,CancellationToken token)
+    public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)=>LookupAsync(track,token,preferTranslation:true);
+    public async Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token,bool preferTranslation=true)
+        =>await CompleteLookupAsync(track,null,token,preferTranslation);
+    public async Task<LyricsLookupResult> CompleteLookupAsync(Track track,LyricsLookupResult? exact,CancellationToken token,bool preferTranslation=true)
     {
         track=TrackMetadata.FromAppleSession(track);
         token.ThrowIfCancellationRequested();var found=new List<LyricsCandidate>();var unavailable=new List<string>();int reachable=0;
@@ -52,7 +54,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
         try
         {
             var lookup=secondary is NetEaseTranslationProvider netease
-                ?await netease.LookupRecordingsAsync(track,token):null;
+                ?await netease.LookupRecordingsAsync(track,token,preferTranslation):null;
             translationCandidates=lookup?.Candidates??await secondary.LookupAsync(track,token);
             token.ThrowIfCancellationRequested();reachable++;
             secondaryAvailable=true;

@@ -15,6 +15,8 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
     readonly LyricsRepository repository; readonly PlaybackClock clock = new();
     CancellationTokenSource? lookup; readonly RequestVersion requests=new(); bool disposed;
     readonly CancellationTokenSource lifetime=new();CancellationTokenSource? libraryCancellation;Task? libraryTask,libraryMonitor;
+    Task? workspaceSuspendedPrefetch;
+    internal ILyricsProvider? LibraryPrefetchProvider {get;set;}
     CancellationTokenSource? artworkCancellation;Task? artworkTask;
     volatile bool foregroundLookupActive;
     DateTimeOffset nextLookupRetry;
@@ -69,16 +71,46 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         if(disposed||!Settings.OnlineLookup||!Settings.AutoPrefetchLibrary)return;
         var path=Settings.LibraryPath??AppleMusicLibraryReader.Discover();
         if(path is null){LibraryStatus=new(0,0,0,0,false,"未找到本机资料库，可在资料库窗口选择 Library.musicdb");Updated?.Invoke();return;}
-        if(libraryTask is not {IsCompleted:false})StartLyricsPrefetch(path);
+        if(!WorkspaceBusy && libraryTask is not {IsCompleted:false})StartLyricsPrefetch(path);
         if(artworkTask is not {IsCompleted:false})StartArtworkPrefetch(path);
     }
     void StartLyricsPrefetch(string path)
     {
         libraryCancellation?.Dispose();libraryCancellation=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);var token=libraryCancellation.Token;
-        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),provider,()=>foregroundLookupActive);
+        var prefetcher=new LibraryPrefetcher(Path.Combine(store.Root,"lyrics.db"),LibraryPrefetchProvider??provider,()=>foregroundLookupActive);
         prefetcher.Progress+=progress=>{if(!disposed)dispatcher.BeginInvoke(()=>{LibraryStatus=progress;Updated?.Invoke();});};
         prefetcher.Cached+=track=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;InvalidateWorkspace();if(Snapshot is { } s && TrackMetadata.FromAppleSession(s.Track).Fingerprint==track.Fingerprint && Binding?.Manual!=true){var b=repository.Find(s.Track);if(b is not null && b.Id!=Binding?.Id)Apply(b);}});};
         libraryTask=Task.Run(async()=>{try{await prefetcher.RunAsync(path,token);}catch(Exception e){if(!disposed)_=dispatcher.BeginInvoke(()=>{LibraryStatus=LibraryStatus with{Running=false,Message="资料库扫描失败："+e.Message};Updated?.Invoke();});}},token);
+    }
+    internal async Task<bool> SuspendLyricsPrefetchForWorkspaceAsync(CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if(libraryTask is not {IsCompleted:false} running)return false;
+        workspaceSuspendedPrefetch=running;
+        libraryCancellation?.Cancel();
+        try{await running.WaitAsync(token);}
+        catch(OperationCanceledException) when(!token.IsCancellationRequested){}
+        token.ThrowIfCancellationRequested();
+        return true;
+    }
+    async Task ResumeLyricsPrefetchAfterWorkspaceAsync(Task workspace)
+    {
+        try{await workspace.ConfigureAwait(false);}
+        finally
+        {
+            if(!disposed && workspaceSuspendedPrefetch is {} suspended)
+            {
+                // The workspace may have been canceled while the old worker was releasing its lease.
+                try{await suspended.ConfigureAwait(false);}catch(OperationCanceledException){}
+                if(!disposed)_=dispatcher.BeginInvoke(()=>
+                {
+                    if(disposed || WorkspaceBusy || workspaceSuspendedPrefetch!=suspended)return;
+                    workspaceSuspendedPrefetch=null;
+                    if(Settings.OnlineLookup && Settings.AutoPrefetchLibrary
+                        && !File.Exists(LibraryPrefetcher.PausePath(Path.Combine(store.Root,"lyrics.db"))))StartLibraryPrefetch();
+                });
+            }
+        }
     }
     void StartArtworkPrefetch(string path)
     {
@@ -101,7 +133,7 @@ public sealed partial class PlaybackCoordinator : IAsyncDisposable
         if(disposed)return;
         try
         {
-            var path=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(libraryTask is not {IsCompleted:false} && File.Exists(path))LibraryStatus=(System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(path))??LibraryStatus) with{Running=LibraryPrefetcher.IsRunning(Path.Combine(store.Root,"lyrics.db"))};
+            var path=LibraryPrefetcher.ProgressPath(Path.Combine(store.Root,"lyrics.db"));if(!WorkspaceBusy && libraryTask is not {IsCompleted:false} && File.Exists(path))LibraryStatus=(System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(path))??LibraryStatus) with{Running=LibraryPrefetcher.IsRunning(Path.Combine(store.Root,"lyrics.db"))};
             path=LibraryArtworkImporter.ProgressPath(store.Root);if(artworkTask is not {IsCompleted:false} && File.Exists(path))ArtworkStatus=(System.Text.Json.JsonSerializer.Deserialize<ArtworkProgress>(File.ReadAllText(path))??ArtworkStatus) with{Running=LibraryArtworkImporter.IsRunning(store.Root)};
             RefreshTranslationProgress();
             RefreshCachedOriginal();

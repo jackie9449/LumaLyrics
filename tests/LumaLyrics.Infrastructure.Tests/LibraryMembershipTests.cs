@@ -65,8 +65,79 @@ public sealed class LibraryMembershipTests:IDisposable
     [Fact] public void SourceChangeBeforeCommitKeepsThePreviousMembership()
     {
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));var old=new LibrarySnapshot("old",1,[new("1",new("Own song","Own artist","Own album",1000))],"own");lyrics.SyncLibrary(old);
-        int checks=0;Assert.Throws<OperationCanceledException>(()=>lyrics.SyncLibrary(new("new",1,[new("2",new("New song","Own artist","Own album",1000))],"new"),stillCurrent:()=>++checks==1));
+        int checks=0;Assert.Throws<OperationCanceledException>(()=>lyrics.SyncLibrary(new("new",1,[new("2",new("New song","Own artist","Own album",1000))],"new"),stillCurrent:()=>++checks<3));
         Assert.Equal("old",Assert.Single(lyrics.GetLibraryQueue(true)).Source);
+    }
+
+    [Fact] public void UnchangedContentSkipsMembershipWritesAcrossConnectionsAndStillChecksCancellation()
+    {
+        string path=Path.Combine(root,"lyrics.db");
+        var snapshot=new LibrarySnapshot("own",1,[new("1",new("Own song","Own artist","Own album",1000))],"same");
+        using(var first=new LyricsRepository(path))first.SyncLibrary(snapshot);
+        using var db=new SqliteConnection($"Data Source={path}");db.Open();using var command=db.CreateCommand();
+        command.CommandText="""
+            CREATE TRIGGER RejectMembershipDeletes BEFORE DELETE ON LibraryMembership BEGIN SELECT RAISE(ABORT, 'membership was rewritten'); END;
+            CREATE TRIGGER RejectTrackUpdates BEFORE UPDATE ON LibraryTracks BEGIN SELECT RAISE(ABORT, 'library tracks were rewritten'); END;
+            """;
+        command.ExecuteNonQuery();
+        using var second=new LyricsRepository(path);
+        second.SyncLibrary(snapshot with{SourceHash="different file hash"});
+        int checks=0;
+        Assert.Throws<OperationCanceledException>(()=>second.SyncLibrary(snapshot,stillCurrent:()=>++checks==1));
+        using var cancel=new CancellationTokenSource();cancel.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>second.SyncLibrary(snapshot,cancel.Token));
+        command.CommandText="PRAGMA user_version";
+        Assert.Equal(5L,command.ExecuteScalar());
+    }
+
+    [Fact] public void ChangedMemberContentResyncsEvenWhenTheSourceHashAndTrackCountAreIdentical()
+    {
+        using var repository=new LyricsRepository(Path.Combine(root,"lyrics.db"));
+        var track=new Track("Own song","Own artist","Own album",1000);
+        var initial=new LibraryTrack("1",track);
+        var snapshot=new LibrarySnapshot("own",1,[initial],"same");
+        repository.SyncLibrary(snapshot);
+        foreach(var changed in new LibraryTrack[]
+        {
+            initial with{Track=track with{Title="Own Song"}},
+            initial with{Track=track with{Artist="Own Artist"}},
+            initial with{Track=track with{Album="Own Album"}},
+            initial with{Track=track with{DurationMs=null}},
+            initial with{Track=track with{DurationMs=1001}},
+            initial with{PersistentId="2"}
+        })
+        {
+            repository.SyncLibrary(snapshot with{Tracks=[changed]});
+            Assert.Equal(new LibraryQueueItem(snapshot.Path,changed.PersistentId,changed.Track),Assert.Single(repository.GetLibraryQueue(true)));
+        }
+    }
+
+    [Fact] public void SyncRepairsInactiveMembersAndInvalidatesDigestsAfterLegacyWrites()
+    {
+        string path=Path.Combine(root,"lyrics.db");
+        using var repository=new LyricsRepository(path);
+        var snapshot=new LibrarySnapshot("own",1,[new("1",new("Own song","Own artist","Own album",1000))],"same");
+        repository.SyncLibrary(snapshot);
+        using var db=new SqliteConnection($"Data Source={path}");db.Open();using var command=db.CreateCommand();
+        command.CommandText="UPDATE LibraryTracks SET Active=0";
+        command.ExecuteNonQuery();
+        repository.SyncLibrary(snapshot);
+        Assert.Single(repository.GetLibraryQueue(true));
+
+        using(var tx=db.BeginTransaction())
+        {
+            command.Transaction=tx;
+            command.CommandText="""
+                UPDATE LibraryTracks SET Active=0;
+                DELETE FROM LibraryMembership;
+                UPDATE LibraryTracks SET Title='Own Song', Active=1;
+                INSERT INTO LibraryMembership VALUES('own','1');
+                """;
+            command.ExecuteNonQuery();tx.Commit();
+        }
+        Assert.Equal("Own Song",Assert.Single(repository.GetLibraryQueue(true)).Track.Title);
+        repository.SyncLibrary(snapshot);
+        Assert.Equal(snapshot.Tracks[0].Track,Assert.Single(repository.GetLibraryQueue(true)).Track);
     }
     [Fact] public async Task BackgroundPreparationQueriesOnlyConfirmedLibraryMembers()
     {

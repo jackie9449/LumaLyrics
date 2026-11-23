@@ -3,12 +3,14 @@ using System.Security.Cryptography;
 using System.Text;
 using LumaLyrics.Core;
 using LumaLyrics.Infrastructure;
+using Microsoft.Data.Sqlite;
 namespace LumaLyrics.Infrastructure.Tests;
 public class LibraryTests : IDisposable
 {
     readonly string dir=Path.Combine(Path.GetTempPath(),"Luma-library-"+Guid.NewGuid().ToString("N"));
     public LibraryTests(){Directory.CreateDirectory(dir);}
-    internal static byte[] Library(int count=2,int? declared=null,string? albumArtist=null,Action<BinaryWriter,int>? playlists=null)
+    internal static byte[] Library(int count=2,int? declared=null,string? albumArtist=null,Action<BinaryWriter,int>? playlists=null,
+        Func<int,string>? title=null,Func<int,int>? duration=null)
     {
         using var content=new MemoryStream();using var writer=new BinaryWriter(content,Encoding.UTF8,true);
         writer.Write("ltma"u8);writer.Write(12);writer.Write(declared??count);
@@ -16,7 +18,7 @@ public class LibraryTests : IDisposable
         {
             writer.Write("itma"u8);writer.Write(24);writer.Write(0);writer.Write(albumArtist is null?4:5);writer.Write((ulong)(i+1));
             void Text(int type,string value){var b=Encoding.Unicode.GetBytes(value);var chunk=new byte[36+b.Length];"boma"u8.CopyTo(chunk);BitConverter.GetBytes(20).CopyTo(chunk,4);BitConverter.GetBytes(chunk.Length).CopyTo(chunk,8);BitConverter.GetBytes(type).CopyTo(chunk,12);BitConverter.GetBytes(1).CopyTo(chunk,20);BitConverter.GetBytes(b.Length).CopyTo(chunk,24);b.CopyTo(chunk,36);writer.Write(chunk);}
-            Text(2,$"Track {i+1}");Text(3,"Album");Text(4,"Artist");if(albumArtist is not null)Text(0x1B,albumArtist);var numeric=new byte[180];"boma"u8.CopyTo(numeric);BitConverter.GetBytes(20).CopyTo(numeric,4);BitConverter.GetBytes(180).CopyTo(numeric,8);BitConverter.GetBytes(1).CopyTo(numeric,12);BitConverter.GetBytes(180000).CopyTo(numeric,176);writer.Write(numeric);
+            Text(2,title?.Invoke(i)??$"Track {i+1}");Text(3,"Album");Text(4,"Artist");if(albumArtist is not null)Text(0x1B,albumArtist);var numeric=new byte[180];"boma"u8.CopyTo(numeric);BitConverter.GetBytes(20).CopyTo(numeric,4);BitConverter.GetBytes(180).CopyTo(numeric,8);BitConverter.GetBytes(1).CopyTo(numeric,12);BitConverter.GetBytes(duration?.Invoke(i)??180000).CopyTo(numeric,176);writer.Write(numeric);
         }
         if(playlists is null)MusicDbPlaylistFixture.Write(writer,new PlaylistFixture(Enumerable.Range(1,count).Select(i=>(ulong)i).ToArray()));else playlists(writer,count);
         using var zipped=new MemoryStream();using(var z=new ZLibStream(zipped,CompressionLevel.SmallestSize,true))z.Write(content.ToArray());var compressed=zipped.ToArray();int crypt=compressed.Length-compressed.Length%16;
@@ -56,6 +58,99 @@ public class LibraryTests : IDisposable
         using(var repo=new LyricsRepository(db)){repo.Save(track,"user confirmed text","本地导入",true,plain:true);}
         var provider=new Provider();await new LibraryPrefetcher(db,provider,pacing:TimeSpan.Zero).RunAsync(file,default);Assert.Equal(0,provider.Requests);
         using var reopened=new LyricsRepository(db);Assert.Equal("user confirmed text",reopened.Find(track)!.Raw);Assert.Equal(1,reopened.GetLibraryProgress().Manual);Assert.Equal(0,reopened.GetLibraryProgress().Cached);
+    }
+    [Fact] public async Task PrefetchReadsCachedAndManualBindingsWithoutUpdatingTrackRows()
+    {
+        var path=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(path,Library());
+        var snapshot=new AppleMusicLibraryReader().Read(path);
+        var database=Path.Combine(dir,"lyrics.db");
+        var manual=snapshot.Tracks[1];
+        using(var repository=new LyricsRepository(database))
+        {
+            repository.SyncLibrary(snapshot);
+            repository.Save(snapshot.Tracks[0].Track with{DurationMs=177000},"[00:00]Morning light falls softly\n[01:15]I walk along the river\n[02:10]The road will lead me home","Checked fixture",false);
+            repository.Save(manual.Track with{DurationMs=179000},"Personal lyric fixture","Manual",true,plain:true);
+            repository.SetLibraryState(new(path,manual.PersistentId,manual.Track),"Pending","Recheck this binding");
+        }
+        using var db=new SqliteConnection($"Data Source={database}");db.Open();
+        using var command=db.CreateCommand();
+        command.CommandText="CREATE TRIGGER RejectTrackWrites BEFORE UPDATE ON Tracks BEGIN SELECT RAISE(ABORT, 'prefetch updated Tracks'); END";
+        command.ExecuteNonQuery();
+
+        var provider=new Provider();
+        await new LibraryPrefetcher(database,provider,pacing:TimeSpan.Zero).RunAsync(path,default);
+        Assert.Equal(0,provider.Requests);
+        command.CommandText="SELECT Duration FROM Tracks ORDER BY Title";
+        using var reader=command.ExecuteReader();
+        Assert.True(reader.Read());Assert.Equal(177000,reader.GetDouble(0));
+        Assert.True(reader.Read());Assert.Equal(179000,reader.GetDouble(0));
+        Assert.False(reader.Read());
+        using var readOnly=new LyricsRepository(database,true);
+        var progress=readOnly.GetLibraryProgress();Assert.Equal(1,progress.Cached);Assert.Equal(1,progress.Manual);
+    }
+
+    [Theory]
+    [InlineData("Missing")]
+    [InlineData("Incomplete")]
+    [InlineData("Error")]
+    public async Task DuplicateLookupFailuresAreDeferredPerMemberAndOnlyDeduplicatedWithinTheRun(string expectedState)
+    {
+        var path=Path.Combine(dir,"Library.musicdb");
+        File.WriteAllBytes(path,Library(3,title:_=>"Shared recording label",duration:i=>i<2?180000:215000));
+        var database=Path.Combine(dir,"lyrics.db");
+        var provider=new LookupProvider(track=>expectedState switch
+        {
+            "Error"=>throw new LyricsProviderException("Synthetic source error"),
+            "Incomplete"=>[new(1,track with{Artist="Another artist"},null,"Original fixture",false)],
+            _=>[]
+        });
+        var worker=new LibraryPrefetcher(database,provider,pacing:TimeSpan.Zero);
+        await worker.RunAsync(path,default);
+        Assert.Equal(new double?[]{180000,215000},provider.Requests.Select(t=>t.DurationMs));
+
+        using(var db=new SqliteConnection($"Data Source={database}"))
+        {
+            db.Open();using var command=db.CreateCommand();
+            command.CommandText="SELECT COUNT(*) FROM LibraryTracks WHERE State=$state AND Detail IS NOT NULL AND RetryUtc IS NOT NULL";
+            command.Parameters.AddWithValue("$state",expectedState);
+            Assert.Equal(3L,command.ExecuteScalar());
+        }
+        using(var repository=new LyricsRepository(database))repository.ResetLibraryRetries();
+        await worker.RunAsync(path,default);
+        Assert.Equal(4,provider.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PrefetchThrottlesIntermediateProgressAndReportsTheTerminalState(bool errors)
+    {
+        var path=Path.Combine(dir,"Library.musicdb");File.WriteAllBytes(path,Library(6));
+        var database=Path.Combine(dir,"lyrics.db");
+        var provider=new LookupProvider(_=>errors?throw new LyricsProviderException("Synthetic source error"):[]);
+        var worker=new LibraryPrefetcher(database,provider,pacing:TimeSpan.Zero);
+        var reports=new List<(long Time,LibraryProgress Progress)>();
+        worker.Progress+=progress=>reports.Add((Environment.TickCount64,progress));
+
+        await worker.RunAsync(path,default);
+
+        Assert.True(reports[0].Progress.Running);
+        Assert.Equal(0,reports[0].Progress.Errors+reports[0].Progress.Unavailable);
+        for(int i=1;i<reports.Count-1;i++)Assert.True(reports[i].Time-reports[i-1].Time>=500);
+        var final=reports[^1].Progress;
+        Assert.False(final.Running);
+        Assert.Equal(errors?4:6,provider.Requests.Count);
+        Assert.Equal(errors?4:0,final.Errors);Assert.Equal(errors?0:6,final.Unavailable);
+        Assert.Contains(errors?"连续失败":"本轮完成",final.Message);
+        var saved=System.Text.Json.JsonSerializer.Deserialize<LibraryProgress>(File.ReadAllText(LibraryPrefetcher.ProgressPath(database)));
+        Assert.Equal(final,saved);
+    }
+
+    sealed class LookupProvider(Func<Track,IReadOnlyList<LyricsCandidate>> lookup):ILyricsProvider
+    {
+        public List<Track> Requests {get;}=[];
+        public Task<IReadOnlyList<LyricsCandidate>> LookupAsync(Track track,CancellationToken token)
+        {Requests.Add(track);return Task.FromResult(lookup(track));}
     }
     [Fact] public async Task OldAutomaticStaticLyricsAreReplacedByTimedLyrics()
     {

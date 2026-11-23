@@ -40,6 +40,11 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
             CREATE INDEX IF NOT EXISTS IX_LibraryTracks_State ON LibraryTracks(Active,State);
             CREATE INDEX IF NOT EXISTS IX_LibraryTracks_Fingerprint ON LibraryTracks(Fingerprint);
             CREATE TABLE IF NOT EXISTS LibraryMembership(Source TEXT NOT NULL, PersistentId TEXT NOT NULL, PRIMARY KEY(Source,PersistentId));
+            CREATE TABLE IF NOT EXISTS LibrarySyncState(Id INTEGER PRIMARY KEY CHECK(Id=1), Source TEXT NOT NULL, ContentDigest TEXT NOT NULL, TrackCount INTEGER NOT NULL);
+            -- Earlier version-5 writers also replace membership through this delete.
+            CREATE TRIGGER IF NOT EXISTS InvalidateLibrarySyncState AFTER DELETE ON LibraryMembership
+            WHEN EXISTS(SELECT 1 FROM LibrarySyncState WHERE Id=1)
+            BEGIN DELETE FROM LibrarySyncState WHERE Id=1; END;
             """);
         var columns=new HashSet<string>();using(var c=Command("PRAGMA table_info(LyricsDocuments)")){using var r=c.ExecuteReader();while(r.Read())columns.Add(r.GetString(1));}
         var libraryColumns=new HashSet<string>();using(var c=Command("PRAGMA table_info(LibraryTracks)")){using var r=c.ExecuteReader();while(r.Read())libraryColumns.Add(r.GetString(1));}
@@ -49,7 +54,8 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
             if(!columns.Contains("ProviderJson"))Execute("ALTER TABLE LyricsDocuments ADD COLUMN ProviderJson TEXT");
             if(!libraryColumns.Contains("LyricsKind"))Execute("ALTER TABLE LibraryTracks ADD COLUMN LyricsKind TEXT DEFAULT ''");
             if(schemaVersion<5)Execute("UPDATE LibraryTracks SET State='Pending',RetryUtc=NULL,LyricsKind='' WHERE State='Cached'");
-            Execute("PRAGMA user_version=5");migration.Commit();
+            if(schemaVersion<5)Execute("PRAGMA user_version=5");
+            migration.Commit();
         }
         failurePoliciesAvailable=true;
         using(var policy=db.BeginTransaction(deferred:false))
@@ -180,8 +186,21 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     {
         // This profile selects one native library. Replace only its derived
         // membership; historical rows, documents and manual bindings survive.
-        token.ThrowIfCancellationRequested();if(stillCurrent?.Invoke()==false)throw new OperationCanceledException();
-        using var tx=db.BeginTransaction();Execute("UPDATE LibraryTracks SET Active=0");Execute("DELETE FROM LibraryMembership");
+        CheckCurrent();
+        var digest=LibraryContentDigest(snapshot,token);
+        using var tx=db.BeginTransaction();
+        using var current=Command("""
+            SELECT 1 FROM LibrarySyncState WHERE Id=1 AND Source=$s AND ContentDigest=$digest AND TrackCount=$count
+                AND (SELECT COUNT(*) FROM LibraryTracks WHERE Active=1)=$count
+                AND (SELECT COUNT(*) FROM LibraryMembership)=$count
+                AND (SELECT COUNT(*) FROM LibraryMembership m JOIN LibraryTracks l ON l.Source=m.Source AND l.PersistentId=m.PersistentId
+                     WHERE m.Source=$s AND l.Active=1)=$count
+            """,("$s",snapshot.Path),("$digest",digest),("$count",snapshot.Tracks.Count));
+        bool unchanged=current.ExecuteScalar() is not null;
+        CheckCurrent();
+        if(unchanged){tx.Commit();return;}
+
+        Execute("UPDATE LibraryTracks SET Active=0");Execute("DELETE FROM LibraryMembership");
         foreach(var item in snapshot.Tracks)
         {
             token.ThrowIfCancellationRequested();var t=item.Track;
@@ -195,8 +214,40 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
                 """,("$s",snapshot.Path),("$id",item.PersistentId),("$t",t.Title),("$ar",t.Artist),("$al",t.Album),("$d",t.DurationMs),("$f",t.Fingerprint));
             Execute("INSERT INTO LibraryMembership(Source,PersistentId) VALUES($s,$id)",("$s",snapshot.Path),("$id",item.PersistentId));
         }
-        token.ThrowIfCancellationRequested();if(stillCurrent?.Invoke()==false)throw new OperationCanceledException();
+        Execute("""
+            INSERT INTO LibrarySyncState(Id,Source,ContentDigest,TrackCount) VALUES(1,$s,$digest,$count)
+            ON CONFLICT(Id) DO UPDATE SET Source=excluded.Source,ContentDigest=excluded.ContentDigest,TrackCount=excluded.TrackCount
+            """,("$s",snapshot.Path),("$digest",digest),("$count",snapshot.Tracks.Count));
+        CheckCurrent();
         tx.Commit();
+
+        void CheckCurrent()
+        {
+            token.ThrowIfCancellationRequested();
+            if(stillCurrent?.Invoke()==false)throw new OperationCanceledException();
+        }
+    }
+    static string LibraryContentDigest(LibrarySnapshot snapshot,CancellationToken token)
+    {
+        using var hash=SHA256.Create();
+        using var stream=new CryptoStream(Stream.Null,hash,CryptoStreamMode.Write);
+        using var writer=new BinaryWriter(stream,Encoding.UTF8,leaveOpen:true);
+        writer.Write(snapshot.Path);
+        writer.Write(snapshot.Tracks.Count);
+        foreach(var item in snapshot.Tracks)
+        {
+            token.ThrowIfCancellationRequested();
+            var track=item.Track;
+            writer.Write(item.PersistentId);
+            writer.Write(track.Fingerprint);
+            writer.Write(track.Title);
+            writer.Write(track.Artist);
+            writer.Write(track.Album);
+            writer.Write(track.DurationMs.HasValue);
+            if(track.DurationMs is {} duration)writer.Write(duration);
+        }
+        stream.FlushFinalBlock();
+        return Convert.ToHexString(hash.Hash!);
     }
     public IReadOnlyList<LibraryQueueItem> GetLibraryQueue(bool includeDeferred=false,bool cachedOnly=false)
     {

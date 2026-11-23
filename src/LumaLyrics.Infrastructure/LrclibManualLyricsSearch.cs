@@ -5,9 +5,9 @@ namespace LumaLyrics.Infrastructure;
 
 public sealed partial class LrclibProvider
 {
-    public Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)=>SearchExpandedAsync(query,ManualLyricsSearch.Queries(query),token);
-    public Task<IReadOnlyList<LyricsCandidate>> SearchAutomaticAsync(Track track,IReadOnlyList<LyricsCandidate> known,CancellationToken token)=>SearchExpandedAsync(track,AutomaticLyricsSearch.Queries(track),token);
-    async Task<IReadOnlyList<LyricsCandidate>> SearchExpandedAsync(Track query,IReadOnlyList<ManualLyricsQuery> queries,CancellationToken token)
+    public Task<IReadOnlyList<LyricsCandidate>> SearchManualAsync(Track query,CancellationToken token)=>SearchExpandedAsync(query,ManualLyricsSearch.Queries(query),false,token);
+    public Task<IReadOnlyList<LyricsCandidate>> SearchAutomaticAsync(Track track,IReadOnlyList<LyricsCandidate> known,CancellationToken token)=>SearchExpandedAsync(track,AutomaticLyricsSearch.Queries(track),true,token);
+    async Task<IReadOnlyList<LyricsCandidate>> SearchExpandedAsync(Track query,IReadOnlyList<ManualLyricsQuery> queries,bool automatic,CancellationToken token)
     {
         token.ThrowIfCancellationRequested();var found=new List<LyricsCandidate>();var unavailable=new List<string>();
         using var budget=CancellationTokenSource.CreateLinkedTokenSource(token);budget.CancelAfter(TimeSpan.FromSeconds(20));
@@ -22,6 +22,7 @@ public sealed partial class LrclibProvider
                 using var json=JsonDocument.Parse(raw);
                 if(json.RootElement.ValueKind!=JsonValueKind.Array)throw new LyricsProviderException("LRCLIB 搜索返回格式异常。");
                 found.AddRange(json.RootElement.EnumerateArray().Where(e=>e.ValueKind==JsonValueKind.Object).Select(Parse));
+                if(automatic && AutomaticLyricsMatcher.Select(query,ManualLyricsSearch.Candidates(query,found)) is {Candidate.Instrumental:false})break;
             }
         }
         catch(OperationCanceledException) when(!token.IsCancellationRequested){unavailable.Add("LRCLIB（搜索超时）");}

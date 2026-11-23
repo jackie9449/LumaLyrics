@@ -49,6 +49,7 @@ public sealed partial class NetEaseTranslationProvider
                         continue;
                     }
                     found.Add(lyrics);
+                    if(automatic && AutomaticLyricsMatcher.Select(query,[ToCandidate(lyrics)]) is {Candidate.Instrumental:false})break;
                 }
                 catch(LyricsProviderException ex)
                 {

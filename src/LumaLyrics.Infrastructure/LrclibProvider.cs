@@ -31,8 +31,9 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
                 var delay = nextRequest - DateTimeOffset.UtcNow; if (delay > TimeSpan.Zero) await Task.Delay(delay, token);
                 try
                 {
+                    var started = DateTimeOffset.UtcNow;
+                    nextRequest = started + minimumInterval;
                     using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
-                    nextRequest = DateTimeOffset.UtcNow+minimumInterval;
                     if (response.StatusCode == HttpStatusCode.NotFound) return null;
                     if (response.StatusCode == HttpStatusCode.TooManyRequests)
                     {
@@ -59,7 +60,7 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
             }
             throw new LyricsProviderException("无法连接歌词服务，请检查网络。");
         }
-        catch (HttpRequestException) { throw new LyricsProviderException("无法连接歌词服务，请检查网络。"); }
+        catch (HttpRequestException) { nextRequest = DateTimeOffset.UtcNow.AddSeconds(2); throw new LyricsProviderException("无法连接歌词服务，请检查网络。"); }
         finally { gate.Release(); }
     }
     internal static LyricsCandidate Parse(JsonElement e)

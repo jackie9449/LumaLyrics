@@ -66,11 +66,44 @@ public sealed partial class PlaybackCoordinator
             {
                 CheckCurrent();
                 var membership=new MusicLibraryCatalog(store.Root,source).Load(token);
+                if(!await PrepareLyricsAsync(membership.ConfirmedMembership))return;
+                CheckCurrent();
+                if(includeArtwork && online && Settings.OnlineLookup && membership.ConfirmedMembership is {} artworkMembership)
+                {
+                    using var artwork=new LibraryArtworkImporter(store.Root);
+                    artwork.Progress+=p=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;ArtworkStatus=p;Updated?.Invoke();});};
+                    await artwork.RunAsync(artworkMembership,token,selectedKeys:targets.Select(t=>t.Key).ToHashSet(LibrarySongKey.Comparer));
+                }
+                CheckCurrent();
+                var batch=TranslationBatchExchange.Create(store.Root,exported,token:token);
+                Report($"本轮处理 {handled} 首；生成 {batch.Tickets.Count} 份任务；跳过 {messages.Count+batch.Skipped.Count} 项。"
+                    +(batch.Batch is null?"":"\n批量入口："+batch.Batch.EntryPath)
+                    +string.Concat(messages.Concat(batch.Skipped.Select(s=>s.Track.Title+"："+s.Message)).Select(m=>"\n"+m)),force:true,done:true);
+            }
+            catch(OperationCanceledException){Report("准备已暂停，已保存内容和任务保留。",force:true,done:true);}
+            catch(Exception e){Report("准备中断："+e.Message,force:true,done:true);}
+
+            async Task<bool> PrepareLyricsAsync(LibrarySnapshot? membership)
+            {
+                CheckCurrent();
+                FileStream? originalLease=null;
+                if(!retranslate && prepareOriginal && online && Settings.OnlineLookup)
+                {
+                    await SuspendLyricsPrefetchForWorkspaceAsync(token);
+                    CheckCurrent();
+                    try{originalLease=OriginalLease();}
+                    catch(IOException)
+                    {
+                        Report("另一个浮光歌词进程正在后台预缓存，请稍候或先暂停后台预缓存。",force:true,done:true);
+                        return false;
+                    }
+                }
+                using var heldOriginalLease=originalLease;
                 using var lyrics=new LyricsRepository(Path.Combine(store.Root,"lyrics.db"));
                 CheckCurrent();
-                if(membership.ConfirmedMembership is {} full)
+                if(membership is {} full)
                     lyrics.SyncLibrary(full,token,()=>Settings.LibraryPath==source);
-                if(staged is not null && !retranslate && prepareOriginal && online && Settings.OnlineLookup)
+                if(staged is not null && originalLease is not null && Settings.OnlineLookup)
                 {
                     foreach(var recording in recordings)
                     {
@@ -84,7 +117,6 @@ public sealed partial class PlaybackCoordinator
                             {
                                 try
                                 {
-                                    using var lease=OriginalLease();
                                     await WaitForPlaybackAsync();
                                     var exact=await staged.LookupExactAsync(track,token);
                                     CheckCurrent();
@@ -114,6 +146,20 @@ public sealed partial class PlaybackCoordinator
                     Report($"原词快查 {checkedFast}/{targets.Length} 首 · 已保存 {savedFast} 首 · 待补查 {pending.Count} 首",force:true);
                 }
 
+                CheckCurrent();
+                bool lookupTranslations=!retranslate && findExisting;
+                FileStream? translationLease=null;
+                if(lookupTranslations)
+                {
+                    try{translationLease=new(Path.Combine(store.Root,"translation-preparation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);}
+                    catch(IOException)
+                    {
+                        Report("后台译文准备正在运行，请稍候或先暂停。",force:true,done:true);
+                        return false;
+                    }
+                }
+                using var heldTranslationLease=translationLease;
+                using var translations=new TranslationRepository(store.Root,readOnly:!lookupTranslations);
                 foreach(var recording in recordings)
                 {
                     IReadOnlyList<LyricsCandidate>? found=null;
@@ -127,11 +173,10 @@ public sealed partial class PlaybackCoordinator
                             if(!lyrics.IsCurrentLibraryMember(member))throw new InvalidDataException("目标不在已确认资料库，请先刷新来源。");
                             var binding=lyrics.FindReadOnly(captured.Track);
                             string? originalReason=null;
-                            if(!retranslate && prepareOriginal && NeedsOriginal(binding,captured.Track) && online && Settings.OnlineLookup)
+                            if(originalLease is not null && NeedsOriginal(binding,captured.Track) && Settings.OnlineLookup)
                             {
                                 if(found is null)
                                 {
-                                    using var lease=OriginalLease();
                                     await WaitForPlaybackAsync();
                                     found=staged is not null
                                         ?await staged.CompleteLookupAsync(captured.Track,exact,token)
@@ -173,7 +218,6 @@ public sealed partial class PlaybackCoordinator
                             }
 
                             var doc=new LrcParser().Parse(binding.Raw);
-                            using var translations=new TranslationRepository(store.Root,true);
                             var active=translations.FindActive(captured.Track,doc);
                             var sourceHash=TranslationAlignment.Hash(doc.Raw);
                             if(retranslate && (captured.SourceHash!=sourceHash || captured.ExpectedTranslationRevision!=active?.Revision))
@@ -184,12 +228,11 @@ public sealed partial class PlaybackCoordinator
                                     messages.Add(captured.Track.Title+"：沿用已有译文；部分稿需明确重译");
                                 continue;
                             }
-                            if(!retranslate && findExisting)
+                            if(lookupTranslations)
                             {
-                                using var lease=new FileStream(Path.Combine(store.Root,"translation-preparation.lock"),FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None);
                                 await WaitForPlaybackAsync();
                                 var previous=WorkspaceChineseProvider is null?(found as LyricsLookupResult)?.TranslationCandidates:null;
-                                var result=await workflow.PrepareAsync(captured.Track,online&&Settings.OnlineLookup,false,token,previous,member);
+                                var result=await workflow.PrepareAsync(lyrics,translations,captured.Track,online&&Settings.OnlineLookup,false,token,previous,member);
                                 CheckCurrent();
                                 active=translations.FindActive(captured.Track,doc);
                                 if(result.Lookup.State==TranslationLookupState.Found)resultsChanged=true;
@@ -220,21 +263,8 @@ public sealed partial class PlaybackCoordinator
                         }
                     }
                 }
-                CheckCurrent();
-                if(includeArtwork && online && Settings.OnlineLookup && membership.ConfirmedMembership is {} artworkMembership)
-                {
-                    using var artwork=new LibraryArtworkImporter(store.Root);
-                    artwork.Progress+=p=>{if(!disposed)_=dispatcher.BeginInvoke(()=>{if(disposed)return;ArtworkStatus=p;Updated?.Invoke();});};
-                    await artwork.RunAsync(artworkMembership,token,selectedKeys:targets.Select(t=>t.Key).ToHashSet(LibrarySongKey.Comparer));
-                }
-                CheckCurrent();
-                var batch=TranslationBatchExchange.Create(store.Root,exported,token:token);
-                Report($"本轮处理 {handled} 首；生成 {batch.Tickets.Count} 份任务；跳过 {messages.Count+batch.Skipped.Count} 项。"
-                    +(batch.Batch is null?"":"\n批量入口："+batch.Batch.EntryPath)
-                    +string.Concat(messages.Concat(batch.Skipped.Select(s=>s.Track.Title+"："+s.Message)).Select(m=>"\n"+m)),force:true,done:true);
+                return true;
             }
-            catch(OperationCanceledException){Report("准备已暂停，已保存内容和任务保留。",force:true,done:true);}
-            catch(Exception e){Report("准备中断："+e.Message,force:true,done:true);}
 
             void CheckCurrent()
             {
@@ -275,6 +305,7 @@ public sealed partial class PlaybackCoordinator
                 });
             }
         });
+        _=ResumeLyricsPrefetchAfterWorkspaceAsync(workspaceOperation);
         return workspaceOperation;
     }
 

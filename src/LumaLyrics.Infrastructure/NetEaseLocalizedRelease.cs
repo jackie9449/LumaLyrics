@@ -145,8 +145,7 @@ public sealed partial class NetEaseTranslationProvider
         IReadOnlyList<CatalogSong> verified=[];
         foreach(var choice in choices)
         {
-            using var detail=JsonDocument.Parse(await GetAsync($"api/album/{choice.Id}",token));
-            CheckCode(detail.RootElement);
+            using var detail=await GetAsync($"api/album/{choice.Id}",token);
             if(!detail.RootElement.TryGetProperty("album",out var node) || ReadAlbum(node) is not {} album
                 || album.Id!=choice.Id || !SameRelease(apple,album))continue;
             var parent=node.TryGetProperty("songs",out var nestedSongs) && nestedSongs.ValueKind==JsonValueKind.Array
@@ -165,8 +164,7 @@ public sealed partial class NetEaseTranslationProvider
     async Task<CatalogAlbum[]?> SearchReleasesAsync(AppleLocalizedRelease apple,string term,CancellationToken token)
     {
         string query=Uri.EscapeDataString(term);
-        using var search=JsonDocument.Parse(await GetAsync($"api/search/get?s={query}&type=10&limit={AlbumSearchLimit}",token));
-        CheckCode(search.RootElement);
+        using var search=await GetAsync($"api/search/get?s={query}&type=10&limit={AlbumSearchLimit}",token);
         if(!search.RootElement.TryGetProperty("result",out var result) || result.ValueKind!=JsonValueKind.Object
             || !result.TryGetProperty("albums",out var albums) || albums.ValueKind!=JsonValueKind.Array)return [];
         if(Integer(result,"albumCount")>AlbumSearchLimit)return null;

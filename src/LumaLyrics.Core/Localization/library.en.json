@@ -257,6 +257,8 @@
   "{0} 首 · 已接收 {1} · 需处理 {2}": "{0} songs · {1} received · {2} need attention",
   "说明不可用": "Instructions unavailable",
   "可交给本地 agent": "Ready for a local agent",
+  "后台译文准备正在运行，请稍候或先暂停。": "Translations are being prepared in the background. Wait or pause preparation.",
+  "另一个浮光歌词进程正在后台预缓存，请稍候或先暂停后台预缓存。": "Another LumaLyrics process is caching lyrics. Wait or pause background caching.",
   "历史个人目录，需要重新生成入口": "The personal data directory changed. Generate a new entry file.",
   "分块越界": "Task chunk is outside its allowed directory",
   "分块身份或哈希不符": "Task chunk identity or hash does not match",
