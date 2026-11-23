@@ -1,12 +1,12 @@
 # 浮光歌词 · 换机开发接手说明
 
-更新：2026-11-15。正式发布基线为 **v1.2.0 / 879e52a**。当前本地开发新增按语言设置悬浮歌词字体，入口、行为和验证命令见 [语言字体说明](docs/language-fonts.md)，实际验证见 [本地开发记录](docs/development-log.md)。版本号暂保留 1.2.0，本地预览包用 language-fonts 标签区分，既有 GitHub Release 不变。旧迁移包仍保留原 manifest。
+更新：2026-11-24。正式发布基线为 **v1.3.0**。新增离线翻译、手动及离线自动歌词打轴，改进歌词匹配和批量查词。完整行为与验证见 [发布记录](docs/release-notes.md) 和 [本地开发记录](docs/development-log.md)。旧迁移包仍保留原 manifest；恢复旧包后可按需同步本次发布提交。
 
 ## 1. 记录与协作方式
 
 先读 [AGENTS.md](AGENTS.md)、[全部更新索引](docs/updates-2026-11-11.md)、[开发记录](docs/development-log.md)、[发布记录](docs/release-notes.md)。更早设计、截图和验证材料仍在 docs 中。工作包 history/commits.txt 和 history/LumaLyrics.bundle 保存完整本地提交历史及 v1.0.0、v1.1.0 标签。
 
-**常规开发使用本地 Git。** 仅在用户对当前任务明确提出时进行 GitHub 同步或发布；此前用户已明确要求同步并发布 1.2.0，发布任务已完成。当前字体任务只提交本地，不沿用此前发布授权。其它任务继续遵循 AGENTS.md，不覆盖旧正式发布资产。原 571ba0e 交接包只作历史保留，不能代替本次成果。
+**常规开发使用本地 Git。** 仅在用户对当前任务明确提出时进行 GitHub 同步或发布。其它任务继续遵循 AGENTS.md，不覆盖旧正式发布资产。既有交接包保留各自的源码版本，不随正式发布更新。
 
 ## 2. 新电脑恢复
 

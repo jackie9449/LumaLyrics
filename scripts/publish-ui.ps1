@@ -104,6 +104,7 @@ Copy-Item -LiteralPath docs/verification-v0180 -Destination $guide -Recurse -For
 Copy-Item -LiteralPath docs/verification-v100 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v110 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-v120 -Destination $guide -Recurse -Force
+Copy-Item -LiteralPath docs/verification-v130 -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-wide-lyrics -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-existing-chinese -Destination $guide -Recurse -Force
 Copy-Item -LiteralPath docs/verification-overlay-native-update -Destination $guide -Recurse -Force

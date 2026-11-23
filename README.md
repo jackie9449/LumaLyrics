@@ -2,7 +2,7 @@
 
 **让音乐，有迹可循。** 为 Windows Apple Music 设计的桌面歌词应用，支持动态原词、独立悬浮歌词、中文译文与本机音乐库。
 
-[下载 1.2.0](https://github.com/jackie9449/LumaLyrics/releases/tag/v1.2.0) · [更新记录](docs/release-notes.md) · [使用与故障反馈](https://github.com/jackie9449/LumaLyrics/issues)
+[下载 1.3.0](https://github.com/jackie9449/LumaLyrics/releases/tag/v1.3.0) · [更新记录](docs/release-notes.md) · [使用与故障反馈](https://github.com/jackie9449/LumaLyrics/issues)
 
 ![六套主应用主题](docs/screenshots-ui-v0180/theme-collection.png)
 
@@ -12,14 +12,21 @@
 
 | 版本 | 下载 | 使用方式 |
 | --- | --- | --- |
-| 安装版 | [LumaLyrics-1.2.0-setup-win-x64.exe](https://github.com/jackie9449/LumaLyrics/releases/download/v1.2.0/LumaLyrics-1.2.0-setup-win-x64.exe) | 双击安装，默认安装到当前用户目录，并创建名为 **浮光歌词** 的桌面快捷方式与开始菜单入口。无需管理员权限。 |
-| 便携版 | [LumaLyrics-1.2.0-portable-win-x64.zip](https://github.com/jackie9449/LumaLyrics/releases/download/v1.2.0/LumaLyrics-1.2.0-portable-win-x64.zip) | 完整解压后双击 **浮光歌词.exe**。程序不写入系统安装目录，个人资料仍独立存储。 |
+| 安装版 | [LumaLyrics-1.3.0-setup-win-x64.exe](https://github.com/jackie9449/LumaLyrics/releases/download/v1.3.0/LumaLyrics-1.3.0-setup-win-x64.exe) | 双击安装，默认安装到当前用户目录，并创建名为 **浮光歌词** 的桌面快捷方式与开始菜单入口。无需管理员权限。 |
+| 便携版 | [LumaLyrics-1.3.0-portable-win-x64.zip](https://github.com/jackie9449/LumaLyrics/releases/download/v1.3.0/LumaLyrics-1.3.0-portable-win-x64.zip) | 完整解压后双击 **浮光歌词.exe**。程序不写入系统安装目录，个人资料仍独立存储。 |
 
 两种版本使用同一程序与随包 .NET 运行时，无需另装 SDK 或填写 Apple API 密钥。启动器使用 Windows 自带的 .NET Framework，保留 `Launch.vbs` 作为兼容入口。发布页同时提供 SHA-256 校验文件。程序与安装包暂未进行代码签名。
 
 升级前从旧版托盘菜单选择 **退出**，再运行安装程序或解压新版。安装、升级与卸载均保留原有个人歌词、译文、封面和设置；关闭主窗口后程序可继续留在托盘，卸载前请先退出。
 
-当前本地开发版新增[按语言设置悬浮歌词字体](docs/language-fonts.md)：系统语言首行、＋添加其他语言、30 种常用语言分类及离线字库。同时修复外观标签右侧裁切、开关焦点框和标签字重继承，清理页面宣传标题。2026-11-16 进一步修复[播放时钟](docs/playback-controls.md)的暂停/恢复时间补偿与历史估算偏差，按 Apple Music 上报的时间轴校准，保留全部歌词与用户偏移。上述本地开发改动尚未替换上方的 1.2.0 正式发布。
+## 1.3.0 带来什么
+
+- **更快准备整张专辑的原词与译文。** 先保存已核对的动态歌词，再并行补查其余录音。同专辑复用目录，不同来源各自处理限流。失败时显示未采用的原因；右键歌曲可直接手动查词。
+- **用静态原词制作动态歌词。** 找不到可靠的动态歌词时先显示已核对的静态原词。可手动打轴并标记间奏，也可从 Apple Music 连续播放或同一录音的 PCM WAV 生成可编辑的本地打轴草稿。
+- **两种本地中文译文方式。** Agent 任务提供专辑语境，帮助统一人名、代词和风格。没有 agent 时，可按需下载 Argos 组件，为英语、法语、德语、西班牙语、日语和韩语制作基础中文译文。
+- **播放和显示。** 校准 Apple Music 上报的播放时钟，改善封面刷新和悬浮圆角；[悬浮字体可按语言分别设置](docs/language-fonts.md)，主窗口和悬浮歌词共用中文译文开关。
+
+详见[发布记录](docs/release-notes.md)、[查词与制作动态歌词](docs/lyric-acquisition.md)及[离线机翻指南](docs/offline-translation.md)。
 
 ## 1.2.0 带来什么
 
@@ -45,11 +52,11 @@
 
 Apple Music 原词通道只读取已经展开的原生动态歌词，不会在后台自动打开窗口或面板。自动原生读取有超时和进程级暂停保护；不能读取时仍可使用缓存与其他来源。不同版本的 Apple Music 可能限制原生访问，不能保证每首歌都有可获取的动态原词。[原词获取说明](docs/apple-original-lyrics.md)
 
-**手动搜词**：在“更换歌词 → 手动填写歌名 / 歌手搜索”中，搜索框会预填当前歌曲并保留本窗口上次的搜索条件。只填歌名即可按回车搜索，也可填写歌手、专辑或时长帮助排序。手动搜索同时查询 LRCLIB 和网易云，补充关键词与只按歌名的搜索，保留不同录音版本供确认；来源故障会单独提示。确认后直接应用并锁定到窗口显示的绑定目标，自动匹配不会覆盖。
+**手动搜词**：在歌词页打开“更换歌词 → 手动填写歌名 / 歌手搜索”，或在“设置 → 资料库与歌词 → 歌曲”中右键目标歌曲，选择“手动查词…”。搜索框会预填目标歌曲并保留本窗口上次的搜索条件。只填歌名即可按回车搜索，也可填写歌手、专辑或时长帮助排序。手动搜索同时查询 LRCLIB 和网易云，补充关键词与只按歌名的搜索，保留不同录音版本供确认；来源故障会单独提示。确认后直接应用并锁定到窗口显示的绑定目标，自动匹配不会覆盖。
 
-**自动查词**也会在常规匹配失败后补充关键词和歌名搜索，适用于当前播放查词及资料库预缓存。补充搜索只扩大候选范围，仍核对原始歌名、艺人、录音版本、真实时长和动态歌词完整性；不确定或只有静态文字时留给手动选择。已有手动绑定、可靠缓存和本机原词的优先顺序保持不变，来源限流或不可用时不会在同一次查询中继续追加该来源的搜索。
+**自动查词**也会在常规匹配失败后补充关键词和歌名搜索，适用于当前播放查词及资料库预缓存。补充搜索只扩大候选范围，仍核对原始歌名、艺人、录音版本、真实时长和动态歌词完整性；找不到合格的动态原词时，会先使用核对过的静态原词，并保留后续升级机会；录音仍无法确认的候选可手动核对。已有手动绑定、可靠缓存和本机原词的优先顺序保持不变，来源限流或不可用时不会在同一次查询中继续追加该来源的搜索。
 
-中文译文共用一个开关，可从主窗口右下角、设置页或悬浮工具栏切换，三处即时同步，默认关闭。译文绑定准确的原词 SHA-256 与分组索引；原文变化后不会串用旧译文，手动译文受保护。来源译文与个人 AI 译稿保留真实来源，现有功能不代表全资料库已有人工核验翻译。[中文译文指南](docs/chinese-translations.md) 现在可在「设置 → 资料库与歌词 → 歌曲」一次选择多首，先准备原词与现有中文，再生成一份本地 agent 批量任务 MD，支持续做、结果自动接收、主动重译和旧版恢复。
+中文译文共用一个开关，可从主窗口右下角、设置页或悬浮工具栏切换，三处即时同步，默认关闭。译文绑定准确的原词 SHA-256 与分组索引；原文变化后不会串用旧译文，手动译文受保护。来源译文与个人 AI 译稿保留真实来源，现有功能不代表全资料库已有人工核验翻译。[中文译文指南](docs/chinese-translations.md) 现在可在「设置 → 资料库与歌词 → 歌曲」一次选择多首，先准备原词与现有中文，再生成一份本地 agent 批量任务 MD，支持按专辑提供翻译上下文、续做、结果自动接收、主动重译和旧版恢复。也可从歌曲列表发起 [Argos 离线基础机翻](docs/offline-translation.md)。
 
 ## 悬浮歌词
 
@@ -95,7 +102,7 @@ C# / WPF，.NET 10，Windows x64。使用仓库的 SDK 选择脚本（有 `.tool
 
 可用 `./scripts/publish-ui.ps1 -PreviewLabel manual-search` 生成独立命名的本地预览包，保留正在使用的默认预览目录；该参数仅用于预览包。
 
-UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.2.0 验证记录](docs/verification-v120/README.md) · [1.1.0 历史记录](docs/verification-v110/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
+UI 验证须通过 `--data-dir` 使用软件目录外的隔离目录，不启动真实媒体和网络服务；这些检查不能替代实际 Apple Music 版本上的原生同步验证。[1.3.0 验证记录](docs/verification-v130/README.md) · [1.2.0 历史记录](docs/verification-v120/README.md) · [1.1.0 历史记录](docs/verification-v110/README.md) · [既有六主题验证](docs/verification-v0180/README.md)
 
 [资料库导入工具](docs/library-assets.md) · [原词校对](docs/lyrics-review.md) · [第三方组件](THIRD-PARTY-NOTICES.md) · [协作规范](AGENTS.md) · [Codex 换机接手](CODEX_HANDOFF.md) · [本地开发记录](docs/development-log.md)
 
