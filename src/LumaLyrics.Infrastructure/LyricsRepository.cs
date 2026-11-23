@@ -251,7 +251,13 @@ public sealed class LyricsRepository : ILyricsRepository, IDisposable
     }
     public IReadOnlyList<LibraryQueueItem> GetLibraryQueue(bool includeDeferred=false,bool cachedOnly=false)
     {
-        using var c=Command("SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId) AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now) ORDER BY CASE WHEN Detail='匹配规则已更新，等待重新评估原词。' THEN -1 WHEN State='Pending' THEN 0 WHEN State='Error' THEN 2 ELSE 1 END,Source,PersistentId",("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")));
+        using var c=Command("""
+            SELECT Source,PersistentId,Title,Artist,Album,Duration FROM LibraryTracks
+            WHERE Active=1 AND EXISTS(SELECT 1 FROM LibraryMembership m WHERE m.Source=LibraryTracks.Source AND m.PersistentId=LibraryTracks.PersistentId)
+                AND (State NOT IN ('Cached','Manual') OR $all=1 OR $cached=1) AND ($cached=0 OR State='Cached') AND ($all=1 OR RetryUtc IS NULL OR RetryUtc<$now)
+            ORDER BY CASE WHEN Detail=$policy THEN -1 WHEN State='Pending' THEN 0 WHEN State='Error' THEN 2 ELSE 1 END,
+                LOWER(Artist),LOWER(Album),Source,PersistentId
+            """,("$all",includeDeferred),("$cached",cachedOnly),("$now",DateTimeOffset.UtcNow.ToString("O")),("$policy",PolicyRetryReason));
         using var r=c.ExecuteReader();var result=new List<LibraryQueueItem>();
         while(r.Read())result.Add(new(r.GetString(0),r.GetString(1),new(r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetDouble(5))));return result;
     }

@@ -69,6 +69,47 @@ public sealed class LibraryMembershipTests:IDisposable
         Assert.Equal("old",Assert.Single(lyrics.GetLibraryQueue(true)).Source);
     }
 
+    [Fact] public void QueueKeepsRetryPriorityAndClustersCaseVariantsWithinEachTier()
+    {
+        string path=Path.Combine(root,"lyrics.db");
+        using var repository=new LyricsRepository(path);
+        var tiers=new[]
+        {
+            (Name:"error",State:"Error",Detail:"Fixture"),
+            (Name:"incomplete",State:"Incomplete",Detail:"Fixture"),
+            (Name:"pending",State:"Pending",Detail:"Fixture"),
+            (Name:"policy",State:"Error",Detail:LyricsRepository.PolicyRetryReason)
+        };
+        var albums=new[]
+        {
+            (Artist:"alpha",Album:"Second"),
+            (Artist:"Beta",Album:"First"),
+            (Artist:"ALPHA",Album:"first"),
+            (Artist:"Alpha",Album:"First"),
+            (Artist:"ALPHA",Album:"second")
+        };
+        var tracks=tiers.SelectMany(tier=>albums.Select((album,i)=>
+            new LibraryTrack(tier.Name+i,new("Fixture song "+i,album.Artist,album.Album,10000)))).ToArray();
+        repository.SyncLibrary(new("own",tracks.Length,tracks,"fixture"));
+        foreach(var tier in tiers)
+        {
+            for(int i=0;i<albums.Length;i++)
+            {
+                var member=tracks.Single(track=>track.PersistentId==tier.Name+i);
+                string state=tier.State=="Incomplete" && i%2==0?"Missing":tier.State;
+                repository.SetLibraryState(new("own",member.PersistentId,member.Track),state,tier.Detail);
+            }
+        }
+        using var connection=new SqliteConnection($"Data Source={path}");
+        connection.Open();
+        using var command=connection.CreateCommand();
+        command.CommandText="UPDATE LibraryTracks SET RetryUtc=NULL";
+        command.ExecuteNonQuery();
+
+        var expected=tiers.Reverse().SelectMany(tier=>new[]{2,3,0,4,1}.Select(i=>tier.Name+i));
+        Assert.Equal(expected,repository.GetLibraryQueue().Select(item=>item.PersistentId));
+    }
+
     [Fact] public void UnchangedContentSkipsMembershipWritesAcrossConnectionsAndStillChecksCancellation()
     {
         string path=Path.Combine(root,"lyrics.db");

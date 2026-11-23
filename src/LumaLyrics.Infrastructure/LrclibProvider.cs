@@ -10,6 +10,7 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
     readonly SemaphoreSlim gate = new(1);
     readonly bool searchOnly;readonly TimeSpan minimumInterval;
     long searchRetryTicks,rateRetryTicks;
+    internal bool IsRateLimited => DateTimeOffset.UtcNow.UtcTicks < Interlocked.Read(ref rateRetryTicks);
     DateTimeOffset nextRequest;
     public LrclibProvider(HttpMessageHandler? handler = null,bool searchOnly=false,TimeSpan? minimumInterval=null)
     {
@@ -24,7 +25,7 @@ public sealed partial class LrclibProvider : ILyricsProvider, IManualLyricsSearc
         try
         {
             bool search=url.StartsWith("search?",StringComparison.Ordinal);
-            if(DateTimeOffset.UtcNow.UtcTicks<Interlocked.Read(ref rateRetryTicks))throw new LyricsProviderException("LRCLIB 仍处于来源要求的限流等待期，继续查询其他来源。",429);
+            if(IsRateLimited)throw new LyricsProviderException("LRCLIB 仍处于来源要求的限流等待期，继续查询其他来源。",429);
             if(search && DateTimeOffset.UtcNow.UtcTicks<Interlocked.Read(ref searchRetryTicks))throw new LyricsProviderException("LRCLIB 搜索暂时繁忙，精确匹配和其他来源仍会继续查询。",503);
             for (int attempt = 0; attempt < 2; attempt++)
             {

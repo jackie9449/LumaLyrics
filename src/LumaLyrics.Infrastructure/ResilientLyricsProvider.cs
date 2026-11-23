@@ -21,6 +21,7 @@ public sealed class ResilientLyricsProvider:ILyricsProvider,IManualLyricsSearch,
 {
     readonly ILyricsProvider primary;
     readonly ITranslationProvider secondary;
+    internal bool IsPrimaryRateLimited => primary is LrclibProvider lrclib && lrclib.IsRateLimited;
     public ResilientLyricsProvider(ILyricsProvider? primary=null,ITranslationProvider? secondary=null)
     {this.primary=primary??new LrclibProvider();this.secondary=secondary??new NetEaseTranslationProvider();}
     public Task<LyricsLookupResult?> LookupExactAsync(Track track,CancellationToken token)=>primary is LrclibProvider lrclib?Probe(lrclib,track,token):Task.FromResult<LyricsLookupResult?>(null);

@@ -31,6 +31,41 @@ public class TranslationPreparationTests : IDisposable
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));using var translations=new TranslationRepository(root);lyrics.Save(Track,Original.Replace("home","away"),"manual",true);
         await new TranslationPreparation(root,Found()).PrepareAsync(Snapshot(Track),lyrics,translations,default);Assert.Empty(translations.ReadAll());Assert.Equal(1,translations.Progress().Mismatch);Assert.Contains("away",lyrics.Find(Track)!.Raw);
     }
+    [Fact] public async Task SharedWorkflowReleasesTheDatabaseGateDuringLookupAndRejectsAChangedOriginal()
+    {
+        using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));
+        using var translations=new TranslationRepository(root);
+        using var dbGate=new SemaphoreSlim(1,1);
+        using var cancel=new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        lyrics.Save(Track,Original,"own manual",true);
+
+        var started=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var provider=new Provider(async(track,token)=>
+        {
+            started.TrySetResult();
+            await release.Task.WaitAsync(token);
+            return await Found().LookupAsync(track,token);
+        });
+        var workflow=new TranslationWorkflow(root,provider);
+        var lookup=workflow.PrepareAsync(lyrics,translations,Track,true,false,cancel.Token,dbGate:dbGate);
+        Exception? failure;
+        try
+        {
+            await started.Task.WaitAsync(cancel.Token);
+            await dbGate.WaitAsync(cancel.Token);
+            try{lyrics.Save(Track,Original.Replace("home","away"),"own manual",true);}
+            finally{dbGate.Release();}
+        }
+        finally
+        {
+            release.TrySetResult();
+            failure=await Record.ExceptionAsync(()=>lookup);
+        }
+
+        Assert.IsType<InvalidDataException>(failure);
+        Assert.Empty(translations.ReadAll());
+    }
     [Fact] public async Task ConfirmedInstrumentalsAndChineseNeedNoNetwork()
     {
         using var lyrics=new LyricsRepository(Path.Combine(root,"lyrics.db"));using var translations=new TranslationRepository(root);var chinese=Track with{Title="中文原创"};var instrumental=Track with{Title="Own instrumental"};
