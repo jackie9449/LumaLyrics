@@ -70,6 +70,8 @@ public partial class MainWindow
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             await fallbackStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await WaitAsync(()=>panel.SongList.Items.Cast<LibraryManagedSong>().Count(s=>s.Track==fast && s.Status.Original==LibraryOriginalState.Ready)==2);
+            // The refreshed items can arrive before WPF creates their row visuals.
+            panel.SongList.UpdateLayout();
             var early=panel.SongList.Items.Cast<LibraryManagedSong>().ToArray();
             checks["batchLyrics.fastRowsVisibleBeforeFallbackReturns"]=coordinator.WorkspaceBusy && early.Count(s=>s.Track==fast && s.Status.Original==LibraryOriginalState.Ready)==2;
             checks["batchLyrics.pendingReasonVisible"]=early.Single(s=>s.Track==hard).Status.Reason=="精确查询未采用，等待补查。"

@@ -24,9 +24,13 @@ public class LyricsTests
         var t=new Track("Song","Singer","Album",200000);LyricsCandidate C(long id,Track track)=>new(id,track,"[00:01]A",null,false);
         Assert.NotNull(MatchRules.AutoSelect(t,[C(1,t)]));Assert.Null(MatchRules.AutoSelect(t,[C(1,t),C(2,t)]));Assert.Null(MatchRules.AutoSelect(t with{DurationMs=null},[C(1,t)]));Assert.Null(MatchRules.AutoSelect(t,[C(1,t with{Artist="Other"})]));Assert.Null(MatchRules.AutoSelect(t,[C(1,t with{DurationMs=210000})]));
     }
-    [Fact] public void JointArtistsCanMatchWithoutIgnoringMissingContributors()
+    [Fact] public void JointArtistsCanMatchAcrossCreditOrderAndFeaturingNotation()
     {
-        var t=new Track("Song","Singer A feat. Singer B","Album",200000);var c=new LyricsCandidate(1,t with{Artist="Singer B & Singer A"},"[00:01]A",null,false);Assert.True(MatchRules.Score(t,c).Eligible);Assert.False(MatchRules.Score(t,c with{Track=c.Track with{Artist="Singer A"}}).Eligible);
+        var track = new Track("Song", "Singer A feat. Singer B", "Album", 200000);
+        var candidate = new LyricsCandidate(1, track with { Artist = "Singer B & Singer A" }, "[00:01]A", null, false);
+        var score = MatchRules.Score(track, candidate);
+        Assert.True(score.Eligible);
+        Assert.Equal(1, score.Score, 8);
     }
     [Fact] public void AlbumVersionConflictVetoesAutomaticSelection(){var t=new Track("Song","Singer","Album",200000);var c=new LyricsCandidate(1,t with{Album="Album (Live)"},"[00:01]A",null,false);Assert.False(MatchRules.Score(t,c).Eligible);}
 }

@@ -11,14 +11,20 @@ public partial class MainWindow
     {
         var oldSource=settings.LibraryPath;bool online=settings.OnlineLookup;string theme=settings.UiTheme;
         SettingsWindow? preferences=null;
-        var tracks=Enumerable.Range(0,6).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
-        tracks[1]=new("Kaze no Oto","Sora Hikari","Kotoba no Umi - Single",479000);
+        var tracks=Enumerable.Range(0,8).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
+        tracks[1]=new("Kaze no Oto","Sora Hikari & Own guest","Kotoba no Umi - Single",479000);
+        tracks[6]=tracks[6] with{Artist="Own singer A & Own singer B"};
+        tracks[7]=tracks[7] with{Artist=tracks[6].Artist};
         string[] lines=["We follow the river beyond the morning","We carry the light across the valley","The path remembers every quiet footstep","The distant hills are waiting for the sunrise","We leave the harbor with a song of our own","We reach the shore and rest beneath the stars"];
         string raw=string.Join("\n",lines.Select((line,i)=>$"[{i*40/60:00}:{i*40%60:00}]{line}")),plain=string.Join("\n",lines);
         string provenance=JsonSerializer.Serialize(new{id=991001,trackName=tracks[0].Title,artistName=tracks[0].Artist,albumName=tracks[0].Album,duration=479,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
         var good=new LyricsCandidate(991001,tracks[0],raw,plain,false,provenance);
-        var bad=good with{Id=991002,Track=new("カゼノオト","ソラヒカリ","コトバノウミ",479000),PlainLyrics=null};
+        var bad=good with{Id=991002,Track=new("カゼノオト","ソラヒカリ & Own guest","コトバノウミ",479000),PlainLyrics=null};
         var staticCandidate=new LyricsCandidate(991004,tracks[4],null,plain,false);
+        var credited=tracks[6] with{Artist="Own singer A",DurationMs=479100};
+        string creditJson=JsonSerializer.Serialize(new{id=991006,trackName=credited.Title,artistName=credited.Artist,albumName=credited.Album,duration=479.1,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
+        var partial=good with{Id=991006,Track=credited,RawJson=creditJson};
+        var otherEdition=partial with{Id=991007,Track=credited with{Title=tracks[7].Title,Album="Own other edition"},RawJson=""};
         try
         {
             settings.LibraryPath="own-ui";settings.OnlineLookup=true;
@@ -29,7 +35,8 @@ public partial class MainWindow
                 repo.Save(tracks[5],plain,"Own manual text",true,plain:true);
             }
             coordinator.WorkspaceOriginalProvider=new WorkspaceOriginalFixture((track,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(
-                track==tracks[0]?[good]:track==tracks[1]?[bad]:track==tracks[4]?new LyricsLookupResult([staticCandidate],["Own unavailable source"]):[]));
+                track==tracks[0]?[good]:track==tracks[1]?[bad]:track==tracks[4]?new LyricsLookupResult([staticCandidate],["Own unavailable source"])
+                :track==tracks[6]?[partial]:track==tracks[7]?[otherEdition]:[]));
             coordinator.WorkspaceChineseProvider=new WorkspaceChineseFixture((_,_)=>Task.FromResult<IReadOnlyList<TranslationCandidate>>([]));
             preferences=new(coordinator,id=>SelectUiTheme(id,false)){Owner=this,Width=1220,Height=900};preferences.Show();preferences.SelectLibrarySongs();
             var panel=preferences.Library.Songs;await panel.Reload(true);await Task.Delay(180);
@@ -43,7 +50,16 @@ public partial class MainWindow
             checks["acquisition.tailAccepted"]=rows.Single(r=>r.Track==tracks[0]).Status.Reason is null;
             checks["acquisition.missingReferenceReason"]=rows.Single(r=>r.Track==tracks[1]).Status.Reason=="尾段较长且来源缺少全文对照，需手动确认";
             checks["acquisition.noCandidateReason"]=rows.Single(r=>r.Track==tracks[2]).Status.Reason=="来源未返回歌词候选";
-            using(var repo=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"),true))checks["acquisition.originalUnchanged"]=repo.FindReadOnly(tracks[0])?.Raw==raw&&repo.FindReadOnly(tracks[1]) is null;
+            using(var repo=new LyricsRepository(Path.Combine(coordinator.DataRoot,"lyrics.db"),true))
+            {
+                checks["acquisition.originalUnchanged"]=repo.FindReadOnly(tracks[0])?.Raw==raw&&repo.FindReadOnly(tracks[1]) is null;
+                checks["acquisition.collaborationPreservesProviderCredits"]=rows.Single(r=>r.Track==tracks[6]).Status.Original==LibraryOriginalState.Ready
+                    && repo.FindReadOnly(tracks[6]) is {} bound && bound.ProviderJson==creditJson && LibraryPrefetcher.QualityOf(bound,tracks[6]);
+            }
+            string otherEditionReason=MatchRules.Score(tracks[7],otherEdition).Reason;
+            checks["acquisition.collaborationNeedsSameEdition"]=otherEditionReason=="合作署名有重合，但专辑或时长不足以确认录音"
+                && rows.Single(r=>r.Track==tracks[7]).Status.Reason==otherEditionReason
+                && (UiText.Language=="zh-Hans" || UiText.Status(otherEditionReason)!=otherEditionReason);
             var staticRow=rows.Single(r=>r.Track==tracks[4]);
             checks["acquisition.partialSourceCanStillSaveStatic"]=staticRow.Status.Original==LibraryOriginalState.Static
                 && staticRow.Status.Chinese==LibraryChineseState.BlockedOriginal && staticRow.Status.Reason?.Contains("Own unavailable source")==true;
@@ -87,7 +103,8 @@ public partial class MainWindow
             checks["acquisition.upgradedStaticIsTimed"]=panel.SongList.Items.Cast<LibraryManagedSong>().Single(r=>r.Track==tracks[4]).Status.Original==LibraryOriginalState.Ready;
             // The candidate dialog must distinguish metadata score from the automatic quality gate.
             var fixtureStore=new SettingsStore(Path.Combine(coordinator.DataRoot,"candidate-fixture"));
-            var provider=new ManualLyricsFixtureProvider(bad);
+            var previewPartial=partial with{Track=tracks[1] with{Artist="Sora Hikari",DurationMs=479100},RawJson=""};
+            var provider=new ManualLyricsFixtureProvider(bad){Handler=(_,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>([bad,previewPartial])};
             await using var subject=new PlaybackCoordinator(Dispatcher,fixtureStore,new AppSettings{OnlineLookup=true,AutoPrefetchLibrary=false,AppleMusicOriginalLyrics=false},provider);
             subject.SetTranslationVerificationSnapshot(tracks[4],1000);
             subject.ApplyAutomaticLookupResult(tracks[4],[staticCandidate]);
@@ -108,8 +125,10 @@ public partial class MainWindow
             {
                 try
                 {
-                    Descendants<ListBox>(dialog).Single().SelectedIndex=0;await Task.Delay(120);
-                    string text=Descendants<TextBox>(dialog).Single(t=>t.IsReadOnly).Text;
+                    var candidates=Descendants<ListBox>(dialog).Single();
+                    candidates.SelectedItem=bad;await Task.Delay(120);
+                    var preview=Descendants<TextBox>(dialog).Single(t=>t.IsReadOnly);
+                    string text=preview.Text;
                     checks["acquisition.dialog.metadataScore"]=text.StartsWith(UiText.F($"歌曲信息匹配度 {1d:P0} · {UiText.Status(MatchRules.Score(tracks[1],bad).Reason)}\n"));
                     string readingReason=MatchRules.Score(tracks[1],bad).Reason;
                     checks["acquisition.dialog.japaneseReadingReasonLocalized"]=readingReason.StartsWith("日文读法相符",StringComparison.Ordinal)
@@ -122,6 +141,12 @@ public partial class MainWindow
                         checks["acquisition.dialog."+appTheme.Id+".readable"]=Descendants<TextBox>(dialog).Single(t=>t.IsReadOnly).ActualWidth>300&&Descendants<Button>(dialog).Single(b=>b.Content?.ToString()==UiText.T("使用所选歌词")).IsEnabled;
                         VisualVerification.Save(dialog,Path.Combine(directory,"candidate-metadata-score-"+appTheme.Id+".png"));
                     }
+                    candidates.SelectedItem=previewPartial;
+                    string collaborationReason=MatchRules.Score(tracks[1],previewPartial).Reason;
+                    checks["acquisition.dialog.collaborationMetadataLocalized"]=preview.Text.StartsWith(UiText.F($"歌曲信息匹配度 {.92:P0} · {UiText.Status(collaborationReason)}\n"))
+                        && collaborationReason.StartsWith("合作歌手署名部分相符",StringComparison.Ordinal)
+                        && (UiText.Language=="zh-Hans" || UiText.Status(collaborationReason)!=collaborationReason);
+                    checks["acquisition.dialog.collaborationContentChecked"]=preview.Text.Contains(UiText.F($"自动检查通过：{UiText.Status(AutomaticLyricsMatcher.Assess(previewPartial).Reason)}\n\n"));
                     finished.SetResult();
                 }
                 catch(Exception e){finished.SetException(e);}
