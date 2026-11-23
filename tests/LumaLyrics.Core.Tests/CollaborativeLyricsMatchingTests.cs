@@ -71,6 +71,58 @@ public sealed class CollaborativeLyricsMatchingTests
         "The Phantom of the Opera (Original 1986 London Cast)", 140107);
     const string CastCredit = "\"The Phantom Of The Opera\" Original London Cast, Sarah Brightman, Andrew Lloyd Webber, Janet Devenish, Richard Stilgoe, Charles Hart";
     const string Show = "The Phantom of the Opera";
+    static readonly Track EntrActe = new("Entr'acte", "Michael Reed & Studio Orchestra", Show + " (Original 1986 London Cast)", 181693);
+
+    [Theory]
+    [InlineData("Original London Cast", 183000d)]
+    [InlineData("The Original 1986 London Cast Recording", 183693d)]
+    [InlineData("\"The Phantom Of The Opera\" Original London Cast", 183000d)]
+    public void CollectiveCastCreditCanMatchASpecificPerformerOnTheSameRelease(string credit, double duration)
+    {
+        var source = Candidate(EntrActe with { Title = "Entr’Acte", Artist = credit, DurationMs = duration }, 30151647);
+        var match = Assert.IsType<AutomaticLyricsChoice>(AutomaticLyricsMatcher.Select(EntrActe, [source]));
+        Assert.Equal(.90, match.MatchScore, 8);
+        Assert.Same(source, match.Candidate);
+        Assert.Equal(source.Track, AutomaticLyricsMatcher.SelectStatic(EntrActe, [source with { SyncedLyrics = null }])?.Track);
+        var complete = Candidate(EntrActe, 2);
+        Assert.Same(complete, AutomaticLyricsMatcher.Select(EntrActe, [source, complete])?.Candidate);
+    }
+
+    [Theory]
+    [InlineData("Original Broadway Cast", Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Original 1990 London Cast", Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Another Show Original London Cast", Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Original Cast", Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Various Artists", Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Original London Cast", Show, 183000d)]
+    [InlineData("Original London Cast", Show + " (Original London Cast)", 183000d)]
+    [InlineData("Original London Cast", "Highlights from " + Show + " (Original 1986 London Cast)", 183000d)]
+    [InlineData("Original London Cast", Show + " (Original 1986 London Cast)", 183694d)]
+    [InlineData("Original London Cast", Show + " (Original 1986 London Cast)", null)]
+    public void CollectiveCastCreditNeedsTheCompleteReleaseAndAPreciseDuration(string credit, string album, double? duration)
+    {
+        var source = Candidate(EntrActe with { Artist = credit, Album = album, DurationMs = duration });
+        Assert.Null(AutomaticLyricsMatcher.Select(EntrActe, [source]));
+        Assert.Null(AutomaticLyricsMatcher.SelectStatic(EntrActe, [source with { SyncedLyrics = null }]));
+    }
+
+    [Fact]
+    public void CollectiveCastCreditCannotOverrideAnExplicitlyConflictingCast()
+    {
+        var local = EntrActe with { Artist = "Michael Reed & Original Broadway Cast" };
+        var source = Candidate(EntrActe with { Artist = "Original London Cast", DurationMs = 183000 });
+        Assert.Null(AutomaticLyricsMatcher.Select(local, [source]));
+    }
+
+    [Fact]
+    public void CollectiveCastCreditCannotConfirmAnInstrumentalOrBypassLyricsReview()
+    {
+        var source = Candidate(EntrActe with { Artist = "Original London Cast", DurationMs = 183000 });
+        Assert.Null(AutomaticLyricsMatcher.Select(EntrActe, [source with { Instrumental = true, SyncedLyrics = null, PlainLyrics = null }]));
+        Assert.Null(AutomaticLyricsMatcher.Select(EntrActe, [source with { SyncedLyrics = "[00:01]Incomplete", PlainLyrics = null }]));
+        var subtitle = source with { Track = source.Track with { Title = "Entr'acte: Act Two: Six Months Later" } };
+        Assert.Null(AutomaticLyricsMatcher.Select(EntrActe, [subtitle]));
+    }
 
     [Fact]
     public void LondonRecordingMatchesSourceWithBothSingersAndSameCastCredit()

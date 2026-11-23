@@ -87,24 +87,31 @@ public static partial class MatchRules
         bool differentVersion = !SameRecordingVersion(track, c.Track);
         double? delta = track.DurationMs.HasValue && c.Track.DurationMs.HasValue ? Math.Abs(track.DurationMs.Value - c.Track.DurationMs.Value) : null;
         bool partialCredits = corroboratedCredits && credits == CreditMatch.Partial;
-        double artistWeight = sameArtist || (corroboratedCredits && credits == CreditMatch.Equivalent) ? .30 : partialCredits ? .22 : 0;
+        bool castCredit = !sameArtist && !corroboratedCredits && titleExact && albumExact
+            && MatchesOriginalCastEnsemble(track, c.Track.Artist);
+        bool verifiedCast = castCredit && track.DurationMs is > 0 && c.Track.DurationMs is > 0 && delta <= 2000;
+        double artistWeight = sameArtist || (corroboratedCredits && credits == CreditMatch.Equivalent) ? .30
+            : partialCredits ? .22 : verifiedCast ? .20 : 0;
         double score = (title ? .4 : 0) + artistWeight + (delta <= 2000 ? .2 : delta <= 5000 ? .1 : 0) + (album ? .1 : 0);
         bool readingIdentity = titleReading || artistReading;
         bool needsReadingEvidence = readingIdentity && (!album || delta > 2000);
         bool eligible = title && artistWeight > 0 && !differentVersion && delta <= 5000 && !needsReadingEvidence
-            && !(partialCredits && c.Instrumental);
+            && !((partialCredits || verifiedCast) && c.Instrumental);
         bool usesReading = readingIdentity || albumReading;
         string reason = !title ? "歌名不匹配"
-            : !sameArtist && credits == CreditMatch.None ? "歌手信息不匹配"
+            : !sameArtist && credits == CreditMatch.None && !castCredit ? "歌手信息不匹配"
             : differentVersion ? "录音版本不同"
             : delta is null ? "时长未知，请确认"
             : delta > 5000 ? "时长差超过 5 秒"
-            : !sameArtist && !corroboratedCredits ? "合作署名有重合，但专辑或时长不足以确认录音"
+            : castCredit && !verifiedCast ? "原版卡司署名相符，但时长不足以确认录音"
+            : !sameArtist && !corroboratedCredits && !verifiedCast ? "合作署名有重合，但专辑或时长不足以确认录音"
+            : verifiedCast && c.Instrumental ? "原版卡司集体署名相符，纯音乐标记需手动确认"
             : partialCredits && c.Instrumental ? "部分歌手署名相符，纯音乐标记需手动确认"
             : needsReadingEvidence ? "假名读法相符，但专辑或时长不足以确认录音"
             : usesReading ? $"日文读法相符 · 时长差 {delta / 1000:0.0} 秒"
             : partialCredits ? $"合作歌手署名部分相符 · 时长差 {delta / 1000:0.0} 秒"
             : corroboratedCredits ? $"合作歌手署名相符 · 时长差 {delta / 1000:0.0} 秒"
+            : verifiedCast ? $"原版卡司署名与发行版相符 · 时长差 {delta / 1000:0.0} 秒"
             : $"时长差 {delta / 1000:0.0} 秒";
         return new(c, score, eligible, reason) { UsesJapaneseReading = usesReading };
     }

@@ -11,10 +11,11 @@ public partial class MainWindow
     {
         var oldSource=settings.LibraryPath;bool online=settings.OnlineLookup;string theme=settings.UiTheme;
         SettingsWindow? preferences=null;
-        var tracks=Enumerable.Range(0,8).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
+        var tracks=Enumerable.Range(0,9).Select(i=>new Track("Own acquisition "+i,"Own author","Own album",479000)).ToArray();
         tracks[1]=new("Kaze no Oto","Sora Hikari & Own guest","Kotoba no Umi - Single",479000);
         tracks[6]=tracks[6] with{Artist="Own singer A & Own singer B"};
         tracks[7]=tracks[7] with{Artist=tracks[6].Artist};
+        tracks[8]=new("Own cast interlude","Own conductor & Own orchestra","Own stage work (Original 1986 London Cast)",479000);
         string[] lines=["We follow the river beyond the morning","We carry the light across the valley","The path remembers every quiet footstep","The distant hills are waiting for the sunrise","We leave the harbor with a song of our own","We reach the shore and rest beneath the stars"];
         string raw=string.Join("\n",lines.Select((line,i)=>$"[{i*40/60:00}:{i*40%60:00}]{line}")),plain=string.Join("\n",lines);
         string provenance=JsonSerializer.Serialize(new{id=991001,trackName=tracks[0].Title,artistName=tracks[0].Artist,albumName=tracks[0].Album,duration=479,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
@@ -25,6 +26,9 @@ public partial class MainWindow
         string creditJson=JsonSerializer.Serialize(new{id=991006,trackName=credited.Title,artistName=credited.Artist,albumName=credited.Album,duration=479.1,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
         var partial=good with{Id=991006,Track=credited,RawJson=creditJson};
         var otherEdition=partial with{Id=991007,Track=credited with{Title=tracks[7].Title,Album="Own other edition"},RawJson=""};
+        var cast=tracks[8] with{Artist="Original London Cast",DurationMs=480300};
+        string castJson=JsonSerializer.Serialize(new{id=991008,trackName=cast.Title,artistName=cast.Artist,albumName=cast.Album,duration=480.3,syncedLyrics=raw,plainLyrics=plain,instrumental=false});
+        var collective=good with{Id=991008,Track=cast,RawJson=castJson};
         try
         {
             settings.LibraryPath="own-ui";settings.OnlineLookup=true;
@@ -33,10 +37,11 @@ public partial class MainWindow
                 repo.SyncLibrary(new("own-ui",tracks.Length,tracks.Select((t,i)=>new LibraryTrack(i.ToString(),t)).ToArray(),"own"));
                 repo.RecordLookupFailure(tracks[3],"时间戳超出歌曲时长",false,false);
                 repo.Save(tracks[5],plain,"Own manual text",true,plain:true);
+                repo.RecordLookupFailure(tracks[8],"歌手信息不匹配",false,false);
             }
             coordinator.WorkspaceOriginalProvider=new WorkspaceOriginalFixture((track,_)=>Task.FromResult<IReadOnlyList<LyricsCandidate>>(
                 track==tracks[0]?[good]:track==tracks[1]?[bad]:track==tracks[4]?new LyricsLookupResult([staticCandidate],["Own unavailable source"])
-                :track==tracks[6]?[partial]:track==tracks[7]?[otherEdition]:[]));
+                :track==tracks[6]?[partial]:track==tracks[7]?[otherEdition]:track==tracks[8]?[collective]:[]));
             coordinator.WorkspaceChineseProvider=new WorkspaceChineseFixture((_,_)=>Task.FromResult<IReadOnlyList<TranslationCandidate>>([]));
             preferences=new(coordinator,id=>SelectUiTheme(id,false)){Owner=this,Width=1220,Height=900};preferences.Show();preferences.SelectLibrarySongs();
             var panel=preferences.Library.Songs;await panel.Reload(true);await Task.Delay(180);
@@ -55,7 +60,13 @@ public partial class MainWindow
                 checks["acquisition.originalUnchanged"]=repo.FindReadOnly(tracks[0])?.Raw==raw&&repo.FindReadOnly(tracks[1]) is null;
                 checks["acquisition.collaborationPreservesProviderCredits"]=rows.Single(r=>r.Track==tracks[6]).Status.Original==LibraryOriginalState.Ready
                     && repo.FindReadOnly(tracks[6]) is {} bound && bound.ProviderJson==creditJson && LibraryPrefetcher.QualityOf(bound,tracks[6]);
+                var castRow=rows.Single(r=>r.Track==tracks[8]);
+                checks["acquisition.collectiveCastRecoversPreviousFailure"]=castRow.Status is {Original:LibraryOriginalState.Ready,Reason:null}
+                    && repo.FindReadOnly(tracks[8]) is {} castBinding && castBinding.ProviderJson==castJson && LibraryPrefetcher.QualityOf(castBinding,tracks[8]);
             }
+            string castReason=MatchRules.Score(tracks[8],collective).Reason;
+            checks["acquisition.collectiveCastReasonLocalized"]=castReason.StartsWith("原版卡司署名与发行版相符",StringComparison.Ordinal)
+                && (UiText.Language=="zh-Hans" || UiText.Status(castReason)!=castReason);
             string otherEditionReason=MatchRules.Score(tracks[7],otherEdition).Reason;
             checks["acquisition.collaborationNeedsSameEdition"]=otherEditionReason=="合作署名有重合，但专辑或时长不足以确认录音"
                 && rows.Single(r=>r.Track==tracks[7]).Status.Reason==otherEditionReason
@@ -118,6 +129,10 @@ public partial class MainWindow
             }
             subject.ApplyAutomaticLookupResult(tracks[4],[good with{Track=tracks[4],RawJson=""}]);
             checks["acquisition.playbackUpgradesToTimed"]=subject.Binding?.StaticFallback==false && subject.Document?.IsSynced==true;
+            subject.SetTranslationVerificationSnapshot(tracks[8],1000);
+            subject.ApplyAutomaticLookupResult(tracks[8],[collective]);
+            checks["acquisition.playbackUsesCollectiveCastOriginal"]=subject.Document is {IsSynced:true,Instrumental:false} document
+                && document.Raw==raw && subject.Binding?.ProviderJson==castJson;
             subject.SetTranslationVerificationSnapshot(tracks[1],1000);await subject.LookupManualAsync(tracks[1],default);
             var dialog=new CandidateWindow(subject,_=>tracks[1],(_,_)=>{}){Owner=preferences};
             var finished=new TaskCompletionSource();

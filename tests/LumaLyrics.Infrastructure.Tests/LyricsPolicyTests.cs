@@ -9,9 +9,16 @@ public sealed class LyricsPolicyTests:IDisposable
     public LyricsPolicyTests()=>Directory.CreateDirectory(root);
     void Sql(string sql){using var db=new SqliteConnection(new SqliteConnectionStringBuilder{DataSource=Db,Pooling=false}.ToString());db.Open();using var c=db.CreateCommand();c.CommandText=sql;c.ExecuteNonQuery();}
     void Seed(){using var repo=new LyricsRepository(Db);repo.SyncLibrary(new("own",2,[new("one",Song),new("two",Song with{Title="Own manual"})],"own"));repo.Save(Song with{Title="Own manual"},"Own text","manual",true,plain:true);}
-    [Fact]public void UpgradeInvalidatesLegacyFailuresOnceAndPreservesManualData()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(7)]
+    public void UpgradeInvalidatesOldFailuresOnceAndPreservesManualData(int previousPolicy)
     {
-        Seed();Sql("DELETE FROM LyricsPolicyState; DELETE FROM LookupFailurePolicy; INSERT INTO LookupFailures VALUES('owntailfixture|ownauthor|ownalbum','2099-01-01T00:00:00+00:00'); UPDATE LibraryTracks SET State='Incomplete',Detail='old heuristic',RetryUtc='2099' WHERE PersistentId='one';");
+        Seed();
+        using(var writer=new LyricsRepository(Db))writer.RememberFailure(Song);
+        if(previousPolicy==0)Sql("DELETE FROM LyricsPolicyState; DELETE FROM LookupFailurePolicy;");
+        else Sql($"UPDATE LyricsPolicyState SET PolicyVersion={previousPolicy}; UPDATE LookupFailurePolicy SET PolicyVersion={previousPolicy};");
+        Sql("UPDATE LibraryTracks SET State='Incomplete',Detail='old heuristic',RetryUtc='2099' WHERE PersistentId='one';");
         using(var read=new LyricsRepository(Db,true))Assert.False(read.HasFailure(Song));
         using(var repo=new LyricsRepository(Db)){Assert.Equal(1,repo.RequeuedForPolicy);Assert.False(repo.HasFailure(Song));Assert.True(repo.FindReadOnly(Song with{Title="Own manual"})!.Manual);repo.RememberFailure(Song);Assert.True(repo.HasFailure(Song));}
         using(var reopened=new LyricsRepository(Db)){Assert.Equal(0,reopened.RequeuedForPolicy);Assert.True(reopened.HasFailure(Song));}
